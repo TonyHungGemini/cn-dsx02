@@ -1,0 +1,16 @@
+{
+  "name": "Tra cứu Công nhân ĐSX02",
+  "short_name": "CN ĐSX02",
+  "description": "Tra cứu & quản lý thông tin công nhân, gia thuộc, phòng ở - Đội sản xuất 02",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f7f5",
+  "theme_color": "#0f766e",
+  "lang": "vi",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
