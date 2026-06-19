@@ -223,7 +223,7 @@ function idbAll(){ return new Promise(res=>{ if(!_db) return res(); try{
 function idbPut(k,v){ if(!_db) return; try{ _db.transaction("imgs","readwrite").objectStore("imgs").put(v,k); }catch(e){} }
 function getImg(id,t){ const k=t+":"+id; if(k in IMG_OVR) return IMG_OVR[k]===DEL?null:IMG_OVR[k]; const p=PRELOAD[id]; return (p&&p[t])?p[t]:null; }
 function setImg(id,t,uri){ IMG_OVR[t+":"+id]=uri; idbPut(t+":"+id,uri); try{ addPendImg(t+":"+id); }catch(e){} }
-function delImg(id,t){ IMG_OVR[t+":"+id]=DEL; idbPut(t+":"+id,DEL); }
+function delImg(id,t){ IMG_OVR[t+":"+id]=DEL; idbPut(t+":"+id,DEL); try{ addPendDel(t+":"+id); }catch(e){} }
 function hasAnyImg(p){ return !!(getImg(p.id,"photo")||getImg(p.id,"cmnd")); }
 function avatar(p){ return getImg(p.id,"photo")||getImg(p.id,"cmnd"); }
 function compress(file,max,q){ return new Promise((res,rej)=>{ const fr=new FileReader();
@@ -267,7 +267,7 @@ function bindImg(id){
 }
 
 /* ===================== ĐỒNG BỘ GOOGLE DRIVE (Apps Script) ===================== */
-const CFG_KEY="cn_cfg_v1", OUTBOX_KEY="cn_outbox_v1", PENDIMG_KEY="cn_pendimg_v1";
+const CFG_KEY="cn_cfg_v1", OUTBOX_KEY="cn_outbox_v1", PENDIMG_KEY="cn_pendimg_v1", PENDDEL_KEY="cn_penddel_v1";
 let CFG = JSON.parse(localStorage.getItem(CFG_KEY)||'null') || Object.assign({url:"",key:"",user:"",role:null}, (typeof window!=="undefined"&&window.__CFG_DEFAULT)||{});
 let ROLE = CFG.role || null;        // 'admin' | 'guest' | null(offline)
 function isGuest(){ return ROLE==="guest"; }
@@ -276,8 +276,11 @@ function getOutbox(){ try{return JSON.parse(localStorage.getItem(OUTBOX_KEY)||"[
 function setOutbox(a){ localStorage.setItem(OUTBOX_KEY, JSON.stringify(a)); }
 function queueChange(rec, deleted){ const ob=getOutbox().filter(c=>String(c.rec.id)!==String(rec.id)); ob.push({rec:rec, deleted:!!deleted}); setOutbox(ob); updateSyncBadge(); }
 function getPendImg(){ try{return JSON.parse(localStorage.getItem(PENDIMG_KEY)||"[]");}catch(e){return[];} }
-function addPendImg(k){ const s=getPendImg(); if(s.indexOf(k)<0){ s.push(k); localStorage.setItem(PENDIMG_KEY,JSON.stringify(s)); } updateSyncBadge(); }
+function addPendImg(k){ const s=getPendImg(); if(s.indexOf(k)<0){ s.push(k); localStorage.setItem(PENDIMG_KEY,JSON.stringify(s)); } const d=getPendDel().filter(x=>x!==k); setPendDel(d); updateSyncBadge(); }
 function setPendImg(s){ localStorage.setItem(PENDIMG_KEY,JSON.stringify(s)); }
+function getPendDel(){ try{return JSON.parse(localStorage.getItem(PENDDEL_KEY)||"[]");}catch(e){return[];} }
+function addPendDel(k){ const s=getPendDel(); if(s.indexOf(k)<0){ s.push(k); localStorage.setItem(PENDDEL_KEY,JSON.stringify(s)); } const p=getPendImg().filter(x=>x!==k); setPendImg(p); updateSyncBadge(); }
+function setPendDel(s){ localStorage.setItem(PENDDEL_KEY,JSON.stringify(s)); }
 
 function api(action, extra){
   return fetch(CFG.url, { method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
@@ -288,7 +291,7 @@ function online(){ return CFG.url && ROLE; }
 function updateSyncBadge(){
   const b=document.getElementById("syncBadge"); if(!b) return;
   if(!CFG.url){ b.style.display="none"; return; }
-  const pend=getOutbox().length+getPendImg().length;
+  const pend=getOutbox().length+getPendImg().length+getPendDel().length;
   b.style.display=""; b.textContent=(ROLE==="admin"?"👑 Admin":ROLE==="guest"?"🧰 Khách":"⚠️ Chưa kết nối")+(pend?(" · "+pend+" chờ gửi"):" · đã đồng bộ");
 }
 
@@ -315,6 +318,10 @@ async function syncNow(silent){
     for(const k of pend){ const [t,id]=k.split(":"); const uri=getImg(id,t);
       if(!uri){ continue; } try{ const r=await api("uploadImage",{id:id,type:t,dataUrl:uri}); if(!r.ok) stillP.push(k); }catch(e){ stillP.push(k); } }
     setPendImg(stillP);
+    // 1b) đẩy ảnh ĐÃ XOÁ
+    let pdel=getPendDel(); const stillD=[];
+    for(const k of pdel){ const [t,id]=k.split(":"); try{ const r=await api("deleteImage",{id:id,type:t}); if(!r.ok) stillD.push(k); }catch(e){ stillD.push(k); } }
+    setPendDel(stillD);
     // 2) đẩy thay đổi dữ liệu
     const ob=getOutbox();
     if(ob.length){ const r=await api("push",{changes:ob}); if(r&&r.ok){ setOutbox([]); } }
@@ -330,7 +337,7 @@ async function syncNow(silent){
       if(pl&&pl.ok && pl.rows){
         DATA = pl.rows.map(normServerRec).filter(x=>!x.deleted);
         save();
-        await fetchServerImages(pl.images||{});
+        await fetchServerImages(pl.images||{}, pl.deleted||{});
         render(); updateSyncBadge();
         if(!silent) toast("Đồng bộ xong ✓ ("+DATA.length+" người)");
       }
@@ -342,7 +349,7 @@ function normServerRec(o){
   r.id = +o.id || o.id; r.chu_phong = (o.chu_phong===true||o.chu_phong==="true"||o.chu_phong==="x"); r.deleted=(o.deleted===true||o.deleted==="true"||o.deleted==="x");
   return r;
 }
-async function fetchServerImages(imgs){
+async function fetchServerImages(imgs, deleted){
   // ảnh trên Drive LÀ CHUẨN: nếu có (kể cả khi đã có ảnh nhúng sẵn) -> tải về đè.
   // Chỉ bỏ qua khi đã tải đúng đúng bản đó (so theo fileId) để khỏi tải lại.
   let map={}; try{ map=JSON.parse(localStorage.getItem("cn_imgfiles_v1")||"{}"); }catch(e){}
@@ -350,6 +357,7 @@ async function fetchServerImages(imgs){
     if(map[key]===fid && (key in IMG_OVR)) continue;
     try{ const r=await api("getImage",{fileId:fid}); if(r.ok){ IMG_OVR[key]=r.dataUrl; idbPut(key,r.dataUrl); map[key]=fid; } }catch(e){}
   } }
+  if(deleted){ for(const id in deleted){ for(const t in deleted[id]){ const key=t+":"+id; if(IMG_OVR[key]!==DEL){ IMG_OVR[key]=DEL; idbPut(key,DEL); } if(map[key]) delete map[key]; } } }
   try{ localStorage.setItem("cn_imgfiles_v1", JSON.stringify(map)); }catch(e){}
 }
 async function seedToDrive(){
