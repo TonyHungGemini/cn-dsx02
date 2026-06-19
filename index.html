@@ -343,10 +343,14 @@ function normServerRec(o){
   return r;
 }
 async function fetchServerImages(imgs){
-  for(const id in imgs){ for(const t in imgs[id]){ const key=t+":"+id;
-    if((key in IMG_OVR) || (PRELOAD[id]&&PRELOAD[id][t])) continue;  // đã có
-    try{ const r=await api("getImage",{fileId:imgs[id][t]}); if(r.ok){ IMG_OVR[key]=r.dataUrl; idbPut(key,r.dataUrl); } }catch(e){}
+  // ảnh trên Drive LÀ CHUẨN: nếu có (kể cả khi đã có ảnh nhúng sẵn) -> tải về đè.
+  // Chỉ bỏ qua khi đã tải đúng đúng bản đó (so theo fileId) để khỏi tải lại.
+  let map={}; try{ map=JSON.parse(localStorage.getItem("cn_imgfiles_v1")||"{}"); }catch(e){}
+  for(const id in imgs){ for(const t in imgs[id]){ const key=t+":"+id; const fid=imgs[id][t];
+    if(map[key]===fid && (key in IMG_OVR)) continue;
+    try{ const r=await api("getImage",{fileId:fid}); if(r.ok){ IMG_OVR[key]=r.dataUrl; idbPut(key,r.dataUrl); map[key]=fid; } }catch(e){}
   } }
+  try{ localStorage.setItem("cn_imgfiles_v1", JSON.stringify(map)); }catch(e){}
 }
 async function seedToDrive(){
   if(ROLE!=="admin"){ toast("Chỉ Admin mới khởi tạo"); return; }
