@@ -236,6 +236,39 @@ function displayAge(p){ const a=ageFromDOB(p.ngay_sinh); return a!==""?a:(p.tuoi
 function dobFromKHCode(code){ code=String(code||"").replace(/\D/g,""); if(code.length<6) return ""; const yy=+code.slice(0,2), mm=code.slice(2,4), dd=code.slice(4,6); const cy=new Date().getFullYear()%100; const year=(yy>cy)?1900+yy:2000+yy; if(+mm<1||+mm>12||+dd<1||+dd>31) return ""; return dd+"/"+mm+"/"+year; }
 function imgFileId(id,t){ try{ const m=JSON.parse(localStorage.getItem("cn_imgfiles_v1")||"{}"); return m[t+":"+id]||null; }catch(e){ return null; } }
 function downloadImg(id,t,label){ const uri=getImg(id,t); if(!uri){ toast("Chưa có ảnh"); return; } const a=document.createElement("a"); a.href=uri; a.download=(label||"anh")+"_"+id+".jpg"; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),100); }
+/* ---- OCR đọc MRZ trên CMND (miễn phí, trên máy) ---- */
+let _tessP=null;
+function loadTesseract(){ if(window.Tesseract) return Promise.resolve(); if(_tessP) return _tessP;
+  _tessP=new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"; s.onload=()=>res(); s.onerror=rej; document.head.appendChild(s); });
+  return _tessP; }
+function cropBottom(uri){ return new Promise(res=>{ const im=new Image(); im.onload=()=>{ try{ const h=Math.round(im.height*0.42); const c=document.createElement("canvas"); c.width=im.width; c.height=h; c.getContext("2d").drawImage(im,0,im.height-h,im.width,h,0,0,im.width,h); res(c.toDataURL("image/jpeg",0.92)); }catch(e){ res(uri); } }; im.onerror=()=>res(uri); im.src=uri; }); }
+function parseMRZ(text){
+  const up=(text||"").toUpperCase(); const lines=up.split(/\r?\n/).map(l=>l.replace(/[^A-Z0-9<]/g,"")).filter(l=>l.length>=8); const out={};
+  for(const l of lines){ const m=l.match(/(\d{6})\d?([MFX])/); if(m){ const s=m[1],yy=+s.slice(0,2),mm=s.slice(2,4),dd=s.slice(4,6),cy=new Date().getFullYear()%100,year=(yy>cy)?1900+yy:2000+yy;
+    if(+mm>=1&&+mm<=12&&+dd>=1&&+dd<=31){ out.ngay_sinh=dd+"/"+mm+"/"+year; out.gioi_tinh=(m[2]==="F"?"F":(m[2]==="M"?"M":"")); break; } } }
+  for(const l of lines){ if(l.indexOf("<<")>=0 && /^[A-Z<]+$/.test(l) && l.length>=8){ const parts=l.split("<<"); const sur=parts[0].replace(/</g," ").trim(); const giv=(parts[1]||"").replace(/</g," ").trim(); out.ten=(sur+" "+giv).replace(/\s+/g," ").trim(); break; } }
+  for(const l of lines){ const m=l.match(/^ID[A-Z]{3}([0-9]{5,})/); if(m){ out.cmnd=m[1]; break; } }
+  return out;
+}
+async function ocrCmnd(id){
+  const uri=getImg(id,"cmnd"); if(!uri){ toast("Chưa có ảnh CMND"); return; }
+  toast("Đang đọc CMND… (lần đầu cần mạng)");
+  try{
+    await loadTesseract();
+    const crop=await cropBottom(uri);
+    const r=await Tesseract.recognize(crop,"eng",{tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789< "});
+    const p=parseMRZ(r.data&&r.data.text||"");
+    if(!p.ngay_sinh && !p.ten){ toast("Không đọc được MRZ — chụp rõ 3 dòng dưới cùng"); return; }
+    const q=s=>document.querySelector('#sheet [data-k="'+s+'"]');
+    if(p.ten && q("ten_that") && !q("ten_that").value) q("ten_that").value=p.ten;
+    if(p.ten && q("ten_ho_so") && !q("ten_ho_so").value) q("ten_ho_so").value=p.ten;
+    if(p.ngay_sinh && q("ngay_sinh")) q("ngay_sinh").value=p.ngay_sinh;
+    if(p.gioi_tinh && q("gioi_tinh")) q("gioi_tinh").value=p.gioi_tinh;
+    if(p.cmnd && q("cmnd") && !q("cmnd").value) q("cmnd").value=p.cmnd;
+    if(p.ngay_sinh && q("tuoi")){ const a=ageFromDOB(p.ngay_sinh); if(a) q("tuoi").value=a; }
+    toast("Đã đọc ✓ "+[p.ten,p.ngay_sinh].filter(Boolean).join(" · ")+" — kiểm tra rồi bấm Lưu");
+  }catch(e){ toast("Không đọc được (cần mạng lần đầu để tải bộ đọc)"); }
+}
 function descVN(p){
   const g=p.gioi_tinh==="M"?"Nam":(p.gioi_tinh==="F"?"Nữ":p.gioi_tinh);
   const L=[["Họ và tên (thật)",p.ten_that],["Tên trong hồ sơ",p.ten_ho_so],["CMND/CCCD",p.cmnd],
@@ -251,6 +284,7 @@ function imgSlot(p,t,label){
     '<div class="ibtns">'+
       '<label class="mini-b">📷 Chụp<input type="file" accept="image/*" capture="environment" data-img="'+t+'" style="display:none"></label>'+
       '<label class="mini-b">🖼 Chọn<input type="file" accept="image/*" data-img="'+t+'" style="display:none"></label>'+
+      (t==="cmnd"&&uri?'<button class="mini-b" data-ocr="1">🔎 Tự đọc</button>':'')+
       (uri?'<button class="mini-b" data-dl="'+t+'">⬇️ Tải về</button>':'')+
       (fid?'<a class="mini-b" style="text-decoration:none" href="https://drive.google.com/file/d/'+fid+'/view" target="_blank" rel="noopener">↗ Drive (gốc)</a>':'')+
       (uri?'<button class="mini-b" data-del="'+t+'">🗑 Xoá</button>':'')+
@@ -269,6 +303,7 @@ function bindImg(id){
     catch(err){ toast("Không xử lý được ảnh"); }
   }));
   sec.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>downloadImg(id,b.dataset.dl, b.dataset.dl==="cmnd"?"CMND":"AnhChanDung"));
+  sec.querySelectorAll('[data-ocr]').forEach(b=>b.onclick=()=>ocrCmnd(id));
   sec.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     delImg(id,b.dataset.del); sec.innerHTML=imgSectionHTML(DATA.find(x=>x.id===id)); bindImg(id); toast("Đã xoá ảnh");
   });
