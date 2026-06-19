@@ -269,6 +269,26 @@ async function ocrCmnd(id){
     toast("Đã đọc ✓ "+[p.ten,p.ngay_sinh].filter(Boolean).join(" · ")+" — kiểm tra rồi bấm Lưu");
   }catch(e){ toast("Không đọc được (cần mạng lần đầu để tải bộ đọc)"); }
 }
+async function batchOcrDOB(){
+  if(isGuest()){ toast("Chỉ Admin mới cập nhật hàng loạt"); return; }
+  const list=DATA.filter(p=>getImg(p.id,"cmnd"));
+  if(!list.length){ toast("Chưa có ảnh CMND nào trong app"); return; }
+  if(!confirm("Đọc "+list.length+" ảnh CMND và tự cập nhật NGÀY SINH (chuẩn Campuchia)?\n• Có thể mất vài phút.\n• Chỉ đổi khi đọc được; bạn nên kiểm tra lại rồi bấm Đồng bộ.")) return;
+  let worker;
+  try{ await loadTesseract(); worker=await Tesseract.createWorker("eng"); }
+  catch(e){ toast("Cần mạng để tải bộ đọc lần đầu"); return; }
+  let updated=0, fail=0, i=0;
+  for(const p of list){ i++;
+    try{ const crop=await cropBottom(getImg(p.id,"cmnd")); const r=await worker.recognize(crop); const m=parseMRZ(r.data&&r.data.text||"");
+      if(m.ngay_sinh){ if(p.ngay_sinh!==m.ngay_sinh){ p.ngay_sinh=m.ngay_sinh; const a=ageFromDOB(m.ngay_sinh); if(a)p.tuoi=a; if(m.gioi_tinh&&!p.gioi_tinh)p.gioi_tinh=m.gioi_tinh; p._edited=true; queueChange(p); updated++; } }
+      else fail++;
+    }catch(e){ fail++; }
+    if(i%2===0||i===list.length) toast("Đang đọc CMND… "+i+"/"+list.length+" · đã cập nhật "+updated);
+  }
+  try{ await worker.terminate(); }catch(e){}
+  save(); render();
+  toast("Xong: cập nhật "+updated+" ngày sinh, "+fail+" không đọc rõ. Kiểm tra rồi ☁️ Đồng bộ.");
+}
 function descVN(p){
   const g=p.gioi_tinh==="M"?"Nam":(p.gioi_tinh==="F"?"Nữ":p.gioi_tinh);
   const L=[["Họ và tên (thật)",p.ten_that],["Tên trong hồ sơ",p.ten_ho_so],["CMND/CCCD",p.cmnd],
@@ -765,6 +785,7 @@ function openSettings(){
    '<div class="vnbox"><div class="vntitle">Trạng thái</div>'+(ROLE?("Đã kết nối: <b>"+(ROLE==="admin"?"Admin 👑":"Khách 🧰")+"</b>"):"Chưa kết nối")+
      ' · chờ gửi: '+(getOutbox().length+getPendImg().length)+'</div>'+
    (ROLE==="admin"?'<button class="btn" id="bSeed">⬆️ Khởi tạo dữ liệu lên Drive (chạy 1 lần đầu)</button>':'')+
+   '<div style="margin-top:8px"><button class="btn" id="bBatchDob">🔎 Cập nhật ngày sinh từ ảnh CMND (hàng loạt)</button></div>'+
    '</div>'+
    '<div class="sheet-f"><button class="btn" id="bClose2">Đóng</button><button class="btn" id="bConn">🔌 Kết nối</button><button class="btn primary" id="bSyncNow">☁️ Đồng bộ ngay</button></div>';
   document.getElementById("overlay").classList.add("show");
@@ -772,6 +793,7 @@ function openSettings(){
   document.getElementById("bConn").onclick=async()=>{ CFG.url=v("cfgUrl");CFG.key=v("cfgKey");CFG.user=v("cfgUser");saveCfg(); const ok=await connect(); if(ok){ await syncNow(false); } openSettings(); };
   document.getElementById("bSyncNow").onclick=async()=>{ CFG.url=v("cfgUrl");CFG.key=v("cfgKey");CFG.user=v("cfgUser");saveCfg(); await syncNow(false); };
   const sd=document.getElementById("bSeed"); if(sd) sd.onclick=seedToDrive;
+  const bd=document.getElementById("bBatchDob"); if(bd) bd.onclick=batchOcrDOB;
 }
 
 /* ---------- events ---------- */
