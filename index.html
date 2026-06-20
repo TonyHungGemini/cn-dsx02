@@ -289,6 +289,34 @@ async function batchOcrDOB(){
   save(); render();
   toast("Xong: cập nhật "+updated+" ngày sinh, "+fail+" không đọc rõ. Kiểm tra rồi ☁️ Đồng bộ.");
 }
+async function ocrAddr(id){
+  const uri=getImg(id,"cmnd"); if(!uri){ toast("Chưa có ảnh CMND"); return; }
+  if(!CFG.url||!ROLE){ toast("Cần kết nối máy chủ (⚙️) để quét địa chỉ"); return; }
+  toast("Đang quét địa chỉ (Google Drive OCR)…");
+  try{ const r=await api("ocrAddress",{id:id,dataUrl:uri});
+    if(!r||!r.ok){ toast("Không đọc được"+(r&&r.error?": "+r.error:"")); return; }
+    const addr=r.addrVi||r.fullVi||""; if(!addr){ toast("Không tìm thấy địa chỉ trong ảnh"); return; }
+    const q=s=>document.querySelector('#sheet [data-k="'+s+'"]');
+    if(q("dia_chi")) q("dia_chi").value=addr;
+    if(q("chi_tiet_noi_o") && r.addrKhmer && !q("chi_tiet_noi_o").value) q("chi_tiet_noi_o").value=r.addrKhmer;
+    toast("Đã đọc địa chỉ ✓ — kiểm tra rồi bấm Lưu");
+  }catch(e){ toast("Lỗi quét: "+e.message); }
+}
+async function batchOcrAddr(){
+  if(isGuest()){ toast("Chỉ Admin mới chạy hàng loạt"); return; }
+  if(!CFG.url||!ROLE){ toast("Cần kết nối máy chủ trước"); return; }
+  const list=DATA.filter(p=>getImg(p.id,"cmnd"));
+  if(!list.length){ toast("Chưa có ảnh CMND nào"); return; }
+  if(!confirm("Quét "+list.length+" ảnh CMND để lấy ĐỊA CHỈ thường trú (Google Drive OCR + tự dịch)?\n• Mỗi ảnh ~2-4 giây, tổng có thể nhiều phút.\n• Chỉ đổi khi đọc được; kiểm tra lại rồi Đồng bộ.")) return;
+  let upd=0,fail=0,i=0;
+  for(const p of list){ i++;
+    try{ const r=await api("ocrAddress",{id:p.id,dataUrl:getImg(p.id,"cmnd")});
+      if(r&&r.ok){ const a=r.addrVi||r.fullVi||""; if(a && a!==p.dia_chi){ p.dia_chi=a; p._edited=true; queueChange(p); upd++; } else if(!a) fail++; } else fail++;
+    }catch(e){ fail++; }
+    if(i%2===0||i===list.length) toast("Đang quét địa chỉ… "+i+"/"+list.length+" · cập nhật "+upd);
+  }
+  save(); render(); toast("Xong: cập nhật "+upd+" địa chỉ, "+fail+" không đọc rõ. Kiểm tra & ☁️ Đồng bộ.");
+}
 function descVN(p){
   const g=p.gioi_tinh==="M"?"Nam":(p.gioi_tinh==="F"?"Nữ":p.gioi_tinh);
   const L=[["Họ và tên (thật)",p.ten_that],["Tên trong hồ sơ",p.ten_ho_so],["CMND/CCCD",p.cmnd],
@@ -305,6 +333,7 @@ function imgSlot(p,t,label){
       '<label class="mini-b">📷 Chụp<input type="file" accept="image/*" capture="environment" data-img="'+t+'" style="display:none"></label>'+
       '<label class="mini-b">🖼 Chọn<input type="file" accept="image/*" data-img="'+t+'" style="display:none"></label>'+
       (t==="cmnd"&&uri?'<button class="mini-b" data-ocr="1">🔎 Tự đọc</button>':'')+
+      (t==="cmnd"&&uri?'<button class="mini-b" data-ocraddr="1">🏠 Đọc địa chỉ</button>':'')+
       (uri?'<button class="mini-b" data-dl="'+t+'">⬇️ Tải về</button>':'')+
       (fid?'<a class="mini-b" style="text-decoration:none" href="https://drive.google.com/file/d/'+fid+'/view" target="_blank" rel="noopener">↗ Drive (gốc)</a>':'')+
       (uri?'<button class="mini-b" data-del="'+t+'">🗑 Xoá</button>':'')+
@@ -324,6 +353,7 @@ function bindImg(id){
   }));
   sec.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>downloadImg(id,b.dataset.dl, b.dataset.dl==="cmnd"?"CMND":"AnhChanDung"));
   sec.querySelectorAll('[data-ocr]').forEach(b=>b.onclick=()=>ocrCmnd(id));
+  sec.querySelectorAll('[data-ocraddr]').forEach(b=>b.onclick=()=>ocrAddr(id));
   sec.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     delImg(id,b.dataset.del); sec.innerHTML=imgSectionHTML(DATA.find(x=>x.id===id)); bindImg(id); toast("Đã xoá ảnh");
   });
@@ -786,6 +816,7 @@ function openSettings(){
      ' · chờ gửi: '+(getOutbox().length+getPendImg().length)+'</div>'+
    (ROLE==="admin"?'<button class="btn" id="bSeed">⬆️ Khởi tạo dữ liệu lên Drive (chạy 1 lần đầu)</button>':'')+
    '<div style="margin-top:8px"><button class="btn" id="bBatchDob">🔎 Cập nhật ngày sinh từ ảnh CMND (hàng loạt)</button></div>'+
+   '<div style="margin-top:8px"><button class="btn" id="bBatchAddr">🏠 Cập nhật địa chỉ thường trú từ CMND (hàng loạt)</button></div>'+
    '</div>'+
    '<div class="sheet-f"><button class="btn" id="bClose2">Đóng</button><button class="btn" id="bConn">🔌 Kết nối</button><button class="btn primary" id="bSyncNow">☁️ Đồng bộ ngay</button></div>';
   document.getElementById("overlay").classList.add("show");
@@ -794,6 +825,7 @@ function openSettings(){
   document.getElementById("bSyncNow").onclick=async()=>{ CFG.url=v("cfgUrl");CFG.key=v("cfgKey");CFG.user=v("cfgUser");saveCfg(); await syncNow(false); };
   const sd=document.getElementById("bSeed"); if(sd) sd.onclick=seedToDrive;
   const bd=document.getElementById("bBatchDob"); if(bd) bd.onclick=batchOcrDOB;
+  const ba=document.getElementById("bBatchAddr"); if(ba) ba.onclick=batchOcrAddr;
 }
 
 /* ---------- events ---------- */
