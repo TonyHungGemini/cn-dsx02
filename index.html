@@ -851,7 +851,7 @@ document.getElementById("bReset").onclick=()=>{ if(confirm("Đặt lại về d�
 document.getElementById("overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeEdit(); });
 document.getElementById("bSettings").onclick=openSettings;
 document.getElementById("bSync").onclick=()=>syncNow(false);
-initTo(); idbOpen().then(idbAll).then(()=>{ applyRole(); updateSyncBadge(); render(); if(online()) syncNow(true); }).catch(render);
+initTo(); idbOpen().then(idbAll).then(()=>{ applyRole(); updateSyncBadge(); render(); if(online()) syncNow(true);if(!window.__autoSync){window.__autoSync=1;document.addEventListener("visibilitychange",function(){if(!document.hidden&&online())syncNow(true);});window.addEventListener("focus",function(){if(online())syncNow(true);});window.addEventListener("online",function(){if(online())syncNow(true);});setInterval(function(){if(!document.hidden&&online())syncNow(true);},30000);}; }).catch(render);
 </script>
 <script>if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});var _rl=false;navigator.serviceWorker.addEventListener('controllerchange',function(){if(_rl)return;_rl=true;location.reload();});});}</script>
 </body>
