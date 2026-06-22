@@ -700,7 +700,7 @@ function blank(prefillRoom){ const o={id:"__new__"}; for(const [k] of FIELDS) o[
 function closeEdit(){ document.getElementById("overlay").classList.remove("show"); editingId=null; }
 function saveEdit(id){
   const sheet=document.getElementById("sheet");
-  const vals={}; sheet.querySelectorAll("[data-k]").forEach(el=>vals[el.dataset.k]=el.value.trim());
+  if(!window._normDate)window._normDate=function(s){if(!s)return s;s=String(s).trim();var p=function(n){n=String(n);return n.length<2?"0"+n:n;};if(s.indexOf("T")>0&&s.indexOf(":")>0){var d=new Date(s);if(isNaN(d.getTime()))return s;var t=new Date(d.getTime()+25200000);return p(t.getUTCDate())+"/"+p(t.getUTCMonth()+1)+"/"+t.getUTCFullYear();}if(s.indexOf("/")>0){var a=s.split("/");return a.length===3?p(a[0])+"/"+p(a[1])+"/"+a[2]:s;}if(s.indexOf("-")>0&&s.length>=8){var b=s.split("-");return (b.length===3&&b[0].length===4)?p(b[2])+"/"+p(b[1])+"/"+b[0]:s;}return s;};const vals={}; sheet.querySelectorAll("[data-k]").forEach(el=>vals[el.dataset.k]=(el.dataset.k==="ngay_sinh"?window._normDate(el.value.trim()):el.value.trim()));
   const ck=sheet.querySelector("#ckChu"); vals.chu_phong = ck?ck.checked:false;
   const ag=ageFromDOB(vals.ngay_sinh); if(ag!=="") vals.tuoi=ag;
   if(!vals.ten_that){ toast("Cần nhập Họ và tên"); return; }
