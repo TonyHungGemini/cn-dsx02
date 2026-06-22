@@ -189,7 +189,7 @@ const FIELDS = [
   ["phong_o","Phòng ở","input"],
   ["so_bao_hiem","Số bảo hiểm","input"],
   ["chi_tiet_noi_o","Chi tiết nơi ở","input"],
-  ["noi_sinh","Nơi sinh","input"],["dia_chi","Địa chỉ thường trú","input"],
+  ["noi_sinh","Nơi sinh","input"],["sdt","Số điện thoại","input"],["dia_chi","Địa chỉ thường trú","input"],
   ["ghi_chu","Ghi chú","textarea"],
 ];
 const TO_LIST = ["Tổ 1","Tổ 2","Tổ 3","Tổ 4","Tổ 5","Tổ 6","Tổ 7","Tổ 8"];
@@ -322,7 +322,7 @@ function descVN(p){
   const L=[["Họ và tên (thật)",p.ten_that],["Tên trong hồ sơ",p.ten_ho_so],["CMND/CCCD",p.cmnd],
     ["Ngày sinh",p.ngay_sinh],["Tuổi",displayAge(p)],["Giới tính",g],["Quan hệ",p.quan_he],["Loại",p.loai],
     ["Tổ / Khu vực",[p.to,p.khu_vuc].filter(Boolean).join(" · ")],["Phần cây",p.phan_cay],
-    ["Phòng ở",p.phong_o],["Số bảo hiểm",p.so_bao_hiem],["Nơi sinh",p.noi_sinh],["Địa chỉ thường trú",p.dia_chi],["Ghi chú",p.ghi_chu]];
+    ["Phòng ở",p.phong_o],["Số bảo hiểm",p.so_bao_hiem],["Nơi sinh",p.noi_sinh],["Số điện thoại",p.sdt],["Địa chỉ thường trú",p.dia_chi],["Ghi chú",p.ghi_chu]];
   return L.filter(x=>x[1]).map(x=>'<div class="dv"><span>'+x[0]+'</span><b>'+esc(x[1])+'</b></div>').join("");
 }
 function imgSlot(p,t,label){
@@ -651,7 +651,7 @@ function openEdit(id, prefillRoom, backRoom){
   body += '<div class="row2"><div>'+mkInput("phan_cay","Phần cây hiện tại","input")+'</div><div>'+mkInput("phong_o","Phòng ở","input")+'</div></div>';
   body += mkInput("quan_he","Quan hệ","input");
   body += mkInput("chi_tiet_noi_o","Chi tiết nơi ở","input");
-  body += mkInput("noi_sinh","Nơi sinh","input")+mkInput("dia_chi","Địa chỉ thường trú","input");
+  body += mkInput("noi_sinh","Nơi sinh","input")+mkInput("sdt","Số điện thoại","input")+mkInput("dia_chi","Địa chỉ thường trú","input");
   body += mkInput("ghi_chu","Ghi chú","textarea");
 
   const title = id==="__new__" ? "Thêm người mới" : esc(p.ten_that||"Chi tiết");
@@ -728,7 +728,7 @@ const EXPORT_COLS = [
   ["Tên mượn?", p=>isMuon(p)?"x":""],["Ngày sinh","ngay_sinh"],["Tuổi","tuoi"],["Giới tính","gioi_tinh"],
   ["Loại","loai"],["Chủ phòng", p=>p.chu_phong?"x":""],["Tổ","to"],["Khu vực","khu_vuc"],["Phần cây hiện tại","phan_cay"],
   ["Quan hệ","quan_he"],["PHÒNG Ở","phong_o"],["Số bảo hiểm","so_bao_hiem"],
-  ["Chi tiết nơi ở","chi_tiet_noi_o"],["Nơi sinh","noi_sinh"],["Địa chỉ thường trú","dia_chi"],["Ghi chú","ghi_chu"],
+  ["Chi tiết nơi ở","chi_tiet_noi_o"],["Nơi sinh","noi_sinh"],["Số điện thoại","sdt"],["Địa chỉ thường trú","dia_chi"],["Ghi chú","ghi_chu"],
 ];
 function exportXlsx(){
   const head = EXPORT_COLS.map(c=>c[0]);
