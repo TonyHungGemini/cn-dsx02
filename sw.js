@@ -1,4 +1,4 @@
-var CACHE='cn-dsx02-v4';
+var CACHE='cn-dsx02-v5';
 var ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png',
   './images-1.js','./images-2.js','./images-3.js','./images-4.js'];
 self.addEventListener('install',function(e){
