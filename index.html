@@ -702,7 +702,7 @@ function openEdit(id, prefillRoom, backRoom){
   if(id!=="__new__") bindImg(id);
   // chế độ VIP: người ĐÃ CÓ chỉ cho sửa phòng ở + ảnh
   if(isGuest() && id!=="__new__"){
-    const GUEST_EDIT = ['phong_o','phan_cay','khu_vuc','to'];
+    const GUEST_EDIT = ['phong_o','phan_cay','khu_vuc','to','so_dt'];
     sheet.querySelectorAll('[data-k]').forEach(el=>{ if(!GUEST_EDIT.includes(el.dataset.k)){ el.setAttribute("disabled","disabled"); } });
     const ck=sheet.querySelector("#ckChu"); if(ck) ck.setAttribute("disabled","disabled");
     const db=document.getElementById("bDel"); if(db) db.style.display="none";
