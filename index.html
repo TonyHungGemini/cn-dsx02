@@ -416,6 +416,8 @@ function applyRole(){
 async function syncNow(silent){
   if(!CFG.url){ if(!silent) toast("Chưa cấu hình máy chủ (⚙️ Cài đặt)"); return; }
   if(!ROLE){ const ok=await connect(); if(!ok) return; }
+  // Silent version-check: triggers auto-migrate if VIP device is still on old server
+  api("getLog",{limit:1}).catch(()=>{});
   if(!silent) toast("Đang đồng bộ…");
   try{
     // 1) đẩy ảnh chờ
