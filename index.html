@@ -664,12 +664,14 @@ function openEdit(id, prefillRoom, backRoom){
   body += '<div class="row2"><div>'+mkInput("cmnd","CMND / CCCD","input")+'</div><div>'+mkInput("so_bao_hiem","Số bảo hiểm","input")+'</div></div>';
   body += '<div class="fld"><label>Mã ngày sinh trên CMND (6 số: YY-MM-DD, vd 931011 → 11/10/1993)</label><input id="khmerNS" inputmode="numeric" maxlength="6" placeholder="Nhập 6 số → tự điền Ngày sinh"></div>';
   body += '<div class="row2"><div>'+mkInput("ngay_sinh","Ngày sinh","input")+'</div><div>'+mkInput("tuoi","Tuổi (tự tính)","input")+'</div></div>';
+  body += mkInput("noi_sinh","Nơi sinh","input");
   body += '<div class="row2"><div>'+mkInput("gioi_tinh","Giới tính","sel_gt")+'</div><div>'+mkInput("loai","Loại","sel_loai")+'</div></div>';
   body += '<div class="row2"><div>'+mkInput("to","Tổ","sel_to")+'</div><div>'+mkInput("khu_vuc","Khu vực","input")+'</div></div>';
   body += '<div class="row2"><div>'+mkInput("phan_cay","Phần cây hiện tại","input")+'</div><div>'+mkInput("phong_o","Phòng ở","input")+'</div></div>';
   body += mkInput("quan_he","Quan hệ","input");
   body += mkInput("chi_tiet_noi_o","Chi tiết nơi ở","input");
   body += mkInput("dia_chi","Địa chỉ thường trú","input");
+  body += mkInput("so_dt","Số điện thoại","input");
   body += mkInput("ghi_chu","Ghi chú","textarea");
 
   const title = id==="__new__" ? "Thêm người mới" : esc(p.ten_that||"Chi tiết");
