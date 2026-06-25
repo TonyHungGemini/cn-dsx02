@@ -376,10 +376,20 @@ function getPendDel(){ try{return JSON.parse(localStorage.getItem(PENDDEL_KEY)||
 function addPendDel(k){ const s=getPendDel(); if(s.indexOf(k)<0){ s.push(k); localStorage.setItem(PENDDEL_KEY,JSON.stringify(s)); } const p=getPendImg().filter(x=>x!==k); setPendImg(p); updateSyncBadge(); }
 function setPendDel(s){ localStorage.setItem(PENDDEL_KEY,JSON.stringify(s)); }
 
-function api(action, extra){
-  return fetch(CFG.url, { method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body: JSON.stringify(Object.assign({action:action, key:CFG.key, user:CFG.user||""}, extra||{})) })
-    .then(r=>r.json());
+async function api(action, extra){
+  const body=JSON.stringify(Object.assign({action:action,key:CFG.key,user:CFG.user||""},extra||{}));
+  const opts={method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:body};
+  let r=await fetch(CFG.url,opts).then(x=>x.json()).catch(()=>null);
+  const defUrl=(window.__CFG_DEFAULT||{}).url||"";
+  if((!r||r.error==="unknown_action")&&defUrl&&CFG.url!==defUrl){
+    const r2=await fetch(defUrl,opts).then(x=>x.json()).catch(()=>null);
+    if(r2&&r2.error!=="unknown_action"){
+      CFG.url=defUrl; saveCfg();
+      toast("\u2705 \u0110\u00e3 t\u1ef1 c\u1eadp nh\u1eadt sang m\u00e1y ch\u1ee7 m\u1edbi!");
+      r=r2;
+    }
+  }
+  return r;
 }
 function online(){ return CFG.url && ROLE; }
 function updateSyncBadge(){
