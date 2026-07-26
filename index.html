@@ -224,7 +224,16 @@ function idbAll(){ return new Promise(res=>{ if(!_db) return res(); try{
   c.onsuccess=e=>{ const cur=e.target.result; if(cur){ out[cur.key]=cur.value; cur.continue(); } else { IMG_OVR=out; res(); } };
   c.onerror=()=>res(); }catch(e){res();} }); }
 function idbPut(k,v){ if(!_db) return; try{ _db.transaction("imgs","readwrite").objectStore("imgs").put(v,k); }catch(e){} }
-function getImg(id,t){ const k=t+":"+id; if(k in IMG_OVR) return IMG_OVR[k]===DEL?null:IMG_OVR[k]; const p=PRELOAD[id]; return (p&&p[t])?p[t]:null; }
+function imgFileId(id,t){ try{ const m=JSON.parse(localStorage.getItem("cn_imgfiles_v1")||"{}"); return m[t+":"+id]||null; }catch(e){ return null; } }
+function driveImgUrl(fid){ return fid ? "https://lh3.googleusercontent.com/d/" + fid : null; }
+function getImg(id,t){
+  const k=t+":"+id;
+  if(k in IMG_OVR) return IMG_OVR[k]===DEL?null:IMG_OVR[k];
+  const fid=imgFileId(id,t);
+  if(fid) return driveImgUrl(fid);
+  const p=PRELOAD[id];
+  return (p&&p[t])?p[t]:null;
+}
 function setImg(id,t,uri){ IMG_OVR[t+":"+id]=uri; idbPut(t+":"+id,uri); try{ addPendImg(t+":"+id); }catch(e){} }
 function delImg(id,t){ IMG_OVR[t+":"+id]=DEL; idbPut(t+":"+id,DEL); try{ addPendDel(t+":"+id); }catch(e){} }
 function hasAnyImg(p){ return !!(getImg(p.id,"photo")||getImg(p.id,"cmnd")); }
@@ -237,7 +246,6 @@ function compress(file,max,q){ return new Promise((res,rej)=>{ const fr=new File
 function ageFromDOB(ds){ if(!ds) return ""; const m=String(ds).match(/(19|20)\d{2}/); if(!m) return ""; const y=+m[0]; const a=(new Date().getFullYear())-y; return (a>=0&&a<120)?String(a):""; }
 function displayAge(p){ const a=ageFromDOB(p.ngay_sinh); return a!==""?a:(p.tuoi||""); }
 function dobFromKHCode(code){ code=String(code||"").replace(/\D/g,""); if(code.length<6) return ""; const yy=+code.slice(0,2), mm=code.slice(2,4), dd=code.slice(4,6); const cy=new Date().getFullYear()%100; const year=(yy>cy)?1900+yy:2000+yy; if(+mm<1||+mm>12||+dd<1||+dd>31) return ""; return dd+"/"+mm+"/"+year; }
-function imgFileId(id,t){ try{ const m=JSON.parse(localStorage.getItem("cn_imgfiles_v1")||"{}"); return m[t+":"+id]||null; }catch(e){ return null; } }
 function downloadImg(id,t,label){ const uri=getImg(id,t); if(!uri){ toast("Chưa có ảnh"); return; } const a=document.createElement("a"); a.href=uri; a.download=(label||"anh")+"_"+id+".jpg"; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),100); }
 /* ---- OCR đọc MRZ trên CMND (miễn phí, trên máy) ---- */
 let _tessP=null;
@@ -461,15 +469,56 @@ function normServerRec(o){
   return r;
 }
 async function fetchServerImages(imgs, deleted){
-  // ảnh trên Drive LÀ CHUẨN: nếu có (kể cả khi đã có ảnh nhúng sẵn) -> tải về đè.
-  // Chỉ bỏ qua khi đã tải đúng đúng bản đó (so theo fileId) để khỏi tải lại.
   let map={}; try{ map=JSON.parse(localStorage.getItem("cn_imgfiles_v1")||"{}"); }catch(e){}
-  for(const id in imgs){ for(const t in imgs[id]){ const key=t+":"+id; const fid=imgs[id][t];
-    if(map[key]===fid && (key in IMG_OVR)) continue;
-    try{ const r=await api("getImage",{fileId:fid}); if(r.ok){ IMG_OVR[key]=r.dataUrl; idbPut(key,r.dataUrl); map[key]=fid; } }catch(e){}
-  } }
-  if(deleted){ for(const id in deleted){ for(const t in deleted[id]){ const key=t+":"+id; if(IMG_OVR[key]!==DEL){ IMG_OVR[key]=DEL; idbPut(key,DEL); } if(map[key]) delete map[key]; } } }
-  try{ localStorage.setItem("cn_imgfiles_v1", JSON.stringify(map)); }catch(e){}
+  let mapChanged=false;
+  
+  // 1. Cập nhật ngay tất cả fileId vào map để hiển thị trực tiếp từ Google Drive CDN
+  for(const id in imgs){
+    for(const t in imgs[id]){
+      const key=t+":"+id; const fid=imgs[id][t];
+      if(fid && map[key]!==fid){
+        map[key]=fid;
+        mapChanged=true;
+      }
+    }
+  }
+  if(deleted){
+    for(const id in deleted){
+      for(const t in deleted[id]){
+        const key=t+":"+id;
+        if(IMG_OVR[key]!==DEL){ IMG_OVR[key]=DEL; idbPut(key,DEL); }
+        if(map[key]){ delete map[key]; mapChanged=true; }
+      }
+    }
+  }
+  if(mapChanged){
+    try{ localStorage.setItem("cn_imgfiles_v1", JSON.stringify(map)); }catch(e){}
+  }
+
+  // 2. Tải song song (batch) các ảnh chưa có về bộ nhớ đệm (IndexedDB) để dùng offline
+  const pendingKeys=[];
+  for(const key in map){
+    const fid=map[key];
+    if(fid && !(key in IMG_OVR)){
+      pendingKeys.push({key, fid});
+    }
+  }
+
+  if(pendingKeys.length > 0){
+    const BATCH_SIZE = 4;
+    for(let i=0; i<pendingKeys.length; i+=BATCH_SIZE){
+      const chunk = pendingKeys.slice(i, i+BATCH_SIZE);
+      await Promise.all(chunk.map(async item=>{
+        try{
+          const r=await api("getImage", {fileId: item.fid});
+          if(r && r.ok && r.dataUrl){
+            IMG_OVR[item.key]=r.dataUrl;
+            idbPut(item.key, r.dataUrl);
+          }
+        }catch(e){}
+      }));
+    }
+  }
 }
 async function seedToDrive(){
   if(ROLE!=="admin"){ toast("Chỉ Admin mới khởi tạo"); return; }
@@ -488,7 +537,7 @@ function filtered(){
     if(state.loai && p.loai!==state.loai) return false;
     if(state.muon && !isMuon(p)) return false;
     if(q){
-      const hay = noAccent([p.ten_that,p.ten_ho_so,p.cmnd,p.phong_o,p.phan_cay,p.khu_vuc,p.dia_chi,p.so_bao_hiem,p.quan_he].join(" "));
+      const hay = noAccent([p.ten_that,p.ten_ho_so,p.cmnd,p.so_dt,p.phong_o,p.phan_cay,p.khu_vuc,p.dia_chi,p.so_bao_hiem,p.quan_he].join(" "));
       if(!hay.includes(q)) return false;
     }
     return true;
@@ -503,12 +552,12 @@ function renderSugg(){
   const q=state.q.trim();
   if(state.view!=="people" || q.length<1){ el.classList.remove("show"); el.innerHTML=""; return; }
   const nq=noAccent(q);
-  const matches=DATA.filter(p=>{ const a=noAccent(p.ten_that), b=noAccent(p.ten_ho_so), c=noAccent(p.cmnd); return a.includes(nq)||b.includes(nq)||c.includes(nq); })
+  const matches=DATA.filter(p=>{ const a=noAccent(p.ten_that), b=noAccent(p.ten_ho_so), c=noAccent(p.cmnd), d=noAccent(p.so_dt); return a.includes(nq)||b.includes(nq)||c.includes(nq)||d.includes(nq); })
     .sort((x,y)=>noAccent(x.ten_that).indexOf(nq)-noAccent(y.ten_that).indexOf(nq)).slice(0,8);
   if(!matches.length){ el.classList.remove("show"); el.innerHTML=""; return; }
   el.innerHTML=matches.map(p=>{ const av=avatar(p);
     const avh=av?'<img class="sgav" style="object-fit:cover" src="'+av+'">':'<div class="sgav">'+esc((p.ten_that||"?").trim().slice(0,1))+'</div>';
-    const meta=[p.to, p.phong_o?("Phòng "+p.phong_o):"", isMuon(p)?("HS: "+p.ten_ho_so):""].filter(Boolean).join(" · ");
+    const meta=[p.to, p.phong_o?("Phòng "+p.phong_o):"", p.so_dt?("SĐT: "+p.so_dt):"", isMuon(p)?("HS: "+p.ten_ho_so):""].filter(Boolean).join(" · ");
     return '<div class="sgrow" data-id="'+p.id+'">'+avh+
       '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">'+highlightName(p.ten_that||"(chưa có tên)",q)+
       (p.chu_phong?' 👑':'')+'</div><div style="font-size:11.5px;color:var(--muted)">'+esc(meta)+'</div></div>'+
@@ -552,7 +601,7 @@ function openRoom(room){
     const avHtml = av ? '<img class="avatar" src="'+av+'">' : '<div class="avatar" style="display:flex;align-items:center;justify-content:center;color:#9bb0a5">🧑</div>';
     rows+='<div class="occ" data-id="'+p.id+'">'+avHtml+
       '<div class="onm">'+esc(p.ten_that||"(chưa có tên)")+(p.chu_phong?' <span class="tag chu">👑</span>':'')+(isMuon(p)?' <span class="tag muon">⚑</span>':'')+
-        '<div style="font-size:12px;color:var(--muted);font-weight:400">'+esc(p.loai)+(p.quan_he?' · '+esc(p.quan_he):'')+(p.cmnd?' · CMND '+esc(p.cmnd):'')+'</div></div>'+
+        '<div style="font-size:12px;color:var(--muted);font-weight:400">'+esc(p.loai)+(p.quan_he?' · '+esc(p.quan_he):'')+(p.so_dt?' · 📞 '+esc(p.so_dt):'')+(p.cmnd?' · CMND '+esc(p.cmnd):'')+'</div></div>'+
       '<button class="mini-b" data-act="chu" title="Đặt làm chủ phòng">'+(p.chu_phong?'★':'☆')+'</button>'+
       '<button class="mini-b" data-act="edit">Sửa</button>'+
       '<button class="mini-b move" data-act="move">Chuyển</button>'+
@@ -617,6 +666,7 @@ function renderPeople(){
     const muon = isMuon(p);
     const sub = [];
     if(p.cmnd) sub.push('<span class="pill">CMND: '+esc(p.cmnd)+'</span>');
+    if(p.so_dt) sub.push('<span class="pill">📞 '+esc(p.so_dt)+'</span>');
     if(p.to) sub.push('<span class="pill">'+esc(p.to)+'</span>');
     if(p.phong_o) sub.push('<span class="pill">🏠 '+esc(p.phong_o)+'</span>');
     if(p.phan_cay) sub.push('<span class="pill">🌳 '+esc(p.phan_cay)+'</span>');
@@ -786,7 +836,9 @@ function importXlsx(file){
         ngay_sinh:find("ngay sinh"), tuoi:find("tuoi"), gioi_tinh:find("gioi"),
         phan_cay:find("phan cay"), khu_vuc:find("khu vuc"), to:H.findIndex(h=>h==="to"||h.startsWith("to ")),
         quan_he:find("quan he"), loai:find("loai"), phong_o:find("phong"),
-        so_bao_hiem:find("bao hiem"), chi_tiet_noi_o:find("chi tiet"), dia_chi:find("dia chi"), ghi_chu:find("ghi chu") };
+        so_bao_hiem:find("bao hiem"), chi_tiet_noi_o:find("chi tiet"), dia_chi:find("dia chi"),
+        so_dt:find("so dien thoai","dien thoai","sdt","so dt","phone","mobile","zalo"),
+        ghi_chu:find("ghi chu") };
       const out=[]; let id=1;
       for(let i=hr+1;i<aoa.length;i++){
         const r=aoa[i]||[]; const g=k=> idx[k]>=0 ? (r[idx[k]]==null?"":(""+r[idx[k]]).trim()) : "";

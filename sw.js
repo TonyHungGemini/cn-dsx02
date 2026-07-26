@@ -1,6 +1,5 @@
-var CACHE='cn-dsx02-v7';
-var ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png',
-  './images-1.js','./images-2.js','./images-3.js','./images-4.js'];
+var CACHE='cn-dsx02-v8';
+var ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',function(e){
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(function(c){
