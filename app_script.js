@@ -22,19 +22,22 @@ const FIELDS = [
 ];
 const TO_LIST = ["Tổ 1","Tổ 2","Tổ 3","Tổ 4","Tổ 5","Tổ 6","Tổ 7","Tổ 8"];
 
-var DATA = load(); window.DATA = DATA;
-let state = { q:"", to:"", loai:"", muon:false, view:"people" };
-let currentRoom = null;
-const NO_ROOM = "(chưa có phòng)";
-function roomKey(p){ return (p.phong_o||"").trim() || NO_ROOM; }
-function allRooms(){ const s=new Set(); DATA.forEach(p=>{ const r=(p.phong_o||"").trim(); if(r) s.add(r); }); return Array.from(s).sort((a,b)=>a.localeCompare(b,'vi',{numeric:true})); }
+function clone(o){
+  if(!o) return [];
+  try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return Array.isArray(o)?[...o]:Object.assign({},o); }
+}
 
-function clone(o){ if(!o) return []; try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return Array.isArray(o)?[...o]:Object.assign({},o); } }
+function getPhone(p){
+  if(!p) return "";
+  return String(p.so_dt || p.sdt || p["Số ĐT"] || p["SĐT"] || p["SDT"] || "").trim();
+}
+
 function getBaseData(){
   if(typeof BASE_DATA!=="undefined" && Array.isArray(BASE_DATA) && BASE_DATA.length>0) return BASE_DATA;
   if(typeof window!=="undefined" && Array.isArray(window.BASE_DATA) && window.BASE_DATA.length>0) return window.BASE_DATA;
   return [];
 }
+
 function load(){
   try{
     const s=localStorage.getItem(LS_KEY);
@@ -49,7 +52,7 @@ function load(){
       }
     }
   }catch(e){
-    console.warn("Loi doc localStorage:", e);
+    console.warn("Lỗi đọc localStorage:", e);
   }
   const base = getBaseData();
   return clone(base).map(p => {
@@ -58,7 +61,33 @@ function load(){
     return p;
   });
 }
-function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(DATA)); }catch(e){ toast("Không lưu được (bộ nhớ đầy)"); } }
+
+function save(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(DATA));
+  }catch(e){
+    console.warn("Lỗi lưu localStorage:", e);
+  }
+}
+
+var DATA = load();
+if(!DATA || DATA.length === 0){
+  DATA = clone(getBaseData()).map(p => {
+    p.so_dt = getPhone(p);
+    p.sdt = p.so_dt;
+    return p;
+  });
+  save();
+}
+window.DATA = DATA;
+
+let state = { q:"", to:"", loai:"", muon:false, view:"people" };
+let currentRoom = null;
+const NO_ROOM = "(chưa có phòng)";
+function roomKey(p){ return (p.phong_o||"").trim() || NO_ROOM; }
+function allRooms(){ const s=new Set(); DATA.forEach(p=>{ const r=(p.phong_o||"").trim(); if(r) s.add(r); }); return Array.from(s).sort((a,b)=>a.localeCompare(b,'vi',{numeric:true})); }
+
+
 function noAccent(s){ return (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase(); }
 function esc(s){ return (s==null?"":""+s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
