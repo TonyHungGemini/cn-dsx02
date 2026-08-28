@@ -224,6 +224,186 @@ table.mini td:last-child{text-align:right;font-weight:700;color:var(--green-d);}
   transform: scale(0.97);
 }
 
+/* Restored & Enhanced Settings Modal Styles */
+.cfg-nav-tabs {
+  display: flex;
+  background: #f1f5f9;
+  padding: 4px;
+  border-bottom: 1px solid var(--line);
+  gap: 4px;
+  overflow-x: auto;
+}
+.cnt-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.cnt-btn.on {
+  background: #ffffff;
+  color: var(--green);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.cfg-card {
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 14px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.cfg-card.cfg-online {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+.cfg-card.cfg-offline {
+  background: #fefce8;
+  border: 1px solid #fef08a;
+  color: #854d0e;
+}
+.status-indicator { font-size: 18px; line-height: 1; margin-top: 2px; }
+.status-info { flex: 1; font-size: 13px; line-height: 1.4; }
+.status-info b { display: block; font-size: 14px; margin-bottom: 2px; }
+.status-info span { font-size: 12px; opacity: 0.9; }
+.pending-tag {
+  display: inline-block;
+  margin-top: 6px;
+  background: #fed7aa;
+  color: #9a3412;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+.fld-pass-wrap {
+  display: flex;
+  gap: 6px;
+  position: relative;
+}
+.fld-pass-wrap input {
+  flex: 1;
+}
+.btn-eye {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.cfg-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+@media (max-width: 480px){
+  .cfg-actions-grid { grid-template-columns: 1fr; }
+}
+.cfg-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 12px;
+  line-height: 1.5;
+  background: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+.cfg-stat-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.css-item {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 6px;
+  text-align: center;
+}
+.css-item b { display: block; font-size: 16px; color: var(--green-d); }
+.css-item span { font-size: 11px; color: var(--muted); }
+.cfg-sec-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+.cfg-btn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+@media (max-width: 480px){
+  .cfg-btn-grid { grid-template-columns: 1fr; }
+}
+.ckrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: #1e293b;
+  cursor: pointer;
+}
+.ckrow input {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+}
+.cfg-info-box {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+.cib-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  padding: 4px 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.cib-row:last-child { border-bottom: none; }
+.cib-row span { color: var(--muted); }
+.cib-row b { color: #1e293b; }
+.cfg-log-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.cfg-log-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.cfg-log-item:last-child { border-bottom: none; }
+.cli-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.cli-top b { color: var(--green-d); font-size: 12.5px; }
+.cli-time { color: var(--muted); font-size: 11px; }
+.cli-desc { color: #334155; line-height: 1.35; }
+.cli-user { color: #64748b; font-size: 11.5px; }
+
 </style>
 </head>
 <body>

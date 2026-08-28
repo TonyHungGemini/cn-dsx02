@@ -1813,9 +1813,120 @@ try{
 let ROLE = null;
 function isGuest(){ return ROLE === "guest"; }
 
+let PREFS = { autoTranslate: true, highlightChu: true, confirmDelete: true };
+try {
+  const sp = localStorage.getItem("cn_prefs_v1");
+  if(sp) PREFS = Object.assign({}, PREFS, JSON.parse(sp));
+} catch(e){}
+
+function savePrefs(p){
+  PREFS = Object.assign({}, PREFS, p);
+  localStorage.setItem("cn_prefs_v1", JSON.stringify(PREFS));
+}
+
+/* ---------- Audit Logs ---------- */
+function addLog(action, detail){
+  try{
+    const logs = JSON.parse(localStorage.getItem("cn_audit_logs_v1") || "[]");
+    logs.unshift({
+      time: new Date().toLocaleString("vi-VN"),
+      user: CFG.user || "Người dùng",
+      action: action,
+      detail: detail || ""
+    });
+    if(logs.length > 50) logs.length = 50;
+    localStorage.setItem("cn_audit_logs_v1", JSON.stringify(logs));
+  }catch(e){}
+}
+
+function getLogs(){
+  try{
+    return JSON.parse(localStorage.getItem("cn_audit_logs_v1") || "[]");
+  }catch(e){ return []; }
+}
+
+function clearLogs(){
+  localStorage.removeItem("cn_audit_logs_v1");
+}
+
+/* ---------- Backup & Restore JSON ---------- */
+function backupJson(){
+  const dump = {
+    appName: "Tra cứu Công nhân ĐSX02",
+    version: "2.4",
+    exportDate: new Date().toISOString(),
+    totalRecords: DATA.length,
+    records: DATA,
+    imagesOvr: IMG_OVR,
+    config: { url: CFG.url, user: CFG.user }
+  };
+  const str = JSON.stringify(dump, null, 2);
+  const blob = new Blob([str], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const d = new Date();
+  const dateStr = d.getFullYear() + String(d.getMonth()+1).padStart(2,"0") + String(d.getDate()).padStart(2,"0");
+  a.download = `DSX02_SaoLuu_${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
+  addLog("Sao lưu JSON", `Xuất file JSON (${DATA.length} hồ sơ)`);
+  toast("Đã xuất file sao lưu JSON ✓");
+}
+
+function restoreJson(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const parsed = JSON.parse(e.target.result);
+      const list = parsed.records || (Array.isArray(parsed) ? parsed : null);
+      if(!list || !Array.isArray(list) || list.length === 0){
+        toast("File JSON không hợp lệ hoặc rỗng");
+        return;
+      }
+      DATA = list.map(normServerRec);
+      save();
+      if(parsed.imagesOvr && typeof parsed.imagesOvr === "object"){
+        Object.assign(IMG_OVR, parsed.imagesOvr);
+        for(const k in parsed.imagesOvr){
+          idbPut(k, parsed.imagesOvr[k]);
+        }
+      }
+      initFilterOptions();
+      render();
+      addLog("Khôi phục JSON", `Nạp ${DATA.length} hồ sơ từ file JSON`);
+      toast(`Đã khôi phục thành công ${DATA.length} hồ sơ ✓`);
+    }catch(err){
+      toast("Lỗi đọc file JSON: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearImgCache(){
+  if(!confirm("Xóa bộ nhớ đệm ảnh cục bộ trên máy này? Ảnh gốc trên Google Drive vẫn được giữ nguyên.")){ return; }
+  try {
+    IMG_OVR = {};
+    localStorage.removeItem("cn_imgfiles_v1");
+    idbOpen().then(db => {
+      const tx = db.transaction("images", "readwrite");
+      tx.objectStore("images").clear();
+    }).then(() => {
+      addLog("Dọn cache ảnh", "Đã xóa toàn bộ bộ đệm ảnh cục bộ");
+      toast("Đã dọn dẹp bộ đệm ảnh ✓");
+      render();
+      if(CFG.url && CFG.key) syncNow(true);
+    });
+  }catch(e){
+    toast("Lỗi khi dọn cache: " + e.message);
+  }
+}
+
 async function api(act, data){
   if(!CFG.url) throw new Error("Chưa cấu hình máy chủ");
-  const payload = Object.assign({ act, key: CFG.key, user: CFG.user }, data || {});
+  const payload = Object.assign({ act: act, action: act, key: CFG.key, user: CFG.user }, data || {});
   const res = await fetch(CFG.url, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -1899,8 +2010,7 @@ async function fetchServerImages(imgs, deleted){
 async function syncNow(silent){
   if(!CFG.url){ if(!silent) toast("Chưa cấu hình máy chủ (⚙️ Cài đặt)"); return; }
   if(!CFG.key){ if(!silent) toast("Chưa nhập mã bảo mật (⚙️ Cài đặt)"); return; }
-  if(!ROLE){ const ok = await connect(silent); if(!ok) return; }
-  if(!silent) toast("Đang đồng bộ…");
+  if(!silent) toast("Đang đồng bộ dữ liệu & hình ảnh…");
 
   try{
     let pend = getPendImg();
@@ -1930,10 +2040,17 @@ async function syncNow(silent){
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
     const res = await api("sync", { records: q });
     if(!res.ok){
-      const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ";
-      if(!silent) toast("Lỗi: " + errMsg);
+      if(res.error === "unauthorized" || res.msg === "Sai khoá truy cập."){
+        if(!silent) toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+      } else {
+        const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ";
+        if(!silent) toast("Lỗi: " + errMsg);
+      }
       return;
     }
+
+    ROLE = res.role || "vip";
+    applyRole();
 
     localStorage.removeItem("cn_queue_v1");
     updateSyncBadge();
@@ -1945,27 +2062,38 @@ async function syncNow(silent){
       render();
     }
     if(res.images) fetchServerImages(res.images, res.deletedImages);
-    if(!silent) toast("Đồng bộ thành công ✓");
+    addLog("Đồng bộ đám mây", `Thành công (${(res.data||[]).length} hồ sơ)`);
+    if(!silent) toast("Đồng bộ đám mây thành công ✓");
   }catch(e){
-    if(!silent) toast("Không kết nối được máy chủ");
+    if(!silent) toast("Không kết nối được máy chủ: " + e.message);
   }
 }
 
 async function connect(silent = false){
   if(!CFG.url) return false;
   if(!CFG.key){
-    // Nếu chưa nhập khoá, chạy chế độ offline/local bình thường không hiển thị thông báo lỗi
     return false;
   }
   try{
-    const r = await api("ping");
+    const r = await api("sync", { records: [] });
     if(r.ok){
-      ROLE = r.role || "guest";
+      ROLE = r.role || "vip";
       applyRole();
+      if(Array.isArray(r.data) && r.data.length > 0){
+        DATA = r.data.map(normServerRec);
+        save();
+        initFilterOptions();
+        render();
+      }
+      if(r.images) fetchServerImages(r.images, r.deletedImages);
       return true;
     } else {
-      const errMsg = r.msg || r.err || r.error || "Khoá bảo mật không chính xác";
-      if(!silent) toast("Lỗi khoá: " + errMsg);
+      if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập."){
+        if(!silent) toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+      } else {
+        const errMsg = r.msg || r.err || r.error || "Không thể xác thực máy chủ";
+        if(!silent) toast("Lỗi kết nối: " + errMsg);
+      }
       return false;
     }
   }catch(e){
@@ -1977,48 +2105,249 @@ async function connect(silent = false){
 function applyRole(){
   const ban = document.getElementById("roleBanner");
   if(ban){
-    if(isGuest()){
+    if(ROLE){
       ban.style.display = "";
-      ban.textContent = "⭐ Chế độ VIP — Đang kết nối máy chủ Google Drive/Apps Script.";
+      ban.textContent = (ROLE === "admin" ? "🛡️ Quyền Quản trị viên (Admin)" : "⭐ Đã kết nối Google Drive & Sheets") + " — Đồng bộ tự động đang bật.";
     } else {
       ban.style.display = "none";
     }
   }
   const lb = document.getElementById("bLog");
-  if(lb) lb.style.display = (ROLE === "admin") ? "" : "none";
+  if(lb) lb.style.display = "";
   document.getElementById("bAdd").style.display = (state.view === "people") ? "" : "none";
 }
 
-function openSettings(){
+let curSettingsTab = "sync"; // "sync" | "data" | "prefs" | "logs"
+
+function openSettings(initTab){
+  if(initTab) curSettingsTab = initTab;
   const s = document.getElementById("sheet");
-  const v = k => document.getElementById(k).value.trim();
+  if(!s) return;
+
+  const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+  const imgCount = Object.keys(IMG_OVR).filter(k => IMG_OVR[k] && IMG_OVR[k] !== DEL).length;
+  const uniqueRooms = new Set(DATA.map(x => x.phong_o).filter(Boolean)).size;
+  const ldCount = DATA.filter(x => (x.loai || "").toLowerCase().includes("lao")).length;
+  const gtCount = DATA.filter(x => (x.loai || "").toLowerCase().includes("gia")).length;
+
+  let tabContent = "";
+
+  if(curSettingsTab === "sync"){
+    const isOnline = !!ROLE;
+    tabContent =
+      '<div class="cfg-card status-card ' + (isOnline ? "cfg-online" : "cfg-offline") + '">' +
+        '<div class="status-indicator">' + (isOnline ? "🟢" : "🟡") + '</div>' +
+        '<div class="status-info">' +
+          '<b>' + (isOnline ? "Máy chủ Google Drive & Sheets: Đã kết nối" : "Chế độ Ngoại tuyến / Chưa kết nối") + '</b>' +
+          '<span>' + (isOnline ? ("Quyền hạn: " + (ROLE === "admin" ? "Quản trị viên (Admin)" : "Thành viên VIP")) : "Dữ liệu được lưu an toàn trên máy này. Nhập mã bảo mật để đồng bộ lên Đám mây.") + '</span>' +
+          (q.length > 0 ? ('<div class="pending-tag">⏳ ' + q.length + ' thay đổi chưa đồng bộ</div>') : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="fld">' +
+        '<label>Web App URL (Google Apps Script)</label>' +
+        '<input id="cUrl" value="' + esc(CFG.url || "") + '" placeholder="https://script.google.com/macros/s/.../exec">' +
+      '</div>' +
+      '<div class="fld">' +
+        '<label>Mã bảo mật (Key kết nối)</label>' +
+        '<div class="fld-pass-wrap">' +
+          '<input id="cKey" type="password" value="' + esc(CFG.key || "") + '" placeholder="Nhập mã bảo mật (Key)">' +
+          '<button type="button" class="btn-eye" id="bTogglePass" title="Hiện/Ẩn mã bảo mật">👁️</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="fld">' +
+        '<label>Tên người dùng / Mã nhân sự</label>' +
+        '<input id="cUser" value="' + esc(CFG.user || "") + '" placeholder="Ví dụ: Tony, QuanLy_01, ToTruong_1">' +
+      '</div>' +
+      '<div class="cfg-actions-grid">' +
+        '<button class="btn primary" id="bSaveCfg">💾 Lưu cấu hình & Kết nối</button>' +
+        '<button class="btn" id="bSyncFromSettings">☁️ Đồng bộ đám mây ngay</button>' +
+      '</div>' +
+      (q.length > 0 ? '<div style="margin-top:10px;text-align:right"><button class="btn del mini-b" id="bClearQueue">🧹 Xóa hàng đợi (' + q.length + ')</button></div>' : '') +
+      '<div class="cfg-hint">💡 Khi kết nối Google Apps Script, ảnh chân dung và CMND sẽ được tự động lưu trữ và chia sẻ an toàn trên Google Drive của tổ.</div>';
+  } else if(curSettingsTab === "data"){
+    tabContent =
+      '<div class="cfg-stat-summary">' +
+        '<div class="css-item"><b>' + DATA.length + '</b><span>Tổng hồ sơ</span></div>' +
+        '<div class="css-item"><b>' + uniqueRooms + '</b><span>Phòng ở</span></div>' +
+        '<div class="css-item"><b>' + ldCount + '</b><span>Lao động</span></div>' +
+        '<div class="css-item"><b>' + gtCount + '</b><span>Gia thuộc</span></div>' +
+        '<div class="css-item"><b>' + imgCount + '</b><span>Ảnh cục bộ</span></div>' +
+      '</div>' +
+      '<div class="cfg-sec-title">📦 Sao lưu & Khôi phục (JSON / Excel)</div>' +
+      '<div class="cfg-btn-grid">' +
+        '<button class="btn" id="bBackupJson">⬇️ Sao lưu dữ liệu JSON</button>' +
+        '<button class="btn" id="bRestoreJson">⬆️ Khôi phục từ file JSON</button>' +
+        '<button class="btn" id="bExportExcel">📊 Xuất dữ liệu Excel (.xlsx)</button>' +
+        '<button class="btn" id="bImportExcel">⬆️ Nhập dữ liệu từ Excel</button>' +
+      '</div>' +
+      '<div class="cfg-sec-title" style="margin-top:16px;">🖼️ Bộ nhớ ảnh & Dữ liệu gốc</div>' +
+      '<div class="cfg-btn-grid">' +
+        '<button class="btn" id="bClearImgCache">🗑️ Dọn dẹp bộ đệm ảnh (' + imgCount + ')</button>' +
+        '<button class="btn del" id="bResetBase">↺ Đặt lại 128 hồ sơ gốc</button>' +
+      '</div>' +
+      '<input type="file" id="fileJsonImport" accept=".json" style="display:none">';
+  } else if(curSettingsTab === "prefs"){
+    tabContent =
+      '<div class="cfg-sec-title">🎨 Tùy chọn hiển thị & Nhập liệu</div>' +
+      '<div class="fld"><label class="ckrow"><input type="checkbox" id="ckAutoTrans"' + (PREFS.autoTranslate !== false ? " checked" : "") + '> 🌐 Tự động hiện nút Dịch địa chỉ Campuchia sang Tiếng Việt</label></div>' +
+      '<div class="fld"><label class="ckrow"><input type="checkbox" id="ckHighlightChu"' + (PREFS.highlightChu !== false ? " checked" : "") + '> 👑 Tô nổi bật Chủ phòng trên danh sách phòng ở</label></div>' +
+      '<div class="fld"><label class="ckrow"><input type="checkbox" id="ckConfirmDel"' + (PREFS.confirmDelete !== false ? " checked" : "") + '> ⚠️ Luôn xác nhận trước khi xóa hồ sơ nhân sự</label></div>' +
+      '<div class="cfg-sec-title" style="margin-top:16px;">ℹ️ Thông tin hệ thống</div>' +
+      '<div class="cfg-info-box">' +
+        '<div class="cib-row"><span>Tên ứng dụng:</span><b>Tra cứu Công nhân ĐSX02</b></div>' +
+        '<div class="cib-row"><span>Phiên bản:</span><b>PWA v2.4 (Offline-First)</b></div>' +
+        '<div class="cib-row"><span>Đồng bộ:</span><b>Google Apps Script & Drive v2.4</b></div>' +
+        '<div class="cib-row"><span>Bộ nhớ đệm:</span><b>IndexedDB + LocalStorage</b></div>' +
+      '</div>';
+  } else if(curSettingsTab === "logs"){
+    const logs = getLogs();
+    tabContent =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+        '<div class="cfg-sec-title" style="margin:0">📜 Nhật ký thao tác gần đây (' + logs.length + ')</div>' +
+        (logs.length > 0 ? '<button class="btn mini-b del" id="bClearLogs">🧹 Xóa nhật ký</button>' : '') +
+      '</div>' +
+      (logs.length === 0 ?
+        '<div class="empty" style="padding:24px 0">Chưa có thao tác nào được ghi nhận.</div>' :
+        '<div class="cfg-log-list">' +
+          logs.map(l =>
+            '<div class="cfg-log-item">' +
+              '<div class="cli-top"><b>' + esc(l.action) + '</b><span class="cli-time">' + esc(l.time) + '</span></div>' +
+              '<div class="cli-desc">' + esc(l.detail) + (l.user ? (' <span class="cli-user">(' + esc(l.user) + ')</span>') : '') + '</div>' +
+            '</div>'
+          ).join("") +
+        '</div>'
+      );
+  }
+
   s.innerHTML =
-    '<div class="sheet-h"><h2>⚙️ Cài đặt đồng bộ</h2><button class="x" id="bClose">×</button></div>'+
-    '<div class="sheet-b">'+
-    '<div class="fld"><label>Web App URL (Google Apps Script)</label><input id="cUrl" value="'+esc(CFG.url)+'" placeholder="https://script.google.com/macros/s/.../exec"></div>'+
-    '<div class="fld"><label>Mã bảo mật (Key kết nối)</label><input id="cKey" type="password" value="'+esc(CFG.key)+'" placeholder="Nhập key kết nối"></div>'+
-    '<div class="fld"><label>Tên người dùng (Tùy chọn)</label><input id="cUser" value="'+esc(CFG.user)+'" placeholder="Ví dụ: QuanLy_01"></div>'+
-    '<div style="font-size:12.5px;color:var(--muted);margin-top:8px">Kết nối với Google Apps Script giúp tự động sao lưu ảnh chân dung, CMND lên Google Drive và đồng bộ dữ liệu giữa các thiết bị.</div>'+
-    '</div>'+
-    '<div class="sheet-f"><button class="btn primary" id="bSaveCfg">💾 Lưu & Kết nối</button></div>';
+    '<div class="sheet-h">' +
+      '<h2>⚙️ Cài đặt & Quản lý hệ thống</h2>' +
+      '<button class="x" id="bClose">×</button>' +
+    '</div>' +
+    '<div class="cfg-nav-tabs">' +
+      '<button class="cnt-btn ' + (curSettingsTab === "sync" ? "on" : "") + '" data-tab="sync">☁️ Đồng bộ</button>' +
+      '<button class="cnt-btn ' + (curSettingsTab === "data" ? "on" : "") + '" data-tab="data">💾 Dữ liệu</button>' +
+      '<button class="cnt-btn ' + (curSettingsTab === "prefs" ? "on" : "") + '" data-tab="prefs">🎨 Tùy chọn</button>' +
+      '<button class="cnt-btn ' + (curSettingsTab === "logs" ? "on" : "") + '" data-tab="logs">📜 Nhật ký</button>' +
+    '</div>' +
+    '<div class="sheet-b" style="padding-top:14px;">' + tabContent + '</div>' +
+    '<div class="sheet-f">' +
+      '<button class="btn primary" id="bDoneSettings">Đóng</button>' +
+    '</div>';
 
   document.getElementById("overlay").classList.add("show");
   document.getElementById("bClose").onclick = closeEdit;
-  document.getElementById("bSaveCfg").onclick = async () => {
-    CFG = { url: v("cUrl"), key: v("cKey"), user: v("cUser") };
-    localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
-    if(!CFG.url){
-      toast("Vui lòng nhập Web App URL");
-      return;
+  document.getElementById("bDoneSettings").onclick = closeEdit;
+
+  // Tab switching
+  s.querySelectorAll(".cnt-btn").forEach(b => {
+    b.onclick = () => openSettings(b.dataset.tab);
+  });
+
+  // Tab 1: Sync bindings
+  if(curSettingsTab === "sync"){
+    const tBtn = s.querySelector("#bTogglePass");
+    const kInp = s.querySelector("#cKey");
+    if(tBtn && kInp){
+      tBtn.onclick = () => {
+        kInp.type = kInp.type === "password" ? "text" : "password";
+        tBtn.textContent = kInp.type === "password" ? "👁️" : "🔒";
+      };
     }
-    if(!CFG.key){
-      toast("Vui lòng nhập mã bảo mật (Key kết nối)");
-      return;
+    const saveBtn = s.querySelector("#bSaveCfg");
+    if(saveBtn){
+      saveBtn.onclick = async () => {
+        const u = s.querySelector("#cUrl").value.trim();
+        const k = s.querySelector("#cKey").value.trim();
+        const usr = s.querySelector("#cUser").value.trim();
+        CFG = { url: u, key: k, user: usr };
+        localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
+        if(!CFG.url){ toast("Vui lòng nhập Web App URL"); return; }
+        if(!CFG.key){ toast("Vui lòng nhập mã bảo mật (Key)"); return; }
+        toast("Đang kiểm tra kết nối…");
+        const ok = await connect(false);
+        if(ok){
+          toast("Kết nối thành công! Đang đồng bộ…");
+          syncNow(true);
+          openSettings("sync");
+        }
+      };
     }
-    toast("Đang thử kết nối…");
-    const ok = await connect(false);
-    if(ok){ toast("Kết nối thành công! Đang đồng bộ…"); syncNow(true); closeEdit(); }
-  };
+    const syncBtn = s.querySelector("#bSyncFromSettings");
+    if(syncBtn){
+      syncBtn.onclick = async () => {
+        await syncNow(false);
+        openSettings("sync");
+      };
+    }
+    const clrQBtn = s.querySelector("#bClearQueue");
+    if(clrQBtn){
+      clrQBtn.onclick = () => {
+        if(confirm("Xóa toàn bộ hàng đợi thay đổi chưa gửi?")){
+          localStorage.removeItem("cn_queue_v1");
+          updateSyncBadge();
+          toast("Đã dọn sạch hàng đợi ✓");
+          openSettings("sync");
+        }
+      };
+    }
+  }
+
+  // Tab 2: Data bindings
+  if(curSettingsTab === "data"){
+    const bJson = s.querySelector("#bBackupJson");
+    if(bJson) bJson.onclick = backupJson;
+    const rJson = s.querySelector("#bRestoreJson");
+    const fJson = s.querySelector("#fileJsonImport");
+    if(rJson && fJson){
+      rJson.onclick = () => fJson.click();
+      fJson.onchange = e => {
+        if(e.target.files[0]) restoreJson(e.target.files[0]);
+        e.target.value = "";
+      };
+    }
+    const expExcel = s.querySelector("#bExportExcel");
+    if(expExcel) expExcel.onclick = exportXlsx;
+    const impExcel = s.querySelector("#bImportExcel");
+    if(impExcel) impExcel.onclick = () => document.getElementById("fileImport").click();
+    const clrImg = s.querySelector("#bClearImgCache");
+    if(clrImg) clrImg.onclick = clearImgCache;
+    const rstBase = s.querySelector("#bResetBase");
+    if(rstBase) rstBase.onclick = () => document.getElementById("bReset").click();
+  }
+
+  // Tab 3: Prefs bindings
+  if(curSettingsTab === "prefs"){
+    const ckAt = s.querySelector("#ckAutoTrans");
+    const ckHc = s.querySelector("#ckHighlightChu");
+    const ckCd = s.querySelector("#ckConfirmDel");
+    const updatePref = () => {
+      savePrefs({
+        autoTranslate: ckAt ? ckAt.checked : true,
+        highlightChu: ckHc ? ckHc.checked : true,
+        confirmDelete: ckCd ? ckCd.checked : true
+      });
+      render();
+      toast("Đã cập nhật tùy chọn ✓");
+    };
+    if(ckAt) ckAt.onchange = updatePref;
+    if(ckHc) ckHc.onchange = updatePref;
+    if(ckCd) ckCd.onchange = updatePref;
+  }
+
+  // Tab 4: Logs bindings
+  if(curSettingsTab === "logs"){
+    const clrLogs = s.querySelector("#bClearLogs");
+    if(clrLogs){
+      clrLogs.onclick = () => {
+        if(confirm("Xóa toàn bộ nhật ký thao tác?")){
+          clearLogs();
+          toast("Đã xóa nhật ký");
+          openSettings("logs");
+        }
+      };
+    }
+  }
 }
 
 /* ---------- Toast Notification ---------- */
@@ -2029,7 +2358,7 @@ function toast(msg){
   el.textContent = msg;
   el.classList.add("show");
   clearTimeout(_toastT);
-  _toastT = setTimeout(() => el.classList.remove("show"), 2200);
+  _toastT = setTimeout(() => el.classList.remove("show"), 2500);
 }
 
 /* ---------- Init & Event Listeners ---------- */
@@ -2129,7 +2458,9 @@ document.getElementById("fileImport").addEventListener("change", e => {
   e.target.value = "";
 });
 document.getElementById("bSync").onclick = () => syncNow(false);
-document.getElementById("bSettings").onclick = openSettings;
+const bLogEl = document.getElementById("bLog");
+if(bLogEl) bLogEl.onclick = () => openSettings("logs");
+document.getElementById("bSettings").onclick = () => openSettings("sync");
 document.getElementById("bReset").onclick = () => {
   if(confirm("Đặt lại về dữ liệu gốc ban đầu? Mọi chỉnh sửa cục bộ sẽ đặt lại.")){
     localStorage.removeItem(LS_KEY);
