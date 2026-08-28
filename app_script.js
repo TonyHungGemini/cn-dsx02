@@ -946,4 +946,5 @@ document.getElementById("overlay").addEventListener("click",e=>{ if(e.target.id=
 document.getElementById("bSettings").onclick=openSettings;
 document.getElementById("bSync").onclick=()=>syncNow(false);
 document.getElementById("bLog").onclick=showLog;
-initTo(); idbOpen().then(idbAll).then(()=>{ applyRole(); updateSyncBadge(); render(); if(online()) syncNow(true); }).catch(render);
+try{ initTo(); applyRole(); updateSyncBadge(); render(); }catch(e){ console.error("Lỗi render ban đầu:", e); }
+idbOpen().then(idbAll).then(()=>{ applyRole(); updateSyncBadge(); render(); if(online()) syncNow(true); }).catch(e=>{ console.warn("IDB warning:", e); render(); });
