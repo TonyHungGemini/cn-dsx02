@@ -1898,7 +1898,8 @@ async function fetchServerImages(imgs, deleted){
 
 async function syncNow(silent){
   if(!CFG.url){ if(!silent) toast("Chưa cấu hình máy chủ (⚙️ Cài đặt)"); return; }
-  if(!ROLE){ const ok = await connect(); if(!ok) return; }
+  if(!CFG.key){ if(!silent) toast("Chưa nhập mã bảo mật (⚙️ Cài đặt)"); return; }
+  if(!ROLE){ const ok = await connect(silent); if(!ok) return; }
   if(!silent) toast("Đang đồng bộ…");
 
   try{
@@ -1928,7 +1929,11 @@ async function syncNow(silent){
 
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
     const res = await api("sync", { records: q });
-    if(!res.ok){ toast("Lỗi: " + res.err); return; }
+    if(!res.ok){
+      const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ";
+      if(!silent) toast("Lỗi: " + errMsg);
+      return;
+    }
 
     localStorage.removeItem("cn_queue_v1");
     updateSyncBadge();
@@ -1946,7 +1951,12 @@ async function syncNow(silent){
   }
 }
 
-async function connect(){
+async function connect(silent = false){
+  if(!CFG.url) return false;
+  if(!CFG.key){
+    // Nếu chưa nhập khoá, chạy chế độ offline/local bình thường không hiển thị thông báo lỗi
+    return false;
+  }
   try{
     const r = await api("ping");
     if(r.ok){
@@ -1954,11 +1964,12 @@ async function connect(){
       applyRole();
       return true;
     } else {
-      toast("Lỗi khóa: " + r.err);
+      const errMsg = r.msg || r.err || r.error || "Khoá bảo mật không chính xác";
+      if(!silent) toast("Lỗi khoá: " + errMsg);
       return false;
     }
   }catch(e){
-    toast("Không kết nối được: " + e.message);
+    if(!silent) toast("Không kết nối được: " + e.message);
     return false;
   }
 }
@@ -1996,8 +2007,16 @@ function openSettings(){
   document.getElementById("bSaveCfg").onclick = async () => {
     CFG = { url: v("cUrl"), key: v("cKey"), user: v("cUser") };
     localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
+    if(!CFG.url){
+      toast("Vui lòng nhập Web App URL");
+      return;
+    }
+    if(!CFG.key){
+      toast("Vui lòng nhập mã bảo mật (Key kết nối)");
+      return;
+    }
     toast("Đang thử kết nối…");
-    const ok = await connect();
+    const ok = await connect(false);
     if(ok){ toast("Kết nối thành công! Đang đồng bộ…"); syncNow(true); closeEdit(); }
   };
 }
@@ -2019,7 +2038,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initFilterOptions();
     render();
     updateSyncBadge();
-    if(CFG.url) connect().then(ok => { if(ok) syncNow(true); });
+    if(CFG.url && CFG.key) connect(true).then(ok => { if(ok) syncNow(true); });
   });
 });
 

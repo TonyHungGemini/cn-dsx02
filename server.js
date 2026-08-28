@@ -120,7 +120,7 @@ function fallbackTranslateKhmer(raw) {
   return text.replace(/\s{2,}/g, ' ').trim();
 }
 
-function withTimeout(promise, ms = 4000) {
+function withTimeout(promise, ms = 7000) {
   return Promise.race([
     promise,
     new Promise((_, reject) =>
@@ -182,7 +182,7 @@ Nhiệm vụ:
 
 3. Trả về JSON đúng cấu trúc.`;
 
-      const modelsToTry = ['gemini-3.7-flash', 'gemini-3.1-flash-lite'];
+      const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.7-flash'];
       for (const model of modelsToTry) {
         try {
           const response = await withTimeout(
@@ -200,6 +200,7 @@ Nhiệm vụ:
                 ],
               },
               config: {
+                thinkingConfig: { thinkingBudget: 0 },
                 responseMimeType: 'application/json',
                 responseSchema: {
                   type: Type.OBJECT,
@@ -219,7 +220,7 @@ Nhiệm vụ:
                 },
               },
             }),
-            8000
+            12000
           );
 
           const result = JSON.parse(response.text || '{}');
@@ -227,7 +228,7 @@ Nhiệm vụ:
             return res.json({ ok: true, source: 'ai', data: result });
           }
         } catch (err) {
-          console.warn(`OCR attempt with ${model} failed, trying next...`, err.message);
+          // silently try next model
         }
       }
     }
@@ -235,7 +236,6 @@ Nhiệm vụ:
     // Return fallback signal to let client run Tesseract OCR
     res.json({ ok: false, fallback: true });
   } catch (err) {
-    console.error('OCR route error:', err);
     res.json({ ok: false, fallback: true, error: err.message || String(err) });
   }
 });
@@ -249,7 +249,7 @@ app.post('/api/translate-address', async (req, res) => {
 
   const ai = getAI();
   if (ai) {
-    const modelsToTry = ['gemini-3.7-flash', 'gemini-3.1-flash-lite'];
+    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.7-flash'];
     for (const model of modelsToTry) {
       try {
         const prompt = `Bạn là chuyên gia phiên dịch địa danh và địa chỉ Campuchia / Khmer sang tiếng Việt chuẩn.
@@ -261,6 +261,7 @@ Trả về JSON: { "translated": "...", "original": "..." }`;
             model: model,
             contents: prompt,
             config: {
+              thinkingConfig: { thinkingBudget: 0 },
               responseMimeType: 'application/json',
               responseSchema: {
                 type: Type.OBJECT,
@@ -272,7 +273,7 @@ Trả về JSON: { "translated": "...", "original": "..." }`;
               },
             },
           }),
-          4000
+          7000
         );
 
         const result = JSON.parse(response.text || '{}');
@@ -280,7 +281,7 @@ Trả về JSON: { "translated": "...", "original": "..." }`;
           return res.json({ ok: true, source: 'ai', data: result });
         }
       } catch (err) {
-        console.warn(`Translation attempt with ${model} failed, trying next...`, err.message);
+        // silently try next model or fallback
       }
     }
   }
