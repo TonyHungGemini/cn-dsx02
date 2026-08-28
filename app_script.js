@@ -1186,33 +1186,68 @@ function flipImage(uri, horizontal = true) {
   });
 }
 
-function autoCropCard(uri) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const srcW = img.width;
-        const srcH = img.height;
-        
-        // Target standard ID card aspect ratio: ~1.58 : 1 (or 16:10)
-        // Auto trim redundant borders (especially outer 3-8% dark/distorted frame margins)
-        const trimX = Math.round(srcW * 0.04);
-        const trimY = Math.round(srcH * 0.04);
-        const cropW = srcW - trimX * 2;
-        const cropH = srcH - trimY * 2;
+function aiCropCard(uri) {
+  return new Promise(async (resolve) => {
+    try {
+      const res = await fetch("/api/detect-card-bounds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: uri })
+      });
+      const json = await res.json();
+      if (json.ok && json.data && json.data.detected && json.data.ymin != null) {
+        const { ymin, xmin, ymax, xmax } = json.data;
+        if (ymax > ymin && xmax > xmin && (xmax - xmin) > 80 && (ymax - ymin) > 80) {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const srcW = img.naturalWidth || img.width;
+              const srcH = img.naturalHeight || img.height;
+              
+              // Pad 0.5% margin around detected bounds to ensure edge text/corners remain fully intact
+              const padX = Math.round(srcW * 0.005);
+              const padY = Math.round(srcH * 0.005);
 
-        const canvas = document.createElement("canvas");
-        canvas.width = cropW;
-        canvas.height = cropH;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, trimX, trimY, cropW, cropH, 0, 0, cropW, cropH);
-        resolve(canvas.toDataURL("image/jpeg", 0.92));
-      } catch (e) {
-        resolve(uri);
+              const sx = Math.max(0, Math.round((xmin / 1000) * srcW) - padX);
+              const sy = Math.max(0, Math.round((ymin / 1000) * srcH) - padY);
+              const ex = Math.min(srcW, Math.round((xmax / 1000) * srcW) + padX);
+              const ey = Math.min(srcH, Math.round((ymax / 1000) * srcH) + padY);
+
+              const sw = ex - sx;
+              const sh = ey - sy;
+
+              if (sw <= 20 || sh <= 20) {
+                resolve({ ok: false, reason: "Tọa độ không hợp lệ", uri });
+                return;
+              }
+
+              const canvas = document.createElement("canvas");
+              canvas.width = sw;
+              canvas.height = sh;
+              const ctx = canvas.getContext("2d");
+              
+              // Strictly crop original pixels only - NEVER modify or distort original text/photos
+              ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+              
+              const croppedUri = canvas.toDataURL("image/jpeg", 0.94);
+              resolve({ ok: true, uri: croppedUri });
+            } catch (err) {
+              resolve({ ok: false, reason: err.message, uri });
+            }
+          };
+          img.onerror = () => resolve({ ok: false, reason: "Không tải được ảnh gốc", uri });
+          img.src = uri;
+          return;
+        }
       }
-    };
-    img.onerror = () => resolve(uri);
-    img.src = uri;
+      resolve({
+        ok: false,
+        reason: json.data?.reason || json.error || "Ảnh khó xác định rõ viền thẻ, hệ thống đã giữ nguyên ảnh gốc.",
+        uri
+      });
+    } catch (e) {
+      resolve({ ok: false, reason: e.message || "Lỗi kết nối", uri });
+    }
   });
 }
 
@@ -1347,9 +1382,9 @@ function openManualCropModal(id, type, label, onDone) {
 
 function renderDriveBadge(driveUrl) {
   if (!driveUrl) return "";
-  return '<a href="' + driveUrl + '" target="_blank" rel="noopener noreferrer" class="drive-badge-link" title="Mở file gốc trên Google Drive">' +
-    '<span class="drive-cloud-icon">☁️</span>' +
-    '<span>Drive</span>' +
+  return '<a href="' + driveUrl + '" target="_blank" rel="noopener noreferrer" class="drive-badge-link" style="display:inline-flex;align-items:center;gap:4px;background:#0f766e;color:#ffffff;border:1px solid #0d9488;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;text-decoration:none;box-shadow:0 1px 2px rgba(15,118,110,0.25);line-height:1.2;cursor:pointer;" title="Mở file gốc trên Google Drive">' +
+    '<span style="font-size:12px;line-height:1;">☁️</span>' +
+    '<span style="text-decoration:none;color:#ffffff;">Drive</span>' +
   '</a>';
 }
 
@@ -1367,20 +1402,44 @@ function renderImgSlot(id, type, label) {
   h += '</div>';
 
   if (uri) {
-    h += '<div class="thumbwrap" style="position:relative;cursor:pointer;border-radius:10px;overflow:hidden;" title="Bấm để xem ảnh gốc / phóng to" data-img-act="preview" data-img-type="' + type + '">';
-    h += '<img class="thumbimg" src="' + uri + '" alt="' + esc(label) + '">';
+    h += '<div class="thumbwrap" style="position:relative;cursor:pointer;border-radius:10px;overflow:hidden;background:#f7f9f8;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;min-height:140px;" title="Bấm để xem ảnh gốc / phóng to" data-img-act="preview" data-img-type="' + type + '">';
+    h += '<img class="thumbimg" src="' + uri + '" alt="' + esc(label) + '" style="max-height:240px;width:100%;object-fit:contain;border:none;background:transparent;">';
     h += '<div class="thumb-overlay" style="position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,0.68);color:#fff;font-size:11.5px;padding:3px 9px;border-radius:6px;backdrop-filter:blur(2px);font-weight:600;">🔍 Xem lớn</div>';
     h += '</div>';
 
     h += '<div class="ibtns">';
     if (type === "cmnd") {
       h += '<button type="button" class="btn mini-b btn-ocr" data-img-act="ocr" title="Đọc thông tin CMND & Dịch địa chỉ">⚡ Đọc CMND & Dịch</button>';
-      h += '<button type="button" class="btn mini-b btn-crop-tool" data-img-act="auto-crop" title="Tự động nhận diện và cắt viền thẻ CMND">✂️ Cắt tự động</button>';
-      h += '<button type="button" class="btn mini-b btn-crop-tool" data-img-act="manual-crop" title="Cắt viền và căn chỉnh thủ công">📐 Cắt thủ công</button>';
+      h += '<div class="img-dropdown-wrap">';
+      h += '<button type="button" class="btn mini-b btn-tool-secondary" data-dropdown-toggle title="Danh sách công cụ xử lý ảnh">⚙️ Công cụ ▾</button>';
+      h += '<div class="img-dropdown-menu">';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="ai-crop" data-img-type="cmnd" title="AI tự động nhận diện khung viền CMND và cắt bỏ chi tiết thừa">✂️ AI Cắt viền CMND</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="manual-crop" data-img-type="cmnd" title="Cắt viền và căn chỉnh kích thước thủ công">📐 Cắt viền thủ công</button>';
+      h += '<div class="img-dropdown-divider"></div>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="rotate" data-img-type="cmnd">🔄 Xoay 90°</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="flip" data-img-type="cmnd">↔️ Lật ảnh</button>';
+      h += '<div class="img-dropdown-divider"></div>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="change" data-img-type="cmnd">📷 Đổi ảnh mới</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="download" data-img-type="cmnd" data-img-label="Ảnh CMND">⬇ Tải ảnh về máy</button>';
+      h += '<div class="img-dropdown-divider"></div>';
+      h += '<button type="button" class="img-dropdown-item del-item" data-img-act="del" data-img-type="cmnd">🗑 Xóa ảnh này</button>';
+      h += '</div>';
+      h += '</div>';
+    } else {
+      h += '<div class="img-dropdown-wrap">';
+      h += '<button type="button" class="btn mini-b btn-tool-secondary" data-dropdown-toggle title="Danh sách công cụ chỉnh sửa">⚙️ Công cụ ▾</button>';
+      h += '<div class="img-dropdown-menu">';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="rotate" data-img-type="photo">🔄 Xoay 90°</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="flip" data-img-type="photo">↔️ Lật ảnh</button>';
+      h += '<div class="img-dropdown-divider"></div>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="change" data-img-type="photo">📷 Đổi ảnh mới</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="download" data-img-type="photo" data-img-label="Ảnh chân dung">⬇ Tải ảnh về máy</button>';
+      h += '<div class="img-dropdown-divider"></div>';
+      h += '<button type="button" class="img-dropdown-item del-item" data-img-act="del" data-img-type="photo">🗑 Xóa ảnh này</button>';
+      h += '</div>';
+      h += '</div>';
     }
-    h += '<button type="button" class="btn mini-b btn-tool-secondary" data-img-act="rotate" data-img-type="' + type + '" title="Xoay ảnh 90° theo chiều kim đồng hồ">🔄 Xoay 90°</button>';
-    h += '<button type="button" class="btn mini-b btn-tool-secondary" data-img-act="flip" data-img-type="' + type + '" title="Lật ảnh nằm ngang">↔️ Lật</button>';
-    h += '<button type="button" class="btn mini-b" data-img-act="change" data-img-type="' + type + '">📷 Đổi ảnh</button>';
+    h += '<button type="button" class="btn mini-b" data-img-act="change" data-img-type="' + type + '" title="Tải ảnh khác thay thế">📷 Đổi ảnh</button>';
     h += '<button type="button" class="btn mini-b" data-img-act="download" data-img-type="' + type + '" data-img-label="' + esc(label) + '" style="font-weight:700;color:#047857;background:#ecfdf5;border-color:#a7f3d0;" title="Tải ảnh này về máy">⬇ Tải về</button>';
     h += '<button type="button" class="btn mini-b del" data-img-act="del" data-img-type="' + type + '" title="Xóa ảnh này">🗑 Xóa</button>';
     h += '</div>';
@@ -1424,10 +1483,40 @@ function wireImgEvents(id) {
   const container = document.getElementById("imgSection");
   if (!container) return;
 
+  // Toggle dropdown menus
+  container.querySelectorAll("[data-dropdown-toggle]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrap = btn.closest(".img-dropdown-wrap");
+      if (!wrap) return;
+      const wasOpen = wrap.classList.contains("open");
+      document.querySelectorAll(".img-dropdown-wrap.open").forEach(w => w.classList.remove("open"));
+      if (!wasOpen) {
+        wrap.classList.add("open");
+      }
+    };
+  });
+
+  // Global listener to close dropdowns when clicking outside
+  if (!window.__imgDropdownCloseBound) {
+    window.__imgDropdownCloseBound = true;
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".img-dropdown-wrap")) {
+        document.querySelectorAll(".img-dropdown-wrap.open").forEach(w => w.classList.remove("open"));
+      }
+    });
+  }
+
   container.querySelectorAll("[data-img-act]").forEach(b => {
     b.onclick = async e => {
       e.preventDefault();
       e.stopPropagation();
+
+      // Close dropdown if clicked inside
+      const parentWrap = b.closest(".img-dropdown-wrap");
+      if (parentWrap) parentWrap.classList.remove("open");
+
       const act = b.dataset.imgAct;
       const type = b.dataset.imgType || "cmnd";
       const label = b.dataset.imgLabel || (type === "photo" ? "Ảnh chân dung" : "Ảnh CMND");
@@ -1460,15 +1549,19 @@ function wireImgEvents(id) {
         container.innerHTML = renderImgSection(id);
         wireImgEvents(id);
         toast("Đã lật ảnh thành công ✓");
-      } else if (act === "auto-crop") {
+      } else if (act === "ai-crop") {
         const curUri = getImg(id, type);
         if (!curUri) return;
-        toast("Đang tự động nhận diện & cắt viền…");
-        const cropped = await autoCropCard(curUri);
-        setImg(id, type, cropped);
-        container.innerHTML = renderImgSection(id);
-        wireImgEvents(id);
-        toast("Đã tự động cắt viền CMND ✓");
+        toast("🤖 AI đang nhận diện vùng CMND & cắt viền…");
+        const cropRes = await aiCropCard(curUri);
+        if (cropRes.ok && cropRes.uri) {
+          setImg(id, type, cropRes.uri);
+          container.innerHTML = renderImgSection(id);
+          wireImgEvents(id);
+          toast("✓ Đã nhận diện & cắt viền CMND bằng AI!");
+        } else {
+          toast("⚠️ " + (cropRes.reason || "Ảnh khó xác định rõ viền thẻ, đã giữ nguyên ảnh gốc."));
+        }
       } else if (act === "manual-crop") {
         openManualCropModal(id, type, label, croppedUri => {
           setImg(id, type, croppedUri);

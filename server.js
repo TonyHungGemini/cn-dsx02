@@ -295,6 +295,94 @@ Trả về JSON: { "translated": "...", "original": "..." }`;
   });
 });
 
+// API: AI-powered ID Card Bounding Box Detection for smart cropping
+app.post('/api/detect-card-bounds', async (req, res) => {
+  try {
+    const { image } = req.body;
+    if (!image) {
+      return res.status(400).json({ ok: false, error: 'Thiếu dữ liệu hình ảnh' });
+    }
+
+    const ai = getAI();
+    if (!ai) {
+      return res.json({ ok: false, fallback: true, error: 'Không có API key' });
+    }
+
+    let base64Data = image;
+    let mimeType = 'image/jpeg';
+    const match = image.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      mimeType = match[1];
+      base64Data = match[2];
+    }
+
+    const prompt = `Bạn là chuyên gia thị giác máy tính AI nhận diện vị trí và khung viền thẻ Căn cước công dân / CMND / Thẻ ID Campuchia / Hộ chiếu trong hình ảnh.
+
+Nhiệm vụ:
+1. Tìm chính xác khung viền bao quanh của thẻ CMND/CCCD (chỉ vùng thẻ, loại bỏ phông nền mặt bàn, ngón tay, viền đen thừa bên ngoài).
+2. Tọa độ chuẩn hóa theo thang 0 đến 1000:
+   - ymin (0 - 1000): mép trên của thẻ
+   - xmin (0 - 1000): mép trái của thẻ
+   - ymax (0 - 1000): mép dưới của thẻ
+   - xmax (0 - 1000): mép phải của thẻ
+3. Điều kiện:
+   - Nếu nhận diện rõ ràng thẻ: set "detected": true.
+   - Nếu ảnh không chứa thẻ, hoặc quá mờ, góc chụp quá méo không thể xác định chính xác mép thẻ: set "detected": false và nêu "reason".
+4. Yêu cầu tuyệt đối: Giữ nguyên toàn bộ nội dung thẻ, không cắt lẹm vào chữ hay hình chân dung trên thẻ.`;
+
+    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.7-flash'];
+    for (const model of modelsToTry) {
+      try {
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: model,
+            contents: {
+              parts: [
+                {
+                  inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType,
+                  },
+                },
+                { text: prompt },
+              ],
+            },
+            config: {
+              thinkingConfig: { thinkingBudget: 0 },
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  detected: { type: Type.BOOLEAN },
+                  ymin: { type: Type.INTEGER },
+                  xmin: { type: Type.INTEGER },
+                  ymax: { type: Type.INTEGER },
+                  xmax: { type: Type.INTEGER },
+                  confidence: { type: Type.STRING },
+                  reason: { type: Type.STRING },
+                },
+                required: ['detected'],
+              },
+            },
+          }),
+          10000
+        );
+
+        const result = JSON.parse(response.text || '{}');
+        if (typeof result.detected === 'boolean') {
+          return res.json({ ok: true, source: 'ai', data: result });
+        }
+      } catch (err) {
+        // try next model
+      }
+    }
+
+    return res.json({ ok: false, fallback: true, error: 'Không thể xử lý bằng AI lúc này' });
+  } catch (err) {
+    return res.json({ ok: false, fallback: true, error: err.message || String(err) });
+  }
+});
+
 // Proxy endpoint to bypass CORS / iframe restrictions when connecting to Google Apps Script
 app.post('/api/sync-gas', async (req, res) => {
   try {
