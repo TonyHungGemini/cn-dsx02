@@ -13,8 +13,12 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Serve static assets from project root
-app.use(express.static(__dirname));
+// Serve static assets from project root with no-cache headers for live dev
+app.use(express.static(__dirname, {
+  setHeaders: (res, path) => {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+}));
 
 // Fallback to index.html for SPA/PWA routing
 app.get('*', (req, res) => {
