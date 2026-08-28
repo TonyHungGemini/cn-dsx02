@@ -1,0 +1,8 @@
+{
+  "name": "Tra cứu Công nhân ĐSX02",
+  "description": "Tra cứu & quản lý thông tin công nhân, gia thuộc, phòng ở - Đội sản xuất 02",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
