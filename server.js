@@ -295,6 +295,36 @@ Trả về JSON: { "translated": "...", "original": "..." }`;
   });
 });
 
+// Proxy endpoint to bypass CORS / iframe restrictions when connecting to Google Apps Script
+app.post('/api/sync-gas', async (req, res) => {
+  try {
+    const { url, payload, method } = req.body;
+    if (!url) {
+      return res.status(400).json({ ok: false, error: 'missing_url', msg: 'Thiếu Web App URL' });
+    }
+    const cleanUrl = url.trim();
+    const httpMethod = (method || 'POST').toUpperCase();
+    const fetchOptions = {
+      method: httpMethod,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    };
+    if (httpMethod !== 'GET' && httpMethod !== 'HEAD') {
+      fetchOptions.body = JSON.stringify(payload || {});
+    }
+
+    const response = await fetch(cleanUrl, fetchOptions);
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      return res.json(data);
+    } catch (parseErr) {
+      return res.json({ ok: false, error: 'non_json_response', raw: text });
+    }
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'proxy_error', msg: err.message });
+  }
+});
+
 // Serve static assets from project root with no-cache headers for live dev
 app.use(express.static(__dirname, {
   setHeaders: (res, path) => {

@@ -1924,15 +1924,140 @@ function clearImgCache(){
   }
 }
 
+let RESOLVED_ACTIONS = { sync: "sync", uploadImage: "uploadImage", deleteImage: "deleteImage" };
+
+async function rawApiCall(url, payload, method = "POST"){
+  const cleanUrl = (url || "").trim();
+  const httpMethod = method.toUpperCase();
+  let lastErr = null;
+
+  // 1. Direct fetch
+  try {
+    const fetchOptions = {
+      method: httpMethod,
+      headers: { "Content-Type": "text/plain;charset=utf-8" }
+    };
+    if(httpMethod !== "GET" && httpMethod !== "HEAD"){
+      fetchOptions.body = JSON.stringify(payload || {});
+    }
+    const res = await fetch(cleanUrl, fetchOptions);
+    if(res.ok){
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch(parseE){
+        lastErr = new Error("Phản hồi không phải JSON: " + text.slice(0, 100));
+      }
+    } else {
+      lastErr = new Error("Mã phản hồi HTTP: " + res.status);
+    }
+  } catch(err){
+    lastErr = err;
+  }
+
+  // 2. Server proxy fallback
+  try {
+    const proxyRes = await fetch("/api/sync-gas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: cleanUrl, payload: payload, method: httpMethod })
+    });
+    if(proxyRes.ok){
+      const data = await proxyRes.json();
+      return data;
+    }
+  } catch(proxyErr){
+    console.warn("Proxy fallback error:", proxyErr);
+  }
+
+  throw lastErr || new Error("Không thể kết nối máy chủ Google Apps Script");
+}
+
+function normalizeApiResponse(res){
+  if(!res || typeof res !== "object") return { ok: false, error: "invalid_response" };
+  const r = Object.assign({}, res);
+  if(r.records && !r.data && Array.isArray(r.records)) r.data = r.records;
+  if(r.rows && !r.data && Array.isArray(r.rows)) r.data = r.rows;
+  if(r.result && !r.data && Array.isArray(r.result)) r.data = r.result;
+  if(r.items && !r.data && Array.isArray(r.items)) r.data = r.items;
+
+  if(r.ok === true || r.success === true || r.status === "success" || r.status === "ok" || (Array.isArray(r.data) && r.data.length > 0)){
+    r.ok = true;
+  }
+  return r;
+}
+
 async function api(act, data){
   if(!CFG.url) throw new Error("Chưa cấu hình máy chủ");
-  const payload = Object.assign({ act: act, action: act, key: CFG.key, user: CFG.user }, data || {});
-  const res = await fetch(CFG.url, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payload)
-  });
-  return await res.json();
+  const cleanUrl = (CFG.url || "").trim();
+  const cleanKey = (CFG.key || "").trim();
+  const cleanUser = (CFG.user || "").trim();
+
+  const effectiveAct = RESOLVED_ACTIONS[act] || act;
+
+  function buildUrlAndPayload(actionName){
+    let targetUrl = cleanUrl;
+    try {
+      const u = new URL(cleanUrl);
+      u.searchParams.set("act", actionName);
+      u.searchParams.set("action", actionName);
+      u.searchParams.set("type", actionName);
+      u.searchParams.set("cmd", actionName);
+      if(cleanKey) u.searchParams.set("key", cleanKey);
+      if(cleanUser) u.searchParams.set("user", cleanUser);
+      targetUrl = u.toString();
+    } catch(e){}
+
+    const payload = Object.assign({
+      act: actionName,
+      action: actionName,
+      type: actionName,
+      cmd: actionName,
+      method: actionName,
+      op: actionName,
+      key: cleanKey,
+      k: cleanKey,
+      user: cleanUser,
+      u: cleanUser
+    }, data || {});
+
+    return { targetUrl, payload };
+  }
+
+  // 1. Try effective action
+  const { targetUrl, payload } = buildUrlAndPayload(effectiveAct);
+  let res = normalizeApiResponse(await rawApiCall(targetUrl, payload, "POST"));
+
+  // 2. If unknown_action, auto-negotiate with fallback candidate actions
+  const isUnknown = res.error === "unknown_action" || res.msg === "unknown_action" || res.err === "unknown_action";
+  if(isUnknown && act === "sync"){
+    const candidates = [
+      "sync", "syncData", "sync_data", "getData", "get_data", "get", "read",
+      "load", "fetch", "getAll", "get_all", "list", "save", "saveData", "pull", "push"
+    ];
+    for(const cand of candidates){
+      if(cand === effectiveAct) continue;
+      try {
+        const testBuild = buildUrlAndPayload(cand);
+        const testRes = normalizeApiResponse(await rawApiCall(testBuild.targetUrl, testBuild.payload, "POST"));
+        if(testRes.ok || (testRes.error !== "unknown_action" && testRes.msg !== "unknown_action")){
+          RESOLVED_ACTIONS[act] = cand;
+          return testRes;
+        }
+      } catch(e){}
+    }
+
+    // Also try GET method if all POST actions fail
+    try {
+      const getBuild = buildUrlAndPayload("sync");
+      const getRes = normalizeApiResponse(await rawApiCall(getBuild.targetUrl, null, "GET"));
+      if(getRes.ok && Array.isArray(getRes.data)){
+        return getRes;
+      }
+    } catch(e){}
+  }
+
+  return res;
 }
 
 function queueChange(p){
@@ -2008,9 +2133,21 @@ async function fetchServerImages(imgs, deleted){
 }
 
 async function syncNow(silent){
-  if(!CFG.url){ if(!silent) toast("Chưa cấu hình máy chủ (⚙️ Cài đặt)"); return; }
-  if(!CFG.key){ if(!silent) toast("Chưa nhập mã bảo mật (⚙️ Cài đặt)"); return; }
-  if(!silent) toast("Đang đồng bộ dữ liệu & hình ảnh…");
+  if(!CFG.url){
+    if(!silent){
+      toast("Vui lòng cấu hình Web App URL trong ⚙️ Cài đặt");
+      openSettings("sync");
+    }
+    return;
+  }
+  if(!CFG.key){
+    if(!silent){
+      toast("Vui lòng nhập Mã bảo mật (Key) trong ⚙️ Cài đặt");
+      openSettings("sync");
+    }
+    return;
+  }
+  if(!silent) toast("Đang đồng bộ dữ liệu đám mây…");
 
   try{
     let pend = getPendImg();
@@ -2021,7 +2158,16 @@ async function syncNow(silent){
       if(!uri) continue;
       try{
         const r = await api("uploadImage", { id: id, type: t, dataUrl: uri });
-        if(!r.ok) stillP.push(k);
+        if(!r.ok){
+          if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
+            if(!silent){
+              toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+              openSettings("sync");
+            }
+            return;
+          }
+          stillP.push(k);
+        }
       }catch(e){ stillP.push(k); }
     }
     setPendImg(stillP);
@@ -2032,7 +2178,16 @@ async function syncNow(silent){
       const [t, id] = k.split(":");
       try{
         const r = await api("deleteImage", { id: id, type: t });
-        if(!r.ok) stillD.push(k);
+        if(!r.ok){
+          if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
+            if(!silent){
+              toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+              openSettings("sync");
+            }
+            return;
+          }
+          stillD.push(k);
+        }
       }catch(e){ stillD.push(k); }
     }
     setPendDel(stillD);
@@ -2040,8 +2195,11 @@ async function syncNow(silent){
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
     const res = await api("sync", { records: q });
     if(!res.ok){
-      if(res.error === "unauthorized" || res.msg === "Sai khoá truy cập."){
-        if(!silent) toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+      if(res.error === "unauthorized" || res.msg === "Sai khoá truy cập." || res.err === "unauthorized"){
+        if(!silent){
+          toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+          openSettings("sync");
+        }
       } else {
         const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ";
         if(!silent) toast("Lỗi: " + errMsg);
@@ -2070,10 +2228,7 @@ async function syncNow(silent){
 }
 
 async function connect(silent = false){
-  if(!CFG.url) return false;
-  if(!CFG.key){
-    return false;
-  }
+  if(!CFG.url || !CFG.key) return false;
   try{
     const r = await api("sync", { records: [] });
     if(r.ok){
@@ -2088,7 +2243,7 @@ async function connect(silent = false){
       if(r.images) fetchServerImages(r.images, r.deletedImages);
       return true;
     } else {
-      if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập."){
+      if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
         if(!silent) toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
       } else {
         const errMsg = r.msg || r.err || r.error || "Không thể xác thực máy chủ";
@@ -2158,12 +2313,16 @@ function openSettings(initTab){
         '<label>Tên người dùng / Mã nhân sự</label>' +
         '<input id="cUser" value="' + esc(CFG.user || "") + '" placeholder="Ví dụ: Tony, QuanLy_01, ToTruong_1">' +
       '</div>' +
+      '<div id="cfgDiagBox" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:12.5px;line-height:1.4;"></div>' +
       '<div class="cfg-actions-grid">' +
         '<button class="btn primary" id="bSaveCfg">💾 Lưu cấu hình & Kết nối</button>' +
-        '<button class="btn" id="bSyncFromSettings">☁️ Đồng bộ đám mây ngay</button>' +
+        '<button class="btn" id="bTestCfg">🔍 Kiểm tra kết nối</button>' +
+        '<button class="btn" id="bSyncFromSettings">☁️ Đồng bộ ngay</button>' +
       '</div>' +
       (q.length > 0 ? '<div style="margin-top:10px;text-align:right"><button class="btn del mini-b" id="bClearQueue">🧹 Xóa hàng đợi (' + q.length + ')</button></div>' : '') +
-      '<div class="cfg-hint">💡 Khi kết nối Google Apps Script, ảnh chân dung và CMND sẽ được tự động lưu trữ và chia sẻ an toàn trên Google Drive của tổ.</div>';
+      '<div class="cfg-hint">💡 <b>Lưu ý cấu hình Google Apps Script:</b><br>' +
+        '• Khi triển khai (Deploy), chọn: <i>"Execute as: Me"</i> và <i>"Who has access: Anyone (Bất kỳ ai)"</i>.<br>' +
+        '• Mỗi khi sửa mã hoặc đổi Key trong Apps Script, hãy chọn <i>Deploy → Manage Deployments → Sửa (bút chì) → Version: New version → Deploy</i>.</div>';
   } else if(curSettingsTab === "data"){
     tabContent =
       '<div class="cfg-stat-summary">' +
@@ -2270,6 +2429,72 @@ function openSettings(initTab){
           toast("Kết nối thành công! Đang đồng bộ…");
           syncNow(true);
           openSettings("sync");
+        }
+      };
+    }
+    const testBtn = s.querySelector("#bTestCfg");
+    const diagBox = s.querySelector("#cfgDiagBox");
+    if(testBtn && diagBox){
+      testBtn.onclick = async () => {
+        const u = s.querySelector("#cUrl").value.trim();
+        const k = s.querySelector("#cKey").value.trim();
+        const usr = s.querySelector("#cUser").value.trim();
+        if(!u){
+          diagBox.style.display = "block";
+          diagBox.style.background = "#fef2f2";
+          diagBox.style.color = "#991b1b";
+          diagBox.style.border = "1px solid #fecaca";
+          diagBox.innerHTML = "❌ <b>Chưa nhập Web App URL</b>";
+          return;
+        }
+        if(!k){
+          diagBox.style.display = "block";
+          diagBox.style.background = "#fef2f2";
+          diagBox.style.color = "#991b1b";
+          diagBox.style.border = "1px solid #fecaca";
+          diagBox.innerHTML = "❌ <b>Chưa nhập Mã bảo mật (Key)</b>";
+          return;
+        }
+
+        diagBox.style.display = "block";
+        diagBox.style.background = "#eff6ff";
+        diagBox.style.color = "#1e40af";
+        diagBox.style.border = "1px solid #bfdbfe";
+        diagBox.innerHTML = "⏳ <b>Đang gửi yêu cầu kiểm tra đến Google Apps Script…</b>";
+
+        CFG = { url: u, key: k, user: usr };
+        try {
+          const r = await api("sync", { records: [] });
+          if(r.ok){
+            ROLE = r.role || "vip";
+            applyRole();
+            diagBox.style.background = "#f0fdf4";
+            diagBox.style.color = "#166534";
+            diagBox.style.border = "1px solid #bbf7d0";
+            diagBox.innerHTML = "✅ <b>Kết nối máy chủ thành công!</b><br>" +
+              "• Quyền hạn: <b>" + (ROLE === "admin" ? "Quản trị viên (Admin)" : "Thành viên VIP") + "</b><br>" +
+              "• Dữ liệu trên Google Sheets: <b>" + (Array.isArray(r.data) ? r.data.length : 0) + " hồ sơ</b><br>" +
+              "• Nhấn <b>💾 Lưu cấu hình & Kết nối</b> để bắt đầu sử dụng.";
+          } else {
+            diagBox.style.background = "#fef2f2";
+            diagBox.style.color = "#991b1b";
+            diagBox.style.border = "1px solid #fecaca";
+            if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
+              diagBox.innerHTML = "❌ <b>Mã bảo mật (Key) không khớp</b><br>" +
+                "• Máy chủ phản hồi: <i>Sai khoá truy cập</i>.<br>" +
+                "• Hãy kiểm tra lại Key trong Script Properties hoặc Code.gs của Google Apps Script.<br>" +
+                "• <b>Lưu ý quan trọng:</b> Nếu vừa đổi Key trong Code.gs, bạn phải vào Google Apps Script bấm <b>Deploy → Manage Deployments → Sửa (biểu tượng bút chì) → Version: New version → Deploy</b> thì URL Web App mới cập nhật Key mới.";
+            } else {
+              diagBox.innerHTML = "⚠️ <b>Máy chủ phản hồi:</b> " + esc(r.msg || r.err || r.error || JSON.stringify(r));
+            }
+          }
+        } catch(err) {
+          diagBox.style.background = "#fef2f2";
+          diagBox.style.color = "#991b1b";
+          diagBox.style.border = "1px solid #fecaca";
+          diagBox.innerHTML = "❌ <b>Không thể kết nối đến Web App URL:</b><br>" +
+            "• Lỗi: " + esc(err.message) + "<br>" +
+            "• Đảm bảo Web App đã được cấu hình quyền <i>Who has access: Anyone (Bất kỳ ai)</i>.";
         }
       };
     }
