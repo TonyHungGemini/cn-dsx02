@@ -214,3 +214,175 @@ table.mini td:last-child{text-align:right;font-weight:700;color:var(--green-d);}
 .btn-trans:active {
   transform: scale(0.97);
 }
+
+/* ===== Google Drive Badge & Image Action Toolbar ===== */
+.drive-badge-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  background: #0f766e !important;
+  border: 1px solid #0d9488 !important;
+  color: #ffffff !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  text-decoration: none !important;
+  box-shadow: 0 1px 2px rgba(15,118,110,0.2) !important;
+  transition: all 0.15s ease !important;
+  line-height: 1.2 !important;
+}
+.drive-badge-link:hover {
+  background: #115e59 !important;
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+.drive-badge-link:active {
+  transform: scale(0.97);
+}
+.drive-cloud-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ibtns {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ibtns .mini-b {
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-tool-secondary {
+  background: #f8fafc;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+.btn-tool-secondary:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+.btn-crop-tool {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+.btn-crop-tool:hover {
+  background: #ede9fe;
+  border-color: #c4b5fd;
+  color: #5b21b6;
+}
+
+/* ===== Crop Modal Styling ===== */
+.crop-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.crop-modal-card {
+  background: #ffffff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+.crop-modal-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+}
+.crop-modal-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.crop-modal-body {
+  padding: 14px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+.crop-preview-wrap {
+  position: relative;
+  background: #0f172a;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  max-height: 320px;
+  margin-bottom: 12px;
+}
+.crop-preview-wrap canvas {
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  display: block;
+}
+.crop-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.crop-ctrl-item label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 2px;
+}
+.crop-ctrl-item input[type="range"] {
+  width: 100%;
+  accent-color: #0f766e;
+}
+.crop-presets {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.crop-preset-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+}
+.crop-preset-btn:hover {
+  background: #e2e8f0;
+}
+.crop-modal-footer {
+  padding: 10px 16px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 8px;
+  background: #f8fafc;
+}

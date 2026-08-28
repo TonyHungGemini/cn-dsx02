@@ -910,7 +910,6 @@ function renderPeople(){
     if(p.phong_o) sub.push('<span class="pill">🏠 '+esc(p.phong_o)+'</span>');
     if(p.phan_cay) sub.push('<span class="pill">🌳 '+esc(p.phan_cay)+'</span>');
     if(p.quan_he) sub.push('<span class="pill">'+esc(p.quan_he)+'</span>');
-    if(p.noi_sinh) sub.push('<span class="pill">📍 '+esc(p.noi_sinh)+'</span>');
 
     const av = avatar(p);
     const avHtml = av ? '<img class="avatar" src="'+av+'">' : '<div class="avatar" style="display:flex;align-items:center;justify-content:center;color:#9bb0a5;font-size:18px;">🧑</div>';
@@ -1135,16 +1134,235 @@ function blank(prefillRoom) {
   };
 }
 
+function rotateImage(uri, angle = 90) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const rad = (angle * Math.PI) / 180;
+        const sin = Math.abs(Math.sin(rad));
+        const cos = Math.abs(Math.cos(rad));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * cos + img.height * sin);
+        canvas.height = Math.round(img.width * sin + img.height * cos);
+        const ctx = canvas.getContext("2d");
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(rad);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        resolve(canvas.toDataURL("image/jpeg", 0.92));
+      } catch (e) {
+        resolve(uri);
+      }
+    };
+    img.onerror = () => resolve(uri);
+    img.src = uri;
+  });
+}
+
+function flipImage(uri, horizontal = true) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (horizontal) {
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        } else {
+          ctx.translate(0, canvas.height);
+          ctx.scale(1, -1);
+        }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg", 0.92));
+      } catch (e) {
+        resolve(uri);
+      }
+    };
+    img.onerror = () => resolve(uri);
+    img.src = uri;
+  });
+}
+
+function autoCropCard(uri) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const srcW = img.width;
+        const srcH = img.height;
+        
+        // Target standard ID card aspect ratio: ~1.58 : 1 (or 16:10)
+        // Auto trim redundant borders (especially outer 3-8% dark/distorted frame margins)
+        const trimX = Math.round(srcW * 0.04);
+        const trimY = Math.round(srcH * 0.04);
+        const cropW = srcW - trimX * 2;
+        const cropH = srcH - trimY * 2;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = cropW;
+        canvas.height = cropH;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, trimX, trimY, cropW, cropH, 0, 0, cropW, cropH);
+        resolve(canvas.toDataURL("image/jpeg", 0.92));
+      } catch (e) {
+        resolve(uri);
+      }
+    };
+    img.onerror = () => resolve(uri);
+    img.src = uri;
+  });
+}
+
+function openManualCropModal(id, type, label, onDone) {
+  const uri = getImg(id, type);
+  if (!uri) return;
+
+  const existing = document.getElementById("cropModalWrap");
+  if (existing) existing.remove();
+
+  const wrap = document.createElement("div");
+  wrap.id = "cropModalWrap";
+  wrap.className = "crop-modal-overlay";
+
+  wrap.innerHTML = `
+    <div class="crop-modal-card">
+      <div class="crop-modal-header">
+        <h3>✂️ Cắt viền CMND / Căn chỉnh</h3>
+        <button type="button" class="x" id="bCloseCrop" title="Đóng">&times;</button>
+      </div>
+      <div class="crop-modal-body">
+        <div class="crop-presets">
+          <span style="font-size:11.5px;font-weight:700;color:#64748b;align-self:center;">Mẫu sẵn:</span>
+          <button type="button" class="crop-preset-btn" data-preset="std">Chuẩn 16:10</button>
+          <button type="button" class="crop-preset-btn" data-preset="trim5">Cắt viền 5%</button>
+          <button type="button" class="crop-preset-btn" data-preset="trim10">Cắt viền 10%</button>
+          <button type="button" class="crop-preset-btn" data-preset="reset">Gốc 100%</button>
+        </div>
+        <div class="crop-preview-wrap">
+          <canvas id="cropCanvas"></canvas>
+        </div>
+        <div class="crop-controls-grid">
+          <div class="crop-ctrl-item">
+            <label>Cắt Trên: <span id="vCropTop">0%</span></label>
+            <input type="range" id="slCropTop" min="0" max="35" value="0">
+          </div>
+          <div class="crop-ctrl-item">
+            <label>Cắt Dưới: <span id="vCropBottom">0%</span></label>
+            <input type="range" id="slCropBottom" min="0" max="35" value="0">
+          </div>
+          <div class="crop-ctrl-item">
+            <label>Cắt Trái: <span id="vCropLeft">0%</span></label>
+            <input type="range" id="slCropLeft" min="0" max="35" value="0">
+          </div>
+          <div class="crop-ctrl-item">
+            <label>Cắt Phải: <span id="vCropRight">0%</span></label>
+            <input type="range" id="slCropRight" min="0" max="35" value="0">
+          </div>
+        </div>
+      </div>
+      <div class="crop-modal-footer">
+        <button type="button" class="btn" id="bCancelCrop" style="flex:1;">Hủy</button>
+        <button type="button" class="btn primary" id="bApplyCrop" style="flex:2;">✓ Áp dụng cắt viền</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(wrap);
+
+  const img = new Image();
+  img.onload = () => {
+    const canvas = wrap.querySelector("#cropCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const slTop = wrap.querySelector("#slCropTop");
+    const slBottom = wrap.querySelector("#slCropBottom");
+    const slLeft = wrap.querySelector("#slCropLeft");
+    const slRight = wrap.querySelector("#slCropRight");
+
+    const vTop = wrap.querySelector("#vCropTop");
+    const vBottom = wrap.querySelector("#vCropBottom");
+    const vLeft = wrap.querySelector("#vCropLeft");
+    const vRight = wrap.querySelector("#vCropRight");
+
+    function renderCropPreview() {
+      const pTop = parseInt(slTop.value, 10) / 100;
+      const pBottom = parseInt(slBottom.value, 10) / 100;
+      const pLeft = parseInt(slLeft.value, 10) / 100;
+      const pRight = parseInt(slRight.value, 10) / 100;
+
+      vTop.textContent = slTop.value + "%";
+      vBottom.textContent = slBottom.value + "%";
+      vLeft.textContent = slLeft.value + "%";
+      vRight.textContent = slRight.value + "%";
+
+      const x = Math.round(img.width * pLeft);
+      const y = Math.round(img.height * pTop);
+      const w = Math.max(10, Math.round(img.width * (1 - pLeft - pRight)));
+      const h = Math.max(10, Math.round(img.height * (1 - pTop - pBottom)));
+
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+    }
+
+    [slTop, slBottom, slLeft, slRight].forEach(sl => {
+      sl.oninput = renderCropPreview;
+    });
+
+    wrap.querySelectorAll("[data-preset]").forEach(btn => {
+      btn.onclick = () => {
+        const pr = btn.dataset.preset;
+        if (pr === "trim5") {
+          slTop.value = 5; slBottom.value = 5; slLeft.value = 5; slRight.value = 5;
+        } else if (pr === "trim10") {
+          slTop.value = 10; slBottom.value = 10; slLeft.value = 10; slRight.value = 10;
+        } else if (pr === "std") {
+          slTop.value = 4; slBottom.value = 4; slLeft.value = 4; slRight.value = 4;
+        } else {
+          slTop.value = 0; slBottom.value = 0; slLeft.value = 0; slRight.value = 0;
+        }
+        renderCropPreview();
+      };
+    });
+
+    renderCropPreview();
+
+    wrap.querySelector("#bApplyCrop").onclick = () => {
+      const croppedUri = canvas.toDataURL("image/jpeg", 0.92);
+      wrap.remove();
+      if (onDone) onDone(croppedUri);
+    };
+  };
+
+  img.src = uri;
+
+  const close = () => wrap.remove();
+  wrap.querySelector("#bCloseCrop").onclick = close;
+  wrap.querySelector("#bCancelCrop").onclick = close;
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+}
+
+function renderDriveBadge(driveUrl) {
+  if (!driveUrl) return "";
+  return '<a href="' + driveUrl + '" target="_blank" rel="noopener noreferrer" class="drive-badge-link" title="Mở file gốc trên Google Drive">' +
+    '<span class="drive-cloud-icon">☁️</span>' +
+    '<span>Drive</span>' +
+  '</a>';
+}
+
 function renderImgSlot(id, type, label) {
   const uri = getImg(id, type);
   const fid = imgFileId(id, type);
   const driveUrl = getDriveFileUrl(id, type);
 
   let h = '<div class="islot">';
-  h += '<div class="ilabel" style="display:flex;justify-content:space-between;align-items:center;">';
-  h += '<span style="font-weight:700;color:var(--text);">' + esc(label) + '</span>';
-  if (fid) {
-    h += '<a href="' + driveUrl + '" target="_blank" rel="noopener noreferrer" class="pill" style="font-size:11.5px;background:#e0f2fe;color:#0284c7;text-decoration:none;font-weight:700;padding:2px 8px;" title="Mở file gốc trên Google Drive">☁️ Drive gốc ↗</a>';
+  h += '<div class="ilabel" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+  h += '<span style="font-weight:700;color:var(--text);font-size:13px;">' + esc(label) + '</span>';
+  if (fid && driveUrl) {
+    h += renderDriveBadge(driveUrl);
   }
   h += '</div>';
 
@@ -1154,26 +1372,22 @@ function renderImgSlot(id, type, label) {
     h += '<div class="thumb-overlay" style="position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,0.68);color:#fff;font-size:11.5px;padding:3px 9px;border-radius:6px;backdrop-filter:blur(2px);font-weight:600;">🔍 Xem lớn</div>';
     h += '</div>';
 
-    h += '<div class="ibtns" style="margin-top:8px;">';
-    if (fid) {
-      h += '<a href="' + driveUrl + '" target="_blank" rel="noopener noreferrer" class="btn mini-b" style="color:#0369a1;background:#f0f9ff;border-color:#bae6fd;font-weight:700;" title="Truy cập file ảnh gốc lưu trên Google Drive">☁️ Drive gốc</a>';
-    } else {
-      h += '<button type="button" class="btn mini-b" data-img-act="preview" data-img-type="' + type + '" title="Xem ảnh gốc độ phân giải cao">🔍 Xem gốc</button>';
-    }
-    h += '<button type="button" class="btn mini-b" data-img-act="download" data-img-type="' + type + '" data-img-label="' + esc(label) + '" style="font-weight:700;color:#047857;background:#ecfdf5;border-color:#a7f3d0;" title="Tải ảnh này về máy">⬇ Tải về</button>';
-    h += '<button type="button" class="btn mini-b" data-img-act="change" data-img-type="' + type + '">📷 Đổi ảnh</button>';
+    h += '<div class="ibtns">';
     if (type === "cmnd") {
       h += '<button type="button" class="btn mini-b btn-ocr" data-img-act="ocr" title="Đọc thông tin CMND & Dịch địa chỉ">⚡ Đọc CMND & Dịch</button>';
+      h += '<button type="button" class="btn mini-b btn-crop-tool" data-img-act="auto-crop" title="Tự động nhận diện và cắt viền thẻ CMND">✂️ Cắt tự động</button>';
+      h += '<button type="button" class="btn mini-b btn-crop-tool" data-img-act="manual-crop" title="Cắt viền và căn chỉnh thủ công">📐 Cắt thủ công</button>';
     }
+    h += '<button type="button" class="btn mini-b btn-tool-secondary" data-img-act="rotate" data-img-type="' + type + '" title="Xoay ảnh 90° theo chiều kim đồng hồ">🔄 Xoay 90°</button>';
+    h += '<button type="button" class="btn mini-b btn-tool-secondary" data-img-act="flip" data-img-type="' + type + '" title="Lật ảnh nằm ngang">↔️ Lật</button>';
+    h += '<button type="button" class="btn mini-b" data-img-act="change" data-img-type="' + type + '">📷 Đổi ảnh</button>';
+    h += '<button type="button" class="btn mini-b" data-img-act="download" data-img-type="' + type + '" data-img-label="' + esc(label) + '" style="font-weight:700;color:#047857;background:#ecfdf5;border-color:#a7f3d0;" title="Tải ảnh này về máy">⬇ Tải về</button>';
     h += '<button type="button" class="btn mini-b del" data-img-act="del" data-img-type="' + type + '" title="Xóa ảnh này">🗑 Xóa</button>';
     h += '</div>';
   } else {
     h += '<div class="noimg">Chưa có ' + esc(label.toLowerCase()) + '</div>';
     h += '<div class="ibtns">';
     h += '<button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="' + type + '">📷 Tải ' + esc(label.toLowerCase()) + ' lên</button>';
-    if (fid) {
-      h += '<a href="' + driveUrl + '" target="_blank" rel="noopener noreferrer" class="btn mini-b" style="color:#0369a1;" title="Mở file trên Google Drive">☁️ Mở Drive gốc</a>';
-    }
     h += '</div>';
   }
   h += '</div>';
@@ -1181,27 +1395,7 @@ function renderImgSlot(id, type, label) {
 }
 
 function renderImgSection(id) {
-  const photo = getImg(id, "photo");
-  const cmnd = getImg(id, "cmnd");
-  const hasBoth = !!(photo && cmnd);
-  const hasAny = !!(photo || cmnd);
-  const photoFid = imgFileId(id, "photo");
-  const cmndFid = imgFileId(id, "cmnd");
-
   let h = "";
-  if (hasAny) {
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:space-between;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 12px;margin-bottom:12px;">';
-    h += '<div style="font-size:12.5px;font-weight:700;color:#166534;display:flex;align-items:center;gap:5px;">🖼️ Quản lý hình ảnh</div>';
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-    if (hasBoth) {
-      h += '<button type="button" class="btn mini-b" data-img-act="download-all" style="color:#047857;background:#fff;border-color:#86efac;font-weight:700;" title="Tải cả ảnh chân dung và CMND về máy">⬇ Tải cả 2 ảnh</button>';
-    }
-    if (photoFid || cmndFid) {
-      h += '<span class="pill" style="background:#e0f2fe;color:#0369a1;font-size:11.5px;font-weight:700;">☁️ Đã đồng bộ Google Drive</span>';
-    }
-    h += '</div></div>';
-  }
-
   h += renderImgSlot(id, "photo", "Ảnh chân dung");
   h += renderImgSlot(id, "cmnd", "Ảnh CMND / Thẻ căn cước");
   h += '<div id="ocrStatusBox" class="ocr-box" style="display:none"></div>';
@@ -1235,7 +1429,7 @@ function wireImgEvents(id) {
       e.preventDefault();
       e.stopPropagation();
       const act = b.dataset.imgAct;
-      const type = b.dataset.imgType;
+      const type = b.dataset.imgType || "cmnd";
       const label = b.dataset.imgLabel || (type === "photo" ? "Ảnh chân dung" : "Ảnh CMND");
 
       if (act === "upload" || act === "change") {
@@ -1247,6 +1441,40 @@ function wireImgEvents(id) {
           if (type === "cmnd") {
             doOcrCMND(id);
           }
+        });
+      } else if (act === "rotate") {
+        const curUri = getImg(id, type);
+        if (!curUri) return;
+        toast("Đang xoay ảnh 90°…");
+        const rotated = await rotateImage(curUri, 90);
+        setImg(id, type, rotated);
+        container.innerHTML = renderImgSection(id);
+        wireImgEvents(id);
+        toast("Đã xoay ảnh 90° ✓");
+      } else if (act === "flip") {
+        const curUri = getImg(id, type);
+        if (!curUri) return;
+        toast("Đang lật ảnh…");
+        const flipped = await flipImage(curUri, true);
+        setImg(id, type, flipped);
+        container.innerHTML = renderImgSection(id);
+        wireImgEvents(id);
+        toast("Đã lật ảnh thành công ✓");
+      } else if (act === "auto-crop") {
+        const curUri = getImg(id, type);
+        if (!curUri) return;
+        toast("Đang tự động nhận diện & cắt viền…");
+        const cropped = await autoCropCard(curUri);
+        setImg(id, type, cropped);
+        container.innerHTML = renderImgSection(id);
+        wireImgEvents(id);
+        toast("Đã tự động cắt viền CMND ✓");
+      } else if (act === "manual-crop") {
+        openManualCropModal(id, type, label, croppedUri => {
+          setImg(id, type, croppedUri);
+          container.innerHTML = renderImgSection(id);
+          wireImgEvents(id);
+          toast("Đã áp dụng cắt viền CMND ✓");
         });
       } else if (act === "del") {
         if (confirm("Xác nhận xóa ảnh này?")) {
@@ -1267,6 +1495,7 @@ function wireImgEvents(id) {
     };
   });
 }
+
 
 function saveEdit(id) {
   const sheet = document.getElementById("sheet");

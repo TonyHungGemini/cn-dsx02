@@ -1,4 +1,4 @@
-var CACHE = "cn-dsx02-v25";
+var CACHE = "cn-dsx02-v29";
 var ASSETS = ["./", "./index.html", "./app_script.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(e) {
