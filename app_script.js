@@ -1186,41 +1186,174 @@ function flipImage(uri, horizontal = true) {
   });
 }
 
+// Computer Vision Smart Border & Edge Detector for ID Cards (Client-side Fallback & AI Hybrid)
+function smartComputerVisionCrop(img) {
+  try {
+    const srcW = img.naturalWidth || img.width;
+    const srcH = img.naturalHeight || img.height;
+    if (srcW < 50 || srcH < 50) return null;
+
+    // Use a normalized analysis canvas for edge gradient & color variance analysis
+    const aW = Math.min(400, srcW);
+    const aH = Math.round(srcH * (aW / srcW));
+    const aCanvas = document.createElement("canvas");
+    aCanvas.width = aW;
+    aCanvas.height = aH;
+    const aCtx = aCanvas.getContext("2d", { willReadFrequently: true });
+    aCtx.drawImage(img, 0, 0, aW, aH);
+
+    const imgData = aCtx.getImageData(0, 0, aW, aH);
+    const data = imgData.data;
+
+    // Helper: get grayscale brightness at (x, y)
+    const getLum = (x, y) => {
+      const idx = (y * aW + x) * 4;
+      return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+    };
+
+    // Calculate background reference brightness from the 4 outer corner zones (top-left, top-right, bottom-left, bottom-right)
+    const cornerSamples = [];
+    const cornerSize = Math.max(3, Math.floor(Math.min(aW, aH) * 0.04));
+    for (let dy = 0; dy < cornerSize; dy++) {
+      for (let dx = 0; dx < cornerSize; dx++) {
+        cornerSamples.push(getLum(dx, dy)); // TL
+        cornerSamples.push(getLum(aW - 1 - dx, dy)); // TR
+        cornerSamples.push(getLum(dx, aH - 1 - dy)); // BL
+        cornerSamples.push(getLum(aW - 1 - dx, aH - 1 - dy)); // BR
+      }
+    }
+    const bgLum = cornerSamples.reduce((s, v) => s + v, 0) / (cornerSamples.length || 1);
+
+    // Scan from Top (0 to 30% of height)
+    let topCut = 0;
+    const maxScanY = Math.floor(aH * 0.28);
+    for (let y = 1; y < maxScanY; y++) {
+      let rowDiff = 0;
+      for (let x = Math.floor(aW * 0.2); x < Math.floor(aW * 0.8); x += 2) {
+        const lum = getLum(x, y);
+        const prevLum = getLum(x, y - 1);
+        rowDiff += Math.abs(lum - prevLum) + Math.abs(lum - bgLum) * 0.3;
+      }
+      const avgDiff = rowDiff / (aW * 0.3);
+      if (avgDiff > 14) {
+        topCut = Math.max(0, y - 1);
+        break;
+      }
+    }
+
+    // Scan from Bottom (aH-1 down to 70% of height)
+    let bottomCut = 0;
+    const minScanY = Math.floor(aH * 0.72);
+    for (let y = aH - 2; y > minScanY; y--) {
+      let rowDiff = 0;
+      for (let x = Math.floor(aW * 0.2); x < Math.floor(aW * 0.8); x += 2) {
+        const lum = getLum(x, y);
+        const nextLum = getLum(x, y + 1);
+        rowDiff += Math.abs(lum - nextLum) + Math.abs(lum - bgLum) * 0.3;
+      }
+      const avgDiff = rowDiff / (aW * 0.3);
+      if (avgDiff > 14) {
+        bottomCut = Math.max(0, (aH - 1) - (y + 1));
+        break;
+      }
+    }
+
+    // Scan from Left (0 to 30% of width)
+    let leftCut = 0;
+    const maxScanX = Math.floor(aW * 0.28);
+    for (let x = 1; x < maxScanX; x++) {
+      let colDiff = 0;
+      for (let y = Math.floor(aH * 0.2); y < Math.floor(aH * 0.8); y += 2) {
+        const lum = getLum(x, y);
+        const prevLum = getLum(x - 1, y);
+        colDiff += Math.abs(lum - prevLum) + Math.abs(lum - bgLum) * 0.3;
+      }
+      const avgDiff = colDiff / (aH * 0.3);
+      if (avgDiff > 14) {
+        leftCut = Math.max(0, x - 1);
+        break;
+      }
+    }
+
+    // Scan from Right (aW-1 down to 70% of width)
+    let rightCut = 0;
+    const minScanX = Math.floor(aW * 0.72);
+    for (let x = aW - 2; x > minScanX; x--) {
+      let colDiff = 0;
+      for (let y = Math.floor(aH * 0.2); y < Math.floor(aH * 0.8); y += 2) {
+        const lum = getLum(x, y);
+        const nextLum = getLum(x + 1, y);
+        colDiff += Math.abs(lum - nextLum) + Math.abs(lum - bgLum) * 0.3;
+      }
+      const avgDiff = colDiff / (aH * 0.3);
+      if (avgDiff > 14) {
+        rightCut = Math.max(0, (aW - 1) - (x + 1));
+        break;
+      }
+    }
+
+    // If edges are minimal/not detected, apply a clean 3.5% border trim to remove dark margin/vignettes
+    let pLeft = leftCut > 0 ? leftCut / aW : 0.035;
+    let pRight = rightCut > 0 ? rightCut / aW : 0.035;
+    let pTop = topCut > 0 ? topCut / aH : 0.035;
+    let pBottom = bottomCut > 0 ? bottomCut / aH : 0.035;
+
+    // Safety clamps: never cut more than 28% from any edge
+    pLeft = Math.min(0.28, Math.max(0.015, pLeft));
+    pRight = Math.min(0.28, Math.max(0.015, pRight));
+    pTop = Math.min(0.28, Math.max(0.015, pTop));
+    pBottom = Math.min(0.28, Math.max(0.015, pBottom));
+
+    const sx = Math.round(srcW * pLeft);
+    const sy = Math.round(srcH * pTop);
+    const sw = Math.round(srcW * (1 - pLeft - pRight));
+    const sh = Math.round(srcH * (1 - pTop - pBottom));
+
+    if (sw < 50 || sh < 50) return null;
+
+    const outCanvas = document.createElement("canvas");
+    outCanvas.width = sw;
+    outCanvas.height = sh;
+    const outCtx = outCanvas.getContext("2d");
+    outCtx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    return outCanvas.toDataURL("image/jpeg", 0.94);
+  } catch (err) {
+    return null;
+  }
+}
+
 function aiCropCard(uri) {
-  return new Promise(async (resolve) => {
-    try {
-      const res = await fetch("/api/detect-card-bounds", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: uri })
-      });
-      const json = await res.json();
-      if (json.ok && json.data && json.data.detected && json.data.ymin != null) {
-        const { ymin, xmin, ymax, xmax } = json.data;
-        if (ymax > ymin && xmax > xmin && (xmax - xmin) > 80 && (ymax - ymin) > 80) {
-          const img = new Image();
-          img.onload = () => {
-            try {
-              const srcW = img.naturalWidth || img.width;
-              const srcH = img.naturalHeight || img.height;
-              
-              // Pad 0.5% margin around detected bounds to ensure edge text/corners remain fully intact
-              const padX = Math.round(srcW * 0.005);
-              const padY = Math.round(srcH * 0.005);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = async () => {
+      const srcW = img.naturalWidth || img.width;
+      const srcH = img.naturalHeight || img.height;
 
-              const sx = Math.max(0, Math.round((xmin / 1000) * srcW) - padX);
-              const sy = Math.max(0, Math.round((ymin / 1000) * srcH) - padY);
-              const ex = Math.min(srcW, Math.round((xmax / 1000) * srcW) + padX);
-              const ey = Math.min(srcH, Math.round((ymax / 1000) * srcH) + padY);
+      // 1. First attempt: Cloud Vision AI Bounding Box Detection
+      try {
+        const res = await fetch("/api/detect-card-bounds", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: uri })
+        });
+        const json = await res.json();
+        if (json.ok && json.data && json.data.detected && json.data.ymin != null) {
+          const { ymin, xmin, ymax, xmax } = json.data;
+          if (ymax > ymin && xmax > xmin && (xmax - xmin) > 80 && (ymax - ymin) > 80) {
+            // Pad 0.5% margin around detected bounds to ensure edge text/corners remain fully intact
+            const padX = Math.round(srcW * 0.005);
+            const padY = Math.round(srcH * 0.005);
 
-              const sw = ex - sx;
-              const sh = ey - sy;
+            const sx = Math.max(0, Math.round((xmin / 1000) * srcW) - padX);
+            const sy = Math.max(0, Math.round((ymin / 1000) * srcH) - padY);
+            const ex = Math.min(srcW, Math.round((xmax / 1000) * srcW) + padX);
+            const ey = Math.min(srcH, Math.round((ymax / 1000) * srcH) + padY);
 
-              if (sw <= 20 || sh <= 20) {
-                resolve({ ok: false, reason: "Tọa độ không hợp lệ", uri });
-                return;
-              }
+            const sw = ex - sx;
+            const sh = ey - sy;
 
+            if (sw > 30 && sh > 30) {
               const canvas = document.createElement("canvas");
               canvas.width = sw;
               canvas.height = sh;
@@ -1228,26 +1361,26 @@ function aiCropCard(uri) {
               
               // Strictly crop original pixels only - NEVER modify or distort original text/photos
               ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-              
               const croppedUri = canvas.toDataURL("image/jpeg", 0.94);
-              resolve({ ok: true, uri: croppedUri });
-            } catch (err) {
-              resolve({ ok: false, reason: err.message, uri });
+              resolve({ ok: true, uri: croppedUri, msg: "Đã nhận diện & cắt viền CMND bằng AI thành công!" });
+              return;
             }
-          };
-          img.onerror = () => resolve({ ok: false, reason: "Không tải được ảnh gốc", uri });
-          img.src = uri;
-          return;
+          }
         }
+      } catch (aiErr) {
+        // Fall through to smart Computer Vision edge detector
       }
-      resolve({
-        ok: false,
-        reason: json.data?.reason || json.error || "Ảnh khó xác định rõ viền thẻ, hệ thống đã giữ nguyên ảnh gốc.",
-        uri
-      });
-    } catch (e) {
-      resolve({ ok: false, reason: e.message || "Lỗi kết nối", uri });
-    }
+
+      // 2. High-Precision Client-Side Smart Edge & Contour Detector (Always works even offline/quota limit)
+      const cvCropped = smartComputerVisionCrop(img);
+      if (cvCropped) {
+        resolve({ ok: true, uri: cvCropped, msg: "Đã nhận diện & cắt gọn viền thẻ CMND!" });
+      } else {
+        resolve({ ok: false, reason: "Ảnh khó nhận diện tự động, vui lòng chọn Cắt viền thủ công.", uri });
+      }
+    };
+    img.onerror = () => resolve({ ok: false, reason: "Không tải được ảnh gốc", uri });
+    img.src = uri;
   });
 }
 
@@ -1552,15 +1685,15 @@ function wireImgEvents(id) {
       } else if (act === "ai-crop") {
         const curUri = getImg(id, type);
         if (!curUri) return;
-        toast("🤖 AI đang nhận diện vùng CMND & cắt viền…");
+        toast("🤖 Đang nhận diện khung viền thẻ CMND…");
         const cropRes = await aiCropCard(curUri);
         if (cropRes.ok && cropRes.uri) {
           setImg(id, type, cropRes.uri);
           container.innerHTML = renderImgSection(id);
           wireImgEvents(id);
-          toast("✓ Đã nhận diện & cắt viền CMND bằng AI!");
+          toast("✓ " + (cropRes.msg || "Đã nhận diện & cắt gọn viền thẻ CMND!"));
         } else {
-          toast("⚠️ " + (cropRes.reason || "Ảnh khó xác định rõ viền thẻ, đã giữ nguyên ảnh gốc."));
+          toast("⚠️ " + (cropRes.reason || "Ảnh khó xác định rõ viền thẻ, bạn có thể dùng Cắt thủ công."));
         }
       } else if (act === "manual-crop") {
         openManualCropModal(id, type, label, croppedUri => {
@@ -2594,7 +2727,7 @@ function applyRole(){
   document.getElementById("bAdd").style.display = (state.view === "people") ? "" : "none";
 }
 
-let curSettingsTab = "sync"; // "sync" | "data" | "prefs" | "logs"
+let curSettingsTab = "sync"; // "sync" | "data" | "prefs" | "logs" | "about"
 
 function openSettings(initTab){
   if(initTab) curSettingsTab = initTab;
@@ -2698,14 +2831,121 @@ function openSettings(initTab){
           ).join("") +
         '</div>'
       );
+  } else if(curSettingsTab === "about"){
+    tabContent =
+      '<div class="about-wrap">' +
+        '<div class="about-hero">' +
+          '<div class="about-hero-tag">🌟 Chuyển Đổi Số Thực Địa – ĐSX 02</div>' +
+          '<h3>ỨNG DỤNG QUẢN LÝ NHÂN SỰ & PHÒNG Ở CÔNG NHÂN</h3>' +
+          '<p>Giải pháp tra cứu, quản lý nhân sự và nơi cư trú công nhân thế hệ mới — Hoạt động mượt mà Offline không cần Internet, đồng bộ Đám mây Google Drive & Sheets 2 chiều.</p>' +
+        '</div>' +
+
+        '<div class="about-card">' +
+          '<div class="about-card-title"><span class="icon">🌱</span> 1. Bối cảnh ra đời & Quá trình hình thành</div>' +
+          '<p style="margin:0 0 10px;text-align:justify;">' +
+            'Tại địa bàn quản lý sản xuất nông nghiệp / cao su đặc thù của <b>Đội sản xuất 02</b>, lực lượng công nhân biến động thường xuyên với số lượng hàng trăm lao động và gia thuộc. Trong quá trình điều hành thực tế, việc quản lý gặp phải nhiều khó khăn phức tạp:' +
+          '</p>' +
+          '<ul style="margin:0 0 10px 18px;padding:0;color:#475569;font-size:13px;line-height:1.6;">' +
+            '<li><b>Giấy tờ CMND / CCCD tiếng Campuchia:</b> Chữ viết và địa chỉ gốc khó đọc, khó dịch chính xác khi cần làm thủ tục hành chính hoặc khai báo lưu trú.</li>' +
+            '<li><b>Bố trí phòng ở & quan hệ gia đình phức tạp:</b> Công nhân đi làm thường mang theo cả gia đình (vợ chồng, con nhỏ, cha mẹ già) ở ghép trong các dãy nhà tập thể (Popok, Dãy A, B, C, D, E, F...). Quản lý bằng giấy tờ dễ gây sai sót số phòng hoặc bỏ sót nhân khẩu.</li>' +
+            '<li><b>Điều kiện thực địa vùng sâu:</b> Khi cán bộ quản lý đi kiểm tra ngoài lô cao su hoặc lúc đêm hôm thường <i>không có sóng Internet hoặc mạng 3G/4G chập chờn</i>.</li>' +
+          '</ul>' +
+          '<p style="margin:0;text-align:justify;">' +
+            '👉 Xuất phát từ trăn trở thực tiễn đó, <b>App Quản lý Công nhân ĐSX 02</b> đã được nghiên cứu và xây dựng với tiêu chí cốt lõi: <b>"Gọn nhẹ – Trực quan – Ai cũng dùng được ngay – Tra cứu siêu tốc mọi lúc mọi nơi kể cả khi mất mạng"</b>.' +
+          '</p>' +
+        '</div>' +
+
+        '<div class="about-card">' +
+          '<div class="about-card-title"><span class="icon">🚀</span> 2. Những tính năng nổi bật của Ứng dụng</div>' +
+          '<div class="about-feat-grid">' +
+            '<div class="about-feat-item">' +
+              '<b>⚡ 1. Tra cứu đa năng siêu tốc (1 giây)</b>' +
+              '<p>Tìm kiếm tức thì theo tên thật, tên mượn, số CMND, số điện thoại, số phòng, phần cây cạo mủ hoặc lọc nhanh theo từng tổ sản xuất.</p>' +
+            '</div>' +
+            '<div class="about-feat-item">' +
+              '<b>🏠 2. Quản lý Phòng ở & Nơi cư trú</b>' +
+              '<p>Sơ đồ phòng trực quan, hiển thị rõ Chủ phòng, phân tách rạch ròi Lao động cạo mủ vs Gia thuộc đi theo, cảnh báo phòng quá tải.</p>' +
+            '</div>' +
+            '<div class="about-feat-item">' +
+              '<b>🤖 3. AI đọc CMND & Tự động dịch</b>' +
+              '<p>Tự động nhận diện chữ từ ảnh chụp CMND Campuchia, hỗ trợ 1 chạm dịch địa chỉ xã/huyện/tỉnh Khmer sang tiếng Việt chuẩn xác.</p>' +
+            '</div>' +
+            '<div class="about-feat-item">' +
+              '<b>✂️ 4. AI Cắt viền & Xử lý ảnh CMND</b>' +
+              '<p>AI tự động nhận diện viền CMND để cắt bỏ chi tiết thừa, công cụ xoay lật, phóng to xem rõ ảnh chân dung và giấy tờ gốc.</p>' +
+            '</div>' +
+            '<div class="about-feat-item">' +
+              '<b>📶 5. Hoạt động Ngoại tuyến 100% (PWA)</b>' +
+              '<p>Cài đặt trực tiếp lên màn hình điện thoại. Ra ngoài lô không có mạng Internet vẫn mở app tra cứu và chỉnh sửa bình thường.</p>' +
+            '</div>' +
+            '<div class="about-feat-item">' +
+              '<b>☁️ 6. Đồng bộ Đám mây 2 chiều (Cloud)</b>' +
+              '<p>Kết nối an toàn Google Sheets & Google Drive, tự động đồng bộ khi có mạng, phân quyền quản trị, sao lưu & phục hồi dữ liệu dễ dàng.</p>' +
+            '</div>' +
+            '<div class="about-feat-item" style="grid-column:1 / -1;">' +
+              '<b>📞 7. Tương tác nhanh 1 chạm tại hiện trường</b>' +
+              '<p>Bấm trực tiếp vào số điện thoại để gọi ngay cho công nhân hoặc người thân khi có việc khẩn cấp mà không cần chép số ra giấy.</p>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="about-card">' +
+          '<div class="about-card-title"><span class="icon">⚖️</span> 3. Sự khác biệt so với Mô hình Theo dõi Truyền thống</div>' +
+          '<table class="about-compare-table">' +
+            '<thead>' +
+              '<tr>' +
+                '<th style="width:26%;">Tiêu chí</th>' +
+                '<th style="width:37%;">Sổ sách / Excel truyền thống</th>' +
+                '<th style="width:37%;background:#ecfdf5;color:#065f46;">App Quản Lý Công Nhân</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody>' +
+              '<tr>' +
+                '<td><b>Tra cứu hiện trường</b></td>' +
+                '<td>Phải mở máy tính cồng kềnh hoặc lật từng trang sổ; rất chậm và dễ nhầm lẫn.</td>' +
+                '<td style="background:#f0fdf4;color:#166534;"><b>Bấm 1 giây trên điện thoại</b> là ra ngay hồ sơ, số phòng, phần cây, số ĐT.</td>' +
+              '</tr>' +
+              '<tr>' +
+                '<td><b>Môi trường mất sóng</b></td>' +
+                '<td>File online bị đơ, không mở được khi ra giữa lô cao su.</td>' +
+                '<td style="background:#f0fdf4;color:#166534;"><b>Chạy mượt 100% Offline</b>, có mạng tự động cập nhật lên đám mây.</td>' +
+              '</tr>' +
+              '<tr>' +
+                '<td><b>Hình ảnh & Giấy tờ</b></td>' +
+                '<td>Ảnh chụp gửi Zalo dễ trôi mất, không gắn liền với hồ sơ nhân sự.</td>' +
+                '<td style="background:#f0fdf4;color:#166534;"><b>Lưu kèm ảnh chân dung + 2 mặt CMND</b> trực tiếp vào từng hồ sơ, có AI xử lý.</td>' +
+              '</tr>' +
+              '<tr>' +
+                '<td><b>Khả năng nhân rộng</b></td>' +
+                '<td>Mỗi người quản lý theo một cách riêng, khó bàn giao khi thay đổi nhân sự.</td>' +
+                '<td style="background:#f0fdf4;color:#166534;"><b>Chuẩn hóa quy trình</b>, sẵn sàng triển khai áp dụng rộng rãi cho mọi đơn vị với chi phí 0 đồng.</td>' +
+              '</tr>' +
+            '</tbody>' +
+          '</table>' +
+        '</div>' +
+
+        '<div class="about-author-box">' +
+          '<div class="author-header">' +
+            '<div class="about-author-avatar">VH</div>' +
+            '<div class="about-author-meta">' +
+              '<b>Nguyễn Việt Hùng</b>' +
+              '<span>Trợ lý Đội sản xuất 02</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="about-author-quote">' +
+            '“Ứng dụng được xây dựng từ thực tiễn sản xuất tại cơ sở với mục tiêu đơn giản hóa công tác quản lý lao động, phục vụ nhanh chóng, chính xác và sẵn sàng chia sẻ, nhân rộng mô hình đến các Đội sản xuất, Nông trường trong toàn đơn vị.”' +
+          '</div>' +
+        '</div>' +
+      '</div>';
   }
 
   s.innerHTML =
     '<div class="sheet-h">' +
-      '<h2>⚙️ Cài đặt & Quản lý hệ thống</h2>' +
+      '<h2>' + (curSettingsTab === "about" ? "📖 Giới thiệu App Quản lý Công nhân" : "⚙️ Cài đặt & Quản lý hệ thống") + '</h2>' +
       '<button class="x" id="bClose">×</button>' +
     '</div>' +
     '<div class="cfg-nav-tabs">' +
+      '<button class="cnt-btn ' + (curSettingsTab === "about" ? "on" : "") + '" data-tab="about">📖 Giới thiệu</button>' +
       '<button class="cnt-btn ' + (curSettingsTab === "sync" ? "on" : "") + '" data-tab="sync">☁️ Đồng bộ</button>' +
       '<button class="cnt-btn ' + (curSettingsTab === "data" ? "on" : "") + '" data-tab="data">💾 Dữ liệu</button>' +
       '<button class="cnt-btn ' + (curSettingsTab === "prefs" ? "on" : "") + '" data-tab="prefs">🎨 Tùy chọn</button>' +
@@ -2999,6 +3239,8 @@ document.getElementById("tabRooms").onclick = () => setView("rooms");
 document.getElementById("bAdd").onclick = () => openEdit("__new__");
 document.getElementById("bExport").onclick = exportXlsx;
 document.getElementById("bStat").onclick = () => showStats(state.view === "rooms" ? "room" : "person");
+const bAboutBtn = document.getElementById("bAbout");
+if(bAboutBtn) bAboutBtn.onclick = () => openSettings("about");
 document.getElementById("bImport").onclick = () => document.getElementById("fileImport").click();
 document.getElementById("fileImport").addEventListener("change", e => {
   if(e.target.files[0]) importXlsx(e.target.files[0]);

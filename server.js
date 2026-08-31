@@ -330,7 +330,12 @@ Nhiệm vụ:
    - Nếu ảnh không chứa thẻ, hoặc quá mờ, góc chụp quá méo không thể xác định chính xác mép thẻ: set "detected": false và nêu "reason".
 4. Yêu cầu tuyệt đối: Giữ nguyên toàn bộ nội dung thẻ, không cắt lẹm vào chữ hay hình chân dung trên thẻ.`;
 
-    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.7-flash'];
+    const modelsToTry = [
+      'gemini-2.5-flash',
+      'gemini-flash-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-3.7-flash',
+    ];
     for (const model of modelsToTry) {
       try {
         const response = await withTimeout(
@@ -348,7 +353,6 @@ Nhiệm vụ:
               ],
             },
             config: {
-              thinkingConfig: { thinkingBudget: 0 },
               responseMimeType: 'application/json',
               responseSchema: {
                 type: Type.OBJECT,
@@ -365,7 +369,7 @@ Nhiệm vụ:
               },
             },
           }),
-          10000
+          9000
         );
 
         const result = JSON.parse(response.text || '{}');
@@ -377,7 +381,7 @@ Nhiệm vụ:
       }
     }
 
-    return res.json({ ok: false, fallback: true, error: 'Không thể xử lý bằng AI lúc này' });
+    return res.json({ ok: false, fallback: true, error: 'AI hiện không phản hồi, chuyển sang thuật toán nhận diện viền thông minh' });
   } catch (err) {
     return res.json({ ok: false, fallback: true, error: err.message || String(err) });
   }
