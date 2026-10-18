@@ -165,40 +165,50 @@ function removePhoneFromCache(p){
 function findMatchingRecord(target, list){
   if(!target || !Array.isArray(list) || list.length === 0) return null;
 
-  // 1. Direct ID match
-  if(target.id != null && target.id !== "" && target.id !== "__new__" && !String(target.id).startsWith("srv_")){
-    const byId = list.find(x => String(x.id) === String(target.id));
-    if(byId) return byId;
-  }
-
-  // 2. Valid CMND match (strictly requires valid CMND to prevent invalid CMND cross-match)
-  if(isValidCmnd(target.cmnd)){
-    const cleanTargetCmnd = String(target.cmnd).trim().toLowerCase();
-    const byCmnd = list.find(x => isValidCmnd(x.cmnd) && String(x.cmnd).trim().toLowerCase() === cleanTargetCmnd);
-    if(byCmnd) return byCmnd;
-  }
-
   const targetName = cleanStr(target.ten_that);
   const targetRoom = cleanStr(target.phong_o);
   const targetDob = String(target.ngay_sinh || "").trim();
+  const targetCmnd = isValidCmnd(target.cmnd) ? String(target.cmnd).trim().toLowerCase() : "";
 
-  // 3. Name + Room match (100% unique in dataset)
-  if(targetName && targetRoom){
-    const byNameRoom = list.find(x => cleanStr(x.ten_that) === targetName && cleanStr(x.phong_o) === targetRoom);
-    if(byNameRoom) return byNameRoom;
+  // 1. Valid CMND match (strictly requires valid CMND to prevent invalid CMND cross-match)
+  if(targetCmnd){
+    const byCmnd = list.find(x => isValidCmnd(x.cmnd) && String(x.cmnd).trim().toLowerCase() === targetCmnd);
+    if(byCmnd) return byCmnd;
   }
 
-  // 4. Name + Ngày sinh match
+  // 2. Name + Room match (100% unique in dataset except 1 infant pair differentiated by DOB)
+  if(targetName && targetRoom){
+    const byNameRoom = list.filter(x => cleanStr(x.ten_that) === targetName && cleanStr(x.phong_o) === targetRoom);
+    if(byNameRoom.length === 1) return byNameRoom[0];
+    if(byNameRoom.length > 1 && targetDob){
+      const byDob = byNameRoom.find(x => String(x.ngay_sinh || "").trim() === targetDob);
+      if(byDob) return byDob;
+      return byNameRoom[0];
+    }
+  }
+
+  // 3. Name + Ngày sinh match
   if(targetName && targetDob){
     const byNameDob = list.find(x => cleanStr(x.ten_that) === targetName && String(x.ngay_sinh || "").trim() === targetDob);
     if(byNameDob) return byNameDob;
   }
 
-  // 5. Tên hồ sơ + Room match
+  // 4. Tên hồ sơ + Room match
   const targetHoSo = cleanStr(target.ten_ho_so);
   if(targetHoSo && targetRoom){
     const byHoSoRoom = list.find(x => cleanStr(x.ten_ho_so) === targetHoSo && cleanStr(x.phong_o) === targetRoom);
     if(byHoSoRoom) return byHoSoRoom;
+  }
+
+  // 5. Direct ID match ONLY IF targetName matches or one of the names is empty!
+  if(target.id != null && target.id !== "" && target.id !== "__new__" && !String(target.id).startsWith("srv_")){
+    const byId = list.find(x => String(x.id) === String(target.id));
+    if(byId){
+      const byIdName = cleanStr(byId.ten_that);
+      if(!targetName || !byIdName || targetName === byIdName){
+        return byId;
+      }
+    }
   }
 
   // 6. Name match if unique in list
@@ -2022,7 +2032,22 @@ function saveEdit(id) {
   queueChange(rec);
   save();
   render();
+
+  // Instant server persistence for cross-device synchronization (Admin Phone <-> Computer)
+  try {
+    fetch("/api/save-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ record: rec })
+    }).catch(e => console.warn("Server save error:", e));
+  } catch(e){}
+
   toast(isNew ? "Đã thêm hồ sơ mới ✓" : "Đã lưu thay đổi hồ sơ ✓");
+
+  // If cloud connected, trigger background sync
+  if(CFG.url && CFG.key){
+    setTimeout(() => { syncNow(true); }, 500);
+  }
 
   if (editBackRoom) {
     openRoom(editBackRoom);
@@ -2888,23 +2913,23 @@ function normServerRec(o){
   r.chu_phong = (o.chu_phong === true || o.chu_phong === "true" || o.chu_phong === "x" || normKeyMap["chuphong"] === "x" || normKeyMap["chuphong"] === true);
   r.deleted = (o.deleted === true || o.deleted === "true" || o.deleted === "x");
 
-  // Determine stable ID: match against local DATA or BASE_DATA to preserve real id
-  if(o.id != null && o.id !== "" && !String(o.id).startsWith("srv_")){
+  // Determine stable ID: match against local DATA or BASE_DATA first to preserve true person identity
+  const existing = findMatchingRecord(r, (typeof DATA !== "undefined" && Array.isArray(DATA)) ? DATA : getBaseData());
+  if(existing && existing.id != null){
+    r.id = existing.id;
+  } else if(isValidCmnd(r.cmnd) && +r.cmnd){
+    r.id = +r.cmnd;
+  } else if(o.id != null && o.id !== "" && !String(o.id).startsWith("srv_")){
     r.id = +o.id || o.id;
   } else {
-    const existing = findMatchingRecord(r, (typeof DATA !== "undefined" && Array.isArray(DATA)) ? DATA : getBaseData());
-    if(existing && existing.id != null){
-      r.id = existing.id;
-    } else if(isValidCmnd(r.cmnd) && +r.cmnd){
-      r.id = +r.cmnd;
-    } else {
-      r.id = "srv_" + Math.random().toString(36).slice(2, 8);
-    }
+    r.id = "srv_" + Math.random().toString(36).slice(2, 8);
   }
 
-  // Extract phone number from server record
+  // Extract phone number from server record, with fallback to existing local record and cache
   let phone = getPhone(o);
   if(!phone) phone = getPhone(r);
+  if(!phone && existing) phone = getPhone(existing);
+  if(!phone) phone = lookupPhoneFromCache(r) || (existing ? lookupPhoneFromCache(existing) : "");
   r.so_dt = phone || "";
   r.sdt = phone || "";
 
@@ -3009,7 +3034,37 @@ async function fetchServerImages(imgs, deleted){
 }
 
 async function syncNow(silent){
+  // Check if we can auto-fill CFG from server before warning
+  if(!CFG.url || !CFG.key){
+    try {
+      const srvRes = await fetch("/api/records");
+      if(srvRes.ok){
+        const srvData = await srvRes.json();
+        if(srvData.config && srvData.config.url && srvData.config.key){
+          CFG.url = srvData.config.url;
+          CFG.key = srvData.config.key;
+          if(srvData.config.user) CFG.user = srvData.config.user;
+          localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
+        }
+      }
+    } catch(e){}
+  }
+
   if(!CFG.url){
+    // Still perform server sync between devices (Phone <-> PC)
+    try {
+      const srvRes = await fetch("/api/records");
+      if(srvRes.ok){
+        const srvData = await srvRes.json();
+        if(Array.isArray(srvData.data) && srvData.data.length > 0){
+          const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+          DATA = mergeServerData(srvData.data, q);
+          save();
+          initFilterOptions();
+          render();
+        }
+      }
+    } catch(e){}
     if(!silent){
       toast("Vui lòng cấu hình Web App URL trong ⚙️ Cài đặt");
       openSettings("sync");
@@ -3095,6 +3150,15 @@ async function syncNow(silent){
       save();
       initFilterOptions();
       render();
+
+      // Persist merged data and phones to server.js for cross-device synchronization
+      try {
+        fetch("/api/save-all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ records: DATA, phones: getPhoneCache() })
+        }).catch(e => {});
+      } catch(e){}
     }
     if(res.images) fetchServerImages(res.images, res.deletedImages);
     addLog("Đồng bộ đám mây", `Thành công (${(res.data||[]).length} hồ sơ)`);
@@ -3409,6 +3473,13 @@ function openSettings(initTab){
         const usr = s.querySelector("#cUser").value.trim();
         CFG = { url: u, key: k, user: usr };
         localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
+        try {
+          fetch("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(CFG)
+          }).catch(e => {});
+        } catch(e){}
         if(!CFG.url){ toast("Vui lòng nhập Web App URL"); return; }
         if(!CFG.key){ toast("Vui lòng nhập mã bảo mật (Key)"); return; }
         toast("Đang kiểm tra kết nối…");
@@ -3533,7 +3604,11 @@ function doPost(e) {
     var sheet = ss.getSheetByName("Tổng") || ss.getSheets()[0];
     
     function cleanNorm(s) {
-      return (s || "").toString().toLowerCase().trim().replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d");
+      return (s || "").toString().normalize("NFD").toLowerCase().trim()
+        .replace(/[\u0300-\u036f]/g,"")
+        .replace(/đ/g,"d")
+        .replace(/Đ/g,"d")
+        .replace(/\s+/g," ");
     }
 
     // Tự động tìm hoặc tạo cột "Số điện thoại"
@@ -3548,17 +3623,17 @@ function doPost(e) {
 
     for (var c = 0; c < headers.length; c++) {
       var h = cleanNorm(headers[c]);
-      if (h === "so dien thoai" || h === "so dt" || h === "sdt" || h === "dien thoai" || h === "phone" || h === "mobile") {
+      if (h === "so dien thoai" || h === "so dt" || h === "sdt" || h === "dien thoai" || h === "phone" || h === "mobile" || h.indexOf("so dien thoai") >= 0 || h.indexOf("dien thoai") >= 0) {
         phoneCol = c + 1;
-      } else if (h === "cmnd" || h === "cccd" || h === "cmnd / cccd" || h === "so cmnd") {
+      } else if (h === "cmnd" || h === "cccd" || h === "cmnd / cccd" || h === "so cmnd" || h.indexOf("cmnd") >= 0) {
         cmndCol = c + 1;
-      } else if (h.indexOf("ho va ten") >= 0 || h === "ho ten" || h === "ten that") {
+      } else if (h.indexOf("ho va ten") >= 0 || h === "ho ten" || h === "ten that" || h === "ho va ten (ten that)") {
         nameCol = c + 1;
-      } else if (h === "phong o" || h === "phong") {
+      } else if (h === "phong o" || h === "phong" || h.indexOf("phong o") >= 0) {
         roomCol = c + 1;
-      } else if (h === "ngay sinh") {
+      } else if (h === "ngay sinh" || h.indexOf("ngay sinh") >= 0) {
         dobCol = c + 1;
-      } else if (h === "chu phong") {
+      } else if (h === "chu phong" || h.indexOf("chu phong") >= 0) {
         chuCol = c + 1;
       }
     }
@@ -3594,23 +3669,30 @@ function doPost(e) {
             var rowRoom = roomCol > 0 ? cleanNorm(row[roomCol - 1]) : "";
             var rowDob = dobCol > 0 ? cleanNorm(row[dobCol - 1]) : "";
 
-            // 1. Direct ID / STT match
-            if (r.id != null && rowId != null && String(rowId).trim() == String(r.id).trim()) {
-              targetRow = rowIdx + 1;
-              break;
-            }
-            // 2. Valid CMND match (ONLY if both are valid!)
+            // 1. Valid CMND match (ONLY if both are valid!)
             if (isRCmndValid && isRowCmndValid && rCmnd === rowCmnd) {
               targetRow = rowIdx + 1;
               break;
             }
-            // 3. Name + Room match (100% unique in dataset!)
+            // 2. Name + Room match (100% unique in dataset!)
             if (rName && rRoom && rowName === rName && rowRoom === rRoom) {
               targetRow = rowIdx + 1;
               break;
             }
-            // 4. Name + DOB match
+            // 3. Name + DOB match
             if (rName && rDob && rowName === rName && rowDob === rDob) {
+              targetRow = rowIdx + 1;
+              break;
+            }
+            // 4. Direct ID / STT match ONLY IF names match or are empty
+            if (r.id != null && rowId != null && String(rowId).trim() == String(r.id).trim()) {
+              if (!rowName || !rName || rowName === rName) {
+                targetRow = rowIdx + 1;
+                break;
+              }
+            }
+            // 5. Name match if unique
+            if (rName && rowName === rName) {
               targetRow = rowIdx + 1;
               break;
             }
@@ -3640,6 +3722,15 @@ function doPost(e) {
         var rowObj = { id: allData[rIdx][0] };
         for (var cIdx = 0; cIdx < sheetHeaders.length; cIdx++) {
           rowObj[sheetHeaders[cIdx]] = allData[rIdx][cIdx];
+        }
+        if (phoneCol > 0 && phoneCol <= sheetHeaders.length) {
+          var pVal = allData[rIdx][phoneCol - 1];
+          if (pVal != null && String(pVal).trim() !== "") {
+            var clP = String(pVal).trim().replace(/'/g, "");
+            rowObj.so_dt = clP;
+            rowObj.sdt = clP;
+            rowObj["Số điện thoại"] = clP;
+          }
         }
         result.push(rowObj);
       }
@@ -3741,10 +3832,59 @@ function toast(msg){
 
 /* ---------- Init & Event Listeners ---------- */
 document.addEventListener("DOMContentLoaded", () => {
-  idbOpen().then(idbAll).then(() => {
+  idbOpen().then(idbAll).then(async () => {
     initFilterOptions();
     render();
     updateSyncBadge();
+
+    // Cross-device synchronization on launch (Admin Phone <-> Computer)
+    try {
+      const srvRes = await fetch("/api/records");
+      if(srvRes.ok){
+        const srvData = await srvRes.json();
+        let shouldRender = false;
+
+        // 1. Auto-apply cloud config from server if missing locally
+        if(srvData.config && srvData.config.url && (!CFG.url || !CFG.key)){
+          if(!CFG.url) CFG.url = srvData.config.url;
+          if(!CFG.key && srvData.config.key) CFG.key = srvData.config.key;
+          if(!CFG.user && srvData.config.user) CFG.user = srvData.config.user;
+          localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
+        }
+
+        // 2. Merge server persistent phone numbers
+        if(srvData.phones && typeof srvData.phones === "object"){
+          const pCache = getPhoneCache();
+          let pChanged = false;
+          for(const pk in srvData.phones){
+            if(srvData.phones[pk] && !pCache[pk]){
+              pCache[pk] = cleanPhone(srvData.phones[pk]);
+              pChanged = true;
+            }
+          }
+          if(pChanged){
+            setPhoneCache(pCache);
+            shouldRender = true;
+          }
+        }
+
+        // 3. Merge server records if server has records
+        if(Array.isArray(srvData.data) && srvData.data.length > 0){
+          const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+          DATA = mergeServerData(srvData.data, q);
+          save();
+          shouldRender = true;
+        }
+
+        if(shouldRender){
+          initFilterOptions();
+          render();
+        }
+      }
+    } catch(err){
+      console.warn("Server launch sync:", err);
+    }
+
     if(CFG.url && CFG.key) connect(true).then(ok => { if(ok) syncNow(true); });
   });
 });

@@ -1,10 +1,119 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Centralized persistent storage for seamless cross-device synchronization (Admin Phone <-> PC)
+const DATA_DIR = path.join(__dirname, 'data');
+const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
+const PHONES_FILE = path.join(DATA_DIR, 'phones.json');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.error('Error creating data directory:', e);
+}
+
+function initDataIfMissing() {
+  try {
+    if (!fs.existsSync(RECORDS_FILE)) {
+      const htmlPath = path.join(__dirname, 'index.html');
+      if (fs.existsSync(htmlPath)) {
+        const html = fs.readFileSync(htmlPath, 'utf8');
+        const match = html.match(/var BASE_DATA=(\[.*?\]);window\.BASE_DATA/);
+        if (match) {
+          fs.writeFileSync(RECORDS_FILE, match[1], 'utf8');
+          console.log('Initialized records.json from BASE_DATA in index.html');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error initializing records.json:', err);
+  }
+  try {
+    if (!fs.existsSync(PHONES_FILE)) {
+      fs.writeFileSync(PHONES_FILE, JSON.stringify({}), 'utf8');
+    }
+  } catch (e) {}
+  try {
+    if (!fs.existsSync(CONFIG_FILE)) {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify({ url: '', key: '', user: '' }), 'utf8');
+    }
+  } catch (e) {}
+}
+initDataIfMissing();
+
+function getStoredRecords() {
+  try {
+    initDataIfMissing();
+    if (fs.existsSync(RECORDS_FILE)) {
+      const raw = fs.readFileSync(RECORDS_FILE, 'utf8');
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return arr;
+    }
+  } catch (e) {
+    console.error('getStoredRecords error:', e);
+  }
+  return [];
+}
+
+function saveStoredRecords(records) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = RECORDS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(records, null, 2), 'utf8');
+    fs.renameSync(tmp, RECORDS_FILE);
+    return true;
+  } catch (e) {
+    console.error('saveStoredRecords error:', e);
+    return false;
+  }
+}
+
+function getStoredPhones() {
+  try {
+    if (fs.existsSync(PHONES_FILE)) {
+      return JSON.parse(fs.readFileSync(PHONES_FILE, 'utf8') || '{}');
+    }
+  } catch (e) {}
+  return {};
+}
+
+function saveStoredPhones(phones) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(PHONES_FILE, JSON.stringify(phones || {}, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getStoredConfig() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8') || '{}');
+    }
+  } catch (e) {}
+  return { url: '', key: '', user: '' };
+}
+
+function saveStoredConfig(cfg) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg || {}, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 const app = express();
 const PORT = 3000;
@@ -414,6 +523,124 @@ app.post('/api/sync-gas', async (req, res) => {
     }
   } catch (err) {
     return res.status(500).json({ ok: false, error: 'proxy_error', msg: err.message });
+  }
+});
+
+function noAccentHelper(s) {
+  return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+}
+function cleanStrHelper(s) {
+  return noAccentHelper(s).trim().toLowerCase().replace(/\s+/g, ' ');
+}
+function isValidCmndHelper(c) {
+  if (c == null) return false;
+  const s = String(c).trim().toLowerCase();
+  if (!s || s === 'không có' || s === 'khong co' || s === 'chưa có' || s === 'chua co' || s === 'k' || s === 'k co' || s === '-' || s === '0' || s === 'none' || s === 'null') return false;
+  return s.length >= 5;
+}
+
+// 1. Get all current records and persistent phone registry
+app.get('/api/records', (req, res) => {
+  try {
+    const records = getStoredRecords();
+    const phones = getStoredPhones();
+    const config = getStoredConfig();
+    return res.json({ ok: true, data: records, phones: phones, config: config, count: records.length });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 2. Save / update a single record (called on every saveEdit)
+app.post('/api/save-record', (req, res) => {
+  try {
+    const { record } = req.body;
+    if (!record || typeof record !== 'object') {
+      return res.status(400).json({ ok: false, error: 'invalid_record' });
+    }
+    const records = getStoredRecords();
+    const phones = getStoredPhones();
+
+    const recName = cleanStrHelper(record.ten_that);
+    const recRoom = cleanStrHelper(record.phong_o);
+    const recDob = String(record.ngay_sinh || '').trim();
+    const recCmnd = isValidCmndHelper(record.cmnd) ? String(record.cmnd).trim().toLowerCase() : '';
+
+    let matchIdx = -1;
+    // Matching hierarchy
+    if (recCmnd) {
+      matchIdx = records.findIndex(x => isValidCmndHelper(x.cmnd) && String(x.cmnd).trim().toLowerCase() === recCmnd);
+    }
+    if (matchIdx === -1 && recName && recRoom) {
+      matchIdx = records.findIndex(x => cleanStrHelper(x.ten_that) === recName && cleanStrHelper(x.phong_o) === recRoom);
+    }
+    if (matchIdx === -1 && recName && recDob) {
+      matchIdx = records.findIndex(x => cleanStrHelper(x.ten_that) === recName && String(x.ngay_sinh || '').trim() === recDob);
+    }
+    if (matchIdx === -1 && record.id != null && record.id !== '' && record.id !== '__new__' && !String(record.id).startsWith('srv_')) {
+      matchIdx = records.findIndex(x => String(x.id) === String(record.id) && (!recName || !x.ten_that || cleanStrHelper(x.ten_that) === recName));
+    }
+
+    const phoneVal = (record.so_dt || record.sdt || record['Số điện thoại'] || '').toString().trim();
+    if (phoneVal) {
+      if (record.id) phones['id:' + record.id] = phoneVal;
+      if (recCmnd) phones['cmnd:' + recCmnd] = phoneVal;
+      if (recName && recRoom) phones['nr:' + recName + '__' + recRoom] = phoneVal;
+      if (recName && recDob) phones['nd:' + recName + '__' + recDob] = phoneVal;
+      saveStoredPhones(phones);
+    }
+
+    if (matchIdx >= 0) {
+      records[matchIdx] = Object.assign({}, records[matchIdx], record);
+    } else {
+      records.unshift(record);
+    }
+
+    saveStoredRecords(records);
+    return res.json({ ok: true, matched: matchIdx >= 0, count: records.length });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 3. Batch save / sync all records
+app.post('/api/save-all', (req, res) => {
+  try {
+    const { records, phones } = req.body;
+    if (Array.isArray(records) && records.length > 0) {
+      saveStoredRecords(records);
+    }
+    if (phones && typeof phones === 'object') {
+      const curPhones = getStoredPhones();
+      Object.assign(curPhones, phones);
+      saveStoredPhones(curPhones);
+    }
+    return res.json({ ok: true, count: Array.isArray(records) ? records.length : 0 });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 4. Central config getters and setters (syncs Web App URL & Key across devices)
+app.get('/api/config', (req, res) => {
+  try {
+    return res.json({ ok: true, config: getStoredConfig() });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/config', (req, res) => {
+  try {
+    const { url, key, user } = req.body || {};
+    const cur = getStoredConfig();
+    if (url != null) cur.url = String(url).trim();
+    if (key != null) cur.key = String(key).trim();
+    if (user != null) cur.user = String(user).trim();
+    saveStoredConfig(cur);
+    return res.json({ ok: true, config: cur });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
