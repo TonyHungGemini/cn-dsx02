@@ -24,24 +24,97 @@ const FIELDS = [
 const TO_LIST = ["Tổ 1","Tổ 2","Tổ 3","Tổ 4","Tổ 5","Tổ 6","Tổ 7","Tổ 8"];
 
 /* ===== Helper Functions ===== */
+function noAccent(s){
+  return (s||"").toString().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase();
+}
+
 function clone(o){
   if(!o) return [];
   try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return Array.isArray(o)?[...o]:Object.assign({},o); }
 }
 
+/* Persistent local phone registry - guarantees worker phone numbers are never lost during sync */
+const PHONES_KEY = "cn_phones_v1";
+function getPhoneCache(){
+  try { return JSON.parse(localStorage.getItem(PHONES_KEY) || "{}"); } catch(e){ return {}; }
+}
+function setPhoneCache(c){
+  try { localStorage.setItem(PHONES_KEY, JSON.stringify(c)); } catch(e){}
+}
+function savePhoneToCache(id, cmnd, phone){
+  if(!phone) return;
+  const c = getPhoneCache();
+  let changed = false;
+  if(id != null && id !== "" && id !== "__new__"){
+    c["id:" + id] = phone;
+    changed = true;
+  }
+  if(cmnd != null && String(cmnd).trim() !== ""){
+    c["cmnd:" + String(cmnd).trim()] = phone;
+    changed = true;
+  }
+  if(changed) setPhoneCache(c);
+}
+function lookupPhoneFromCache(id, cmnd){
+  const c = getPhoneCache();
+  if(id != null && id !== "" && id !== "__new__" && c["id:" + id]) return c["id:" + id];
+  if(cmnd != null && String(cmnd).trim() !== "" && c["cmnd:" + String(cmnd).trim()]) return c["cmnd:" + String(cmnd).trim()];
+  return "";
+}
+
 function cleanPhone(raw){
-  if(!raw) return "";
-  return String(raw).replace(/[^0-9+]/g, "").trim();
+  if(raw == null) return "";
+  let s = String(raw).trim().replace(/\.0+$/, "");
+  let cl = s.replace(/[^0-9+]/g, "").trim();
+  if(!cl) return "";
+  // If Excel/Google Sheets treated phone number as integer and stripped leading 0
+  if(/^[1-9]\d{7,8}$/.test(cl)){
+    cl = "0" + cl;
+  } else if(cl.startsWith("855") && cl.length >= 11){
+    cl = "+" + cl;
+  }
+  return cl;
 }
 
 function getPhone(p){
   if(!p) return "";
-  let s = String(p.so_dt || p.sdt || p["Số ĐT"] || p["SĐT"] || p["SDT"] || p["dien_thoai"] || p["phone"] || "").trim();
+  if(typeof p !== "object") return cleanPhone(p);
+
+  // 1. Check all direct standard & Vietnamese property variations
+  let s = p.so_dt || p.sdt || p.so_dien_thoai || p.dien_thoai || p.phone ||
+          p["Số điện thoại"] || p["Số ĐT"] || p["SĐT"] || p["SDT"] || p["Điện thoại"] ||
+          p["Số DT"] || p["Số đt"] || p["sđt"] || p["So dien thoai"] || p["telephone"] ||
+          p["mobile"] || p["tel"] || p["lien_he"] || p["Liên hệ"] || "";
+
+  // 2. Iterate keys dynamically with accent-stripped lookup if not found
+  if(!s){
+    for(const k of Object.keys(p)){
+      if(!k || typeof k !== "string") continue;
+      const nk = noAccent(k).toLowerCase().replace(/[^a-z0-9]/g, "");
+      if(nk === "sodt" || nk === "sodienthoai" || nk === "dienthoai" || nk === "sdt" ||
+         nk === "phone" || nk === "mobile" || nk === "tel" || nk === "lienhe" || nk === "telephone"){
+        const val = p[k];
+        if(val != null && String(val).trim() !== ""){
+          s = val;
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: extract phone pattern from ghi_chu
   if(!s && p.ghi_chu){
     const m = String(p.ghi_chu).match(/(?:\+855\s*\d[\d\s.-]{6,12}|0\d{8,10}|\+84\s*\d[\d\s.-]{8,11})/);
     if(m) s = m[0].trim();
   }
-  return s;
+
+  // 4. Fallback: persistent phone cache lookup
+  if(!s && (p.id || p.cmnd)){
+    s = lookupPhoneFromCache(p.id, p.cmnd);
+  }
+
+  if(!s) return "";
+  return cleanPhone(s);
 }
 
 function formatPhone(phone){
@@ -83,8 +156,13 @@ function load(){
       const parsed = JSON.parse(s);
       if(Array.isArray(parsed) && parsed.length>0){
         return parsed.map(p => {
-          p.so_dt = getPhone(p);
-          p.sdt = p.so_dt;
+          let ph = getPhone(p);
+          if(!ph) ph = lookupPhoneFromCache(p.id, p.cmnd);
+          if(ph) {
+            p.so_dt = ph;
+            p.sdt = ph;
+            savePhoneToCache(p.id, p.cmnd, ph);
+          }
           return p;
         });
       }
@@ -94,8 +172,13 @@ function load(){
   }
   const base = getBaseData();
   return clone(base).map(p => {
-    p.so_dt = getPhone(p);
-    p.sdt = p.so_dt;
+    let ph = getPhone(p);
+    if(!ph) ph = lookupPhoneFromCache(p.id, p.cmnd);
+    if(ph) {
+      p.so_dt = ph;
+      p.sdt = ph;
+      savePhoneToCache(p.id, p.cmnd, ph);
+    }
     return p;
   });
 }
@@ -111,8 +194,13 @@ function save(){
 var DATA = load();
 if(!DATA || DATA.length === 0){
   DATA = clone(getBaseData()).map(p => {
-    p.so_dt = getPhone(p);
-    p.sdt = p.so_dt;
+    let ph = getPhone(p);
+    if(!ph) ph = lookupPhoneFromCache(p.id, p.cmnd);
+    if(ph) {
+      p.so_dt = ph;
+      p.sdt = ph;
+      savePhoneToCache(p.id, p.cmnd, ph);
+    }
     return p;
   });
   save();
@@ -1746,8 +1834,20 @@ function saveEdit(id) {
     return;
   }
 
-  rec.so_dt = cleanPhone(rec.so_dt) || rec.so_dt;
-  rec.sdt = rec.so_dt;
+  const ph = cleanPhone(rec.so_dt);
+  rec.so_dt = ph;
+  rec.sdt = ph;
+  rec.so_dien_thoai = ph;
+  rec.dien_thoai = ph;
+  rec.phone = ph;
+  rec["Số điện thoại"] = ph;
+  rec["Số ĐT"] = ph;
+  rec["SĐT"] = ph;
+  rec["SDT"] = ph;
+  rec["Điện thoại"] = ph;
+  if (ph) {
+    savePhoneToCache(rec.id, rec.cmnd, ph);
+  }
 
   const ckChu = sheet.querySelector("#ckChu");
   const isLeader = ckChu ? ckChu.checked : false;
@@ -2341,7 +2441,7 @@ function restoreJson(file){
         toast("File JSON không hợp lệ hoặc rỗng");
         return;
       }
-      DATA = list.map(normServerRec);
+      DATA = mergeServerData(list, []);
       save();
       if(parsed.imagesOvr && typeof parsed.imagesOvr === "object"){
         Object.assign(IMG_OVR, parsed.imagesOvr);
@@ -2515,11 +2615,52 @@ async function api(act, data){
   return res;
 }
 
+function enrichRecordForServer(r){
+  if(!r || typeof r !== "object") return r;
+  const o = Object.assign({}, r);
+  const ph = getPhone(o) || (o.id ? lookupPhoneFromCache(o.id, o.cmnd) : "");
+  if(ph){
+    o.so_dt = ph;
+    o.sdt = ph;
+    o.so_dien_thoai = ph;
+    o.dien_thoai = ph;
+    o.phone = ph;
+    o.mobile = ph;
+    o.tel = ph;
+    o["Số điện thoại"] = ph;
+    o["Số ĐT"] = ph;
+    o["SĐT"] = ph;
+    o["SDT"] = ph;
+    o["Điện thoại"] = ph;
+  }
+  // Standard Vietnamese Sheet headers matching EXPORT_COLS for direct GAS column updates
+  if(o.cmnd != null) o["CMND"] = o.cmnd;
+  if(o.ten_that != null) o["HỌ VÀ TÊN (Tên thật)"] = o.ten_that;
+  if(o.ten_ho_so != null) o["TÊN TRONG HỒ SƠ"] = o.ten_ho_so;
+  if(o.ngay_sinh != null) o["Ngày sinh"] = o.ngay_sinh;
+  if(o.tuoi != null) o["Tuổi"] = o.tuoi;
+  if(o.noi_sinh != null) o["Nơi sinh"] = o.noi_sinh;
+  if(o.gioi_tinh != null) o["Giới tính"] = o.gioi_tinh;
+  if(o.loai != null) o["Loại"] = o.loai;
+  if(o.to != null) o["Tổ"] = o.to;
+  if(o.khu_vuc != null) o["Khu vực"] = o.khu_vuc;
+  if(o.phan_cay != null) o["Phần cây hiện tại"] = o.phan_cay;
+  if(o.quan_he != null) o["Quan hệ"] = o.quan_he;
+  if(o.phong_o != null) o["PHÒNG Ở"] = o.phong_o;
+  if(o.so_bao_hiem != null) o["Số bảo hiểm"] = o.so_bao_hiem;
+  if(o.chi_tiet_noi_o != null) o["Chi tiết nơi ở"] = o.chi_tiet_noi_o;
+  if(o.dia_chi != null) o["Địa chỉ thường trú"] = o.dia_chi;
+  if(o.ghi_chu != null) o["Ghi chú"] = o.ghi_chu;
+  o["Chủ phòng"] = o.chu_phong ? "x" : "";
+  return o;
+}
+
 function queueChange(p){
   try{
+    const enriched = enrichRecordForServer(p);
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
-    const i = q.findIndex(x => x.id === p.id);
-    if(i >= 0) q[i] = p; else q.push(p);
+    const i = q.findIndex(x => String(x.id) === String(enriched.id));
+    if(i >= 0) q[i] = enriched; else q.push(enriched);
     localStorage.setItem("cn_queue_v1", JSON.stringify(q));
     updateSyncBadge();
   }catch(e){}
@@ -2548,14 +2689,113 @@ function setPendDel(a){ localStorage.setItem("cn_penddel_v1", JSON.stringify(a))
 function addPendDel(k){ const a=getPendDel(); if(!a.includes(k)){ a.push(k); setPendDel(a); } }
 
 function normServerRec(o){
+  if(!o || typeof o !== "object") return blank();
   const r = {};
-  for(const [k] of FIELDS) r[k] = o[k] != null ? o[k] : "";
-  r.id = +o.id || o.id;
-  r.chu_phong = (o.chu_phong === true || o.chu_phong === "true" || o.chu_phong === "x");
+
+  const normKeyMap = {};
+  for(const k of Object.keys(o)){
+    const nk = noAccent(k).toLowerCase().replace(/[^a-z0-9]/g, "");
+    normKeyMap[nk] = o[k];
+  }
+
+  const findVal = (fieldKey, ...aliases) => {
+    if(o[fieldKey] != null && String(o[fieldKey]).trim() !== "") return String(o[fieldKey]).trim();
+    for(const a of aliases){
+      if(o[a] != null && String(o[a]).trim() !== "") return String(o[a]).trim();
+      const na = noAccent(a).toLowerCase().replace(/[^a-z0-9]/g, "");
+      if(normKeyMap[na] != null && String(normKeyMap[na]).trim() !== "") return String(normKeyMap[na]).trim();
+    }
+    const nfk = noAccent(fieldKey).toLowerCase().replace(/[^a-z0-9]/g, "");
+    if(normKeyMap[nfk] != null && String(normKeyMap[nfk]).trim() !== "") return String(normKeyMap[nfk]).trim();
+    return "";
+  };
+
+  r.cmnd = findVal("cmnd", "CMND / CCCD", "CMND", "CCCD", "Số CMND", "so_cmnd");
+  r.ten_that = findVal("ten_that", "Họ và tên (tên thật)", "Họ và tên", "HỌ VÀ TÊN (Tên thật)", "Họ tên", "ho_ten", "ten");
+  r.ten_ho_so = findVal("ten_ho_so", "Tên trong hồ sơ (tên mượn)", "TÊN TRONG HỒ SƠ", "Tên hồ sơ", "ten_muon");
+  r.ngay_sinh = findVal("ngay_sinh", "Ngày sinh", "Ngày sinh (dd/mm/yyyy)", "ngay sinh");
+  r.tuoi = findVal("tuoi", "Tuổi");
+  r.noi_sinh = findVal("noi_sinh", "Nơi sinh");
+  r.gioi_tinh = findVal("gioi_tinh", "Giới tính", "Giới");
+  r.loai = findVal("loai", "Loại", "Loại đối tượng");
+  r.to = findVal("to", "Tổ");
+  r.khu_vuc = findVal("khu_vuc", "Khu vực");
+  r.phan_cay = findVal("phan_cay", "Phần cây hiện tại", "Phần cây");
+  r.quan_he = findVal("quan_he", "Quan hệ");
+  r.phong_o = findVal("phong_o", "Phòng ở", "PHÒNG Ở", "Phòng");
+  r.so_bao_hiem = findVal("so_bao_hiem", "Số bảo hiểm", "so_bh", "Mã BH");
+  r.chi_tiet_noi_o = findVal("chi_tiet_noi_o", "Chi tiết nơi ở", "chi tiet");
+  r.dia_chi = findVal("dia_chi", "Địa chỉ thường trú", "Địa chỉ", "dia chi");
+  r.ghi_chu = findVal("ghi_chu", "Ghi chú", "Ghi chu");
+
+  r.id = +o.id || o.id || (+r.cmnd ? +r.cmnd : ("srv_" + Math.random().toString(36).slice(2, 8)));
+  r.chu_phong = (o.chu_phong === true || o.chu_phong === "true" || o.chu_phong === "x" || normKeyMap["chuphong"] === "x" || normKeyMap["chuphong"] === true);
   r.deleted = (o.deleted === true || o.deleted === "true" || o.deleted === "x");
-  r.so_dt = getPhone(r);
-  r.sdt = r.so_dt;
+
+  // Extract phone number from raw object o first!
+  let phone = getPhone(o);
+  if(!phone) phone = getPhone(r);
+  if(!phone && r.id) phone = lookupPhoneFromCache(r.id, r.cmnd);
+
+  if(phone){
+    r.so_dt = phone;
+    r.sdt = phone;
+    savePhoneToCache(r.id, r.cmnd, phone);
+  } else {
+    r.so_dt = "";
+    r.sdt = "";
+  }
+
   return r;
+}
+
+function mergeServerData(serverList, queuedList){
+  const localMapById = new Map();
+  const localMapByCmnd = new Map();
+  DATA.forEach(p => {
+    if(p.id != null) localMapById.set(String(p.id), p);
+    if(p.cmnd) localMapByCmnd.set(String(p.cmnd).trim(), p);
+  });
+
+  const queueMapById = new Map();
+  const queueMapByCmnd = new Map();
+  (queuedList || []).forEach(p => {
+    if(p.id != null) queueMapById.set(String(p.id), p);
+    if(p.cmnd) queueMapByCmnd.set(String(p.cmnd).trim(), p);
+  });
+
+  const merged = serverList.map(rawRec => {
+    const srec = normServerRec(rawRec);
+    const existing = localMapById.get(String(srec.id)) || (srec.cmnd ? localMapByCmnd.get(String(srec.cmnd).trim()) : null);
+    const queued = queueMapById.get(String(srec.id)) || (srec.cmnd ? queueMapByCmnd.get(String(srec.cmnd).trim()) : null);
+
+    // Phone priority: raw server > queue > existing local > persistent phone cache
+    let phone = getPhone(srec);
+    if(!phone){
+      if(queued && getPhone(queued)){
+        phone = getPhone(queued);
+      } else if(existing && getPhone(existing)){
+        phone = getPhone(existing);
+      } else {
+        phone = lookupPhoneFromCache(srec.id, srec.cmnd);
+      }
+    }
+
+    if(phone){
+      srec.so_dt = phone;
+      srec.sdt = phone;
+      savePhoneToCache(srec.id, srec.cmnd, phone);
+    }
+
+    // Preserve edited badge if record was edited locally
+    if((existing && existing._edited) || queued){
+      srec._edited = true;
+    }
+
+    return srec;
+  });
+
+  return merged;
 }
 
 async function fetchServerImages(imgs, deleted){
@@ -2648,7 +2888,8 @@ async function syncNow(silent){
     setPendDel(stillD);
 
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
-    const res = await api("sync", { records: q });
+    const enrichedQ = q.map(enrichRecordForServer);
+    const res = await api("sync", { records: enrichedQ });
     if(!res.ok){
       if(res.error === "unauthorized" || res.msg === "Sai khoá truy cập." || res.err === "unauthorized"){
         if(!silent){
@@ -2669,7 +2910,7 @@ async function syncNow(silent){
     updateSyncBadge();
 
     if(Array.isArray(res.data) && res.data.length > 0){
-      DATA = res.data.map(normServerRec);
+      DATA = mergeServerData(res.data, q);
       save();
       initFilterOptions();
       render();
@@ -2690,7 +2931,7 @@ async function connect(silent = false){
       ROLE = r.role || "vip";
       applyRole();
       if(Array.isArray(r.data) && r.data.length > 0){
-        DATA = r.data.map(normServerRec);
+        DATA = mergeServerData(r.data, []);
         save();
         initFilterOptions();
         render();
@@ -2775,8 +3016,12 @@ function openSettings(initTab){
         '<button class="btn" id="bSyncFromSettings">☁️ Đồng bộ ngay</button>' +
       '</div>' +
       (q.length > 0 ? '<div style="margin-top:10px;text-align:right"><button class="btn del mini-b" id="bClearQueue">🧹 Xóa hàng đợi (' + q.length + ')</button></div>' : '') +
+      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn mini-b" id="bCopyGasScript" style="flex:1" title="Sao chép toàn bộ mã Google Apps Script Code.gs chuẩn">📋 Sao chép mã Apps Script chuẩn (Code.gs)</button>' +
+      '</div>' +
       '<div class="cfg-hint">💡 <b>Lưu ý cấu hình Google Apps Script:</b><br>' +
-        '• Khi triển khai (Deploy), chọn: <i>"Execute as: Me"</i> và <i>"Who has access: Anyone (Bất kỳ ai)"</i>.<br>' +
+        '• Cột Số điện thoại: Google Sheet của bạn có thể đặt tên cột là <b>"Số điện thoại"</b>, <b>"Số ĐT"</b> hoặc <b>"so_dt"</b>. Hệ thống tự động nhận diện và bảo toàn số điện thoại.<br>' +
+        '• Khi triển khai (Deploy) trong Apps Script, chọn: <i>"Execute as: Me"</i> và <i>"Who has access: Anyone (Bất kỳ ai)"</i>.<br>' +
         '• Mỗi khi sửa mã hoặc đổi Key trong Apps Script, hãy chọn <i>Deploy → Manage Deployments → Sửa (bút chì) → Version: New version → Deploy</i>.</div>';
   } else if(curSettingsTab === "data"){
     tabContent =
@@ -3075,6 +3320,117 @@ function openSettings(initTab){
           updateSyncBadge();
           toast("Đã dọn sạch hàng đợi ✓");
           openSettings("sync");
+        }
+      };
+    }
+    const copyGasBtn = s.querySelector("#bCopyGasScript");
+    if(copyGasBtn){
+      copyGasBtn.onclick = () => {
+        const gasCode = `/**
+ * Google Apps Script Web App - Tra cứu Công nhân ĐSX02
+ * Hỗ trợ đồng bộ 2 chiều: Hồ sơ nhân sự, Số điện thoại, Phòng ở, và Ảnh Google Drive.
+ */
+var SECRET_KEY = "123456"; // Đặt mã bảo mật của bạn tại đây (khớp với Key trong Cài đặt của App)
+var FOLDER_NAME = "DSX02_ANH_CONG_NHAN";
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(30000);
+  try {
+    var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : "";
+    var body = {};
+    try { body = JSON.parse(raw); } catch(err) { body = (e && e.parameter) || {}; }
+    
+    var key = body.key || body.k || (e && e.parameter && (e.parameter.key || e.parameter.k));
+    if (SECRET_KEY && key !== SECRET_KEY) {
+      return ContentService.createTextOutput(JSON.stringify({ ok: false, error: "unauthorized", msg: "Sai khoá truy cập." }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var act = body.act || body.action || (e && e.parameter && e.parameter.act) || "sync";
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Tổng") || ss.getSheets()[0];
+    
+    // Tự động tìm hoặc tạo cột "Số điện thoại"
+    var lastCol = Math.max(sheet.getLastColumn(), 1);
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    var phoneCol = -1;
+    for (var c = 0; c < headers.length; c++) {
+      var h = headers[c].toString().toLowerCase().trim();
+      if (h === "số điện thoại" || h === "số đt" || h === "sđt" || h === "sdt" || h === "so_dt" || h === "điện thoại") {
+        phoneCol = c + 1;
+        break;
+      }
+    }
+    if (phoneCol === -1) {
+      phoneCol = headers.length + 1;
+      sheet.getRange(1, phoneCol).setValue("Số điện thoại");
+    }
+
+    if (act === "sync" || act === "syncData") {
+      var records = body.records || [];
+      if (Array.isArray(records) && records.length > 0) {
+        var dataRange = sheet.getDataRange();
+        var rows = dataRange.getValues();
+        var hMap = {};
+        for (var col = 0; col < rows[0].length; col++) {
+          hMap[rows[0][col].toString().trim()] = col + 1;
+        }
+
+        for (var i = 0; i < records.length; i++) {
+          var r = records[i];
+          var targetRow = -1;
+          for (var rowIdx = 1; rowIdx < rows.length; rowIdx++) {
+            var rowId = rows[rowIdx][0];
+            var rowCmnd = hMap["CMND"] ? rows[rowIdx][hMap["CMND"] - 1] : "";
+            if (rowId == r.id || (r.cmnd && rowCmnd == r.cmnd)) {
+              targetRow = rowIdx + 1;
+              break;
+            }
+          }
+          if (targetRow > 0) {
+            var phoneVal = r["Số điện thoại"] || r.so_dt || r.sdt || r.so_dien_thoai || r.phone || "";
+            if (phoneVal) sheet.getRange(targetRow, phoneCol).setValue("'" + phoneVal);
+            if (hMap["PHÒNG Ở"] && r.phong_o != null) sheet.getRange(targetRow, hMap["PHÒNG Ở"]).setValue(r.phong_o);
+            if (hMap["Chủ phòng"] && r.chu_phong != null) sheet.getRange(targetRow, hMap["Chủ phòng"]).setValue(r.chu_phong ? "x" : "");
+          }
+        }
+      }
+
+      // Đọc toàn bộ dữ liệu trả về cho App
+      var allData = sheet.getDataRange().getValues();
+      var sheetHeaders = allData[0];
+      var result = [];
+      for (var rIdx = 1; rIdx < allData.length; rIdx++) {
+        var rowObj = { id: allData[rIdx][0] };
+        for (var cIdx = 0; cIdx < sheetHeaders.length; cIdx++) {
+          rowObj[sheetHeaders[cIdx]] = allData[rIdx][cIdx];
+        }
+        result.push(rowObj);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, data: result, role: "admin" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, msg: "OK" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ ok: true, msg: "ĐSX02 sync server đang chạy." }))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(gasCode).then(() => {
+            toast("✓ Đã sao chép mã Code.gs chuẩn vào bộ nhớ tạm!");
+          }).catch(() => {
+            prompt("Mã Code.gs chuẩn:", gasCode);
+          });
+        } else {
+          prompt("Mã Code.gs chuẩn:", gasCode);
         }
       };
     }
