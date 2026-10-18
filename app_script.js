@@ -28,38 +28,20 @@ function noAccent(s){
   return (s||"").toString().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase();
 }
 
+function cleanStr(s){
+  return noAccent(s).trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function isValidCmnd(c){
+  if(c == null) return false;
+  const s = String(c).trim().toLowerCase();
+  if(!s || s === "không có" || s === "khong co" || s === "chưa có" || s === "chua co" || s === "k" || s === "k co" || s === "-" || s === "0" || s === "none" || s === "null") return false;
+  return s.length >= 5;
+}
+
 function clone(o){
   if(!o) return [];
   try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return Array.isArray(o)?[...o]:Object.assign({},o); }
-}
-
-/* Persistent local phone registry - guarantees worker phone numbers are never lost during sync */
-const PHONES_KEY = "cn_phones_v1";
-function getPhoneCache(){
-  try { return JSON.parse(localStorage.getItem(PHONES_KEY) || "{}"); } catch(e){ return {}; }
-}
-function setPhoneCache(c){
-  try { localStorage.setItem(PHONES_KEY, JSON.stringify(c)); } catch(e){}
-}
-function savePhoneToCache(id, cmnd, phone){
-  if(!phone) return;
-  const c = getPhoneCache();
-  let changed = false;
-  if(id != null && id !== "" && id !== "__new__"){
-    c["id:" + id] = phone;
-    changed = true;
-  }
-  if(cmnd != null && String(cmnd).trim() !== ""){
-    c["cmnd:" + String(cmnd).trim()] = phone;
-    changed = true;
-  }
-  if(changed) setPhoneCache(c);
-}
-function lookupPhoneFromCache(id, cmnd){
-  const c = getPhoneCache();
-  if(id != null && id !== "" && id !== "__new__" && c["id:" + id]) return c["id:" + id];
-  if(cmnd != null && String(cmnd).trim() !== "" && c["cmnd:" + String(cmnd).trim()]) return c["cmnd:" + String(cmnd).trim()];
-  return "";
 }
 
 function cleanPhone(raw){
@@ -67,26 +49,178 @@ function cleanPhone(raw){
   let s = String(raw).trim().replace(/\.0+$/, "");
   let cl = s.replace(/[^0-9+]/g, "").trim();
   if(!cl) return "";
-  // If Excel/Google Sheets treated phone number as integer and stripped leading 0
+  // Excel or Google Sheets stripped leading zero (e.g. 97123456 -> 097123456 or 912345678 -> 0912345678)
   if(/^[1-9]\d{7,8}$/.test(cl)){
     cl = "0" + cl;
-  } else if(cl.startsWith("855") && cl.length >= 11){
+  } else if(/^855\d{7,9}$/.test(cl)){
     cl = "+" + cl;
+  } else if(/^\+8550\d{7,9}$/.test(cl)){
+    cl = "+855" + cl.slice(5);
   }
   return cl;
+}
+
+/* Persistent local phone registry with auto-healing and collision protection */
+const PHONES_KEY = "cn_phones_v1";
+
+function getPhoneCache(){
+  try {
+    const raw = JSON.parse(localStorage.getItem(PHONES_KEY) || "{}");
+    const cleaned = {};
+    let changed = false;
+    for(const k of Object.keys(raw)){
+      const val = cleanPhone(raw[k]);
+      if(!val){ changed = true; continue; }
+      if(k.startsWith("cmnd:")){
+        const cmndVal = k.slice(5);
+        if(!isValidCmnd(cmndVal)){ changed = true; continue; }
+      }
+      cleaned[k] = val;
+    }
+    if(changed) localStorage.setItem(PHONES_KEY, JSON.stringify(cleaned));
+    return cleaned;
+  } catch(e){ return {}; }
+}
+
+function setPhoneCache(c){
+  try { localStorage.setItem(PHONES_KEY, JSON.stringify(c)); } catch(e){}
+}
+
+function savePhoneToCache(p, phone){
+  if(!p) return;
+  const ph = cleanPhone(phone || (typeof p === "object" ? getPhone(p) : p));
+  if(!ph) return;
+  const c = getPhoneCache();
+  let changed = false;
+
+  const id = typeof p === "object" ? p.id : null;
+  const cmnd = typeof p === "object" ? p.cmnd : null;
+  const name = typeof p === "object" ? cleanStr(p.ten_that) : "";
+  const room = typeof p === "object" ? cleanStr(p.phong_o) : "";
+  const dob = typeof p === "object" ? String(p.ngay_sinh || "").trim() : "";
+
+  if(id != null && id !== "" && id !== "__new__" && !String(id).startsWith("srv_")){
+    c["id:" + id] = ph;
+    changed = true;
+  }
+  if(isValidCmnd(cmnd)){
+    c["cmnd:" + String(cmnd).trim().toLowerCase()] = ph;
+    changed = true;
+  }
+  if(name && room){
+    c["nr:" + name + "__" + room] = ph;
+    changed = true;
+  }
+  if(name && dob){
+    c["nd:" + name + "__" + dob] = ph;
+    changed = true;
+  }
+  if(changed) setPhoneCache(c);
+}
+
+function lookupPhoneFromCache(p){
+  if(!p) return "";
+  const c = getPhoneCache();
+  if(typeof p !== "object"){
+    return c["id:" + p] || "";
+  }
+  const id = p.id;
+  const cmnd = p.cmnd;
+  const name = cleanStr(p.ten_that);
+  const room = cleanStr(p.phong_o);
+  const dob = String(p.ngay_sinh || "").trim();
+
+  if(id != null && id !== "" && id !== "__new__" && !String(id).startsWith("srv_") && c["id:" + id]){
+    return c["id:" + id];
+  }
+  if(isValidCmnd(cmnd) && c["cmnd:" + String(cmnd).trim().toLowerCase()]){
+    return c["cmnd:" + String(cmnd).trim().toLowerCase()];
+  }
+  if(name && room && c["nr:" + name + "__" + room]){
+    return c["nr:" + name + "__" + room];
+  }
+  if(name && dob && c["nd:" + name + "__" + dob]){
+    return c["nd:" + name + "__" + dob];
+  }
+  return "";
+}
+
+function removePhoneFromCache(p){
+  if(!p || typeof p !== "object") return;
+  const c = getPhoneCache();
+  let changed = false;
+  const id = p.id;
+  const cmnd = p.cmnd;
+  const name = cleanStr(p.ten_that);
+  const room = cleanStr(p.phong_o);
+  const dob = String(p.ngay_sinh || "").trim();
+
+  if(id != null && id !== "" && id !== "__new__" && c["id:" + id]){ delete c["id:" + id]; changed = true; }
+  if(isValidCmnd(cmnd) && c["cmnd:" + String(cmnd).trim().toLowerCase()]){ delete c["cmnd:" + String(cmnd).trim().toLowerCase()]; changed = true; }
+  if(name && room && c["nr:" + name + "__" + room]){ delete c["nr:" + name + "__" + room]; changed = true; }
+  if(name && dob && c["nd:" + name + "__" + dob]){ delete c["nd:" + name + "__" + dob]; changed = true; }
+  if(changed) setPhoneCache(c);
+}
+
+function findMatchingRecord(target, list){
+  if(!target || !Array.isArray(list) || list.length === 0) return null;
+
+  // 1. Direct ID match
+  if(target.id != null && target.id !== "" && target.id !== "__new__" && !String(target.id).startsWith("srv_")){
+    const byId = list.find(x => String(x.id) === String(target.id));
+    if(byId) return byId;
+  }
+
+  // 2. Valid CMND match (strictly requires valid CMND to prevent invalid CMND cross-match)
+  if(isValidCmnd(target.cmnd)){
+    const cleanTargetCmnd = String(target.cmnd).trim().toLowerCase();
+    const byCmnd = list.find(x => isValidCmnd(x.cmnd) && String(x.cmnd).trim().toLowerCase() === cleanTargetCmnd);
+    if(byCmnd) return byCmnd;
+  }
+
+  const targetName = cleanStr(target.ten_that);
+  const targetRoom = cleanStr(target.phong_o);
+  const targetDob = String(target.ngay_sinh || "").trim();
+
+  // 3. Name + Room match (100% unique in dataset)
+  if(targetName && targetRoom){
+    const byNameRoom = list.find(x => cleanStr(x.ten_that) === targetName && cleanStr(x.phong_o) === targetRoom);
+    if(byNameRoom) return byNameRoom;
+  }
+
+  // 4. Name + Ngày sinh match
+  if(targetName && targetDob){
+    const byNameDob = list.find(x => cleanStr(x.ten_that) === targetName && String(x.ngay_sinh || "").trim() === targetDob);
+    if(byNameDob) return byNameDob;
+  }
+
+  // 5. Tên hồ sơ + Room match
+  const targetHoSo = cleanStr(target.ten_ho_so);
+  if(targetHoSo && targetRoom){
+    const byHoSoRoom = list.find(x => cleanStr(x.ten_ho_so) === targetHoSo && cleanStr(x.phong_o) === targetRoom);
+    if(byHoSoRoom) return byHoSoRoom;
+  }
+
+  // 6. Name match if unique in list
+  if(targetName){
+    const nameMatches = list.filter(x => cleanStr(x.ten_that) === targetName);
+    if(nameMatches.length === 1) return nameMatches[0];
+  }
+
+  return null;
 }
 
 function getPhone(p){
   if(!p) return "";
   if(typeof p !== "object") return cleanPhone(p);
 
-  // 1. Check all direct standard & Vietnamese property variations
+  // 1. Check direct standard & Vietnamese property variations
   let s = p.so_dt || p.sdt || p.so_dien_thoai || p.dien_thoai || p.phone ||
           p["Số điện thoại"] || p["Số ĐT"] || p["SĐT"] || p["SDT"] || p["Điện thoại"] ||
           p["Số DT"] || p["Số đt"] || p["sđt"] || p["So dien thoai"] || p["telephone"] ||
           p["mobile"] || p["tel"] || p["lien_he"] || p["Liên hệ"] || "";
 
-  // 2. Iterate keys dynamically with accent-stripped lookup if not found
+  // 2. Iterate keys dynamically with accent-stripped lookup
   if(!s){
     for(const k of Object.keys(p)){
       if(!k || typeof k !== "string") continue;
@@ -109,8 +243,8 @@ function getPhone(p){
   }
 
   // 4. Fallback: persistent phone cache lookup
-  if(!s && (p.id || p.cmnd)){
-    s = lookupPhoneFromCache(p.id, p.cmnd);
+  if(!s){
+    s = lookupPhoneFromCache(p);
   }
 
   if(!s) return "";
@@ -120,16 +254,25 @@ function getPhone(p){
 function formatPhone(phone){
   if(!phone) return "";
   const cl = cleanPhone(phone);
-  if(cl.startsWith("+855") && cl.length >= 11){
-    return cl.slice(0, 4) + " " + cl.slice(4, 6) + " " + cl.slice(6, 9) + " " + cl.slice(9);
+  if(cl.startsWith("+855")){
+    const rem = cl.slice(4);
+    if(rem.length >= 8){
+      return "+855 " + rem.slice(0, 2) + " " + rem.slice(2, 5) + " " + rem.slice(5);
+    }
+    return "+855 " + rem;
   }
-  if(cl.startsWith("0") && cl.length === 10){
-    return cl.slice(0, 4) + " " + cl.slice(4, 7) + " " + cl.slice(7);
+  if(cl.startsWith("0")){
+    if(cl.length === 10){
+      return cl.slice(0, 4) + " " + cl.slice(4, 7) + " " + cl.slice(7);
+    }
+    if(cl.length === 9){
+      return cl.slice(0, 3) + " " + cl.slice(3, 6) + " " + cl.slice(6);
+    }
+    if(cl.length === 8){
+      return cl.slice(0, 3) + " " + cl.slice(3, 6) + " " + cl.slice(6);
+    }
   }
-  if(cl.startsWith("0") && cl.length === 9){
-    return cl.slice(0, 3) + " " + cl.slice(3, 6) + " " + cl.slice(6);
-  }
-  return phone;
+  return cl || phone;
 }
 
 function phonePillHtml(p, compact){
@@ -157,11 +300,13 @@ function load(){
       if(Array.isArray(parsed) && parsed.length>0){
         return parsed.map(p => {
           let ph = getPhone(p);
-          if(!ph) ph = lookupPhoneFromCache(p.id, p.cmnd);
+          if(!ph) ph = lookupPhoneFromCache(p);
           if(ph) {
             p.so_dt = ph;
             p.sdt = ph;
-            savePhoneToCache(p.id, p.cmnd, ph);
+            p.phone = ph;
+            p["Số điện thoại"] = ph;
+            savePhoneToCache(p, ph);
           }
           return p;
         });
@@ -173,11 +318,13 @@ function load(){
   const base = getBaseData();
   return clone(base).map(p => {
     let ph = getPhone(p);
-    if(!ph) ph = lookupPhoneFromCache(p.id, p.cmnd);
+    if(!ph) ph = lookupPhoneFromCache(p);
     if(ph) {
       p.so_dt = ph;
       p.sdt = ph;
-      savePhoneToCache(p.id, p.cmnd, ph);
+      p.phone = ph;
+      p["Số điện thoại"] = ph;
+      savePhoneToCache(p, ph);
     }
     return p;
   });
@@ -195,11 +342,13 @@ var DATA = load();
 if(!DATA || DATA.length === 0){
   DATA = clone(getBaseData()).map(p => {
     let ph = getPhone(p);
-    if(!ph) ph = lookupPhoneFromCache(p.id, p.cmnd);
+    if(!ph) ph = lookupPhoneFromCache(p);
     if(ph) {
       p.so_dt = ph;
       p.sdt = ph;
-      savePhoneToCache(p.id, p.cmnd, ph);
+      p.phone = ph;
+      p["Số điện thoại"] = ph;
+      savePhoneToCache(p, ph);
     }
     return p;
   });
@@ -265,10 +414,6 @@ function allRoomBlocks(){
     if(b === "Chưa có phòng") return -1;
     return a.localeCompare(b, "vi", {numeric:true});
   });
-}
-
-function noAccent(s){
-  return (s||"").toString().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase();
 }
 
 function esc(s){
@@ -1846,7 +1991,9 @@ function saveEdit(id) {
   rec["SDT"] = ph;
   rec["Điện thoại"] = ph;
   if (ph) {
-    savePhoneToCache(rec.id, rec.cmnd, ph);
+    savePhoneToCache(rec, ph);
+  } else {
+    removePhoneFromCache(rec);
   }
 
   const ckChu = sheet.querySelector("#ckChu");
@@ -2618,7 +2765,7 @@ async function api(act, data){
 function enrichRecordForServer(r){
   if(!r || typeof r !== "object") return r;
   const o = Object.assign({}, r);
-  const ph = getPhone(o) || (o.id ? lookupPhoneFromCache(o.id, o.cmnd) : "");
+  const ph = getPhone(o) || lookupPhoneFromCache(o);
   if(ph){
     o.so_dt = ph;
     o.sdt = ph;
@@ -2635,8 +2782,15 @@ function enrichRecordForServer(r){
   }
   // Standard Vietnamese Sheet headers matching EXPORT_COLS for direct GAS column updates
   if(o.cmnd != null) o["CMND"] = o.cmnd;
-  if(o.ten_that != null) o["HỌ VÀ TÊN (Tên thật)"] = o.ten_that;
-  if(o.ten_ho_so != null) o["TÊN TRONG HỒ SƠ"] = o.ten_ho_so;
+  if(o.ten_that != null) {
+    o["HỌ VÀ TÊN (Tên thật)"] = o.ten_that;
+    o["Họ và tên (tên thật)"] = o.ten_that;
+    o["Họ và tên"] = o.ten_that;
+  }
+  if(o.ten_ho_so != null) {
+    o["TÊN TRONG HỒ SƠ"] = o.ten_ho_so;
+    o["Tên trong hồ sơ"] = o.ten_ho_so;
+  }
   if(o.ngay_sinh != null) o["Ngày sinh"] = o.ngay_sinh;
   if(o.tuoi != null) o["Tuổi"] = o.tuoi;
   if(o.noi_sinh != null) o["Nơi sinh"] = o.noi_sinh;
@@ -2646,7 +2800,10 @@ function enrichRecordForServer(r){
   if(o.khu_vuc != null) o["Khu vực"] = o.khu_vuc;
   if(o.phan_cay != null) o["Phần cây hiện tại"] = o.phan_cay;
   if(o.quan_he != null) o["Quan hệ"] = o.quan_he;
-  if(o.phong_o != null) o["PHÒNG Ở"] = o.phong_o;
+  if(o.phong_o != null) {
+    o["PHÒNG Ở"] = o.phong_o;
+    o["Phòng ở"] = o.phong_o;
+  }
   if(o.so_bao_hiem != null) o["Số bảo hiểm"] = o.so_bao_hiem;
   if(o.chi_tiet_noi_o != null) o["Chi tiết nơi ở"] = o.chi_tiet_noi_o;
   if(o.dia_chi != null) o["Địa chỉ thường trú"] = o.dia_chi;
@@ -2728,63 +2885,80 @@ function normServerRec(o){
   r.dia_chi = findVal("dia_chi", "Địa chỉ thường trú", "Địa chỉ", "dia chi");
   r.ghi_chu = findVal("ghi_chu", "Ghi chú", "Ghi chu");
 
-  r.id = +o.id || o.id || (+r.cmnd ? +r.cmnd : ("srv_" + Math.random().toString(36).slice(2, 8)));
   r.chu_phong = (o.chu_phong === true || o.chu_phong === "true" || o.chu_phong === "x" || normKeyMap["chuphong"] === "x" || normKeyMap["chuphong"] === true);
   r.deleted = (o.deleted === true || o.deleted === "true" || o.deleted === "x");
 
-  // Extract phone number from raw object o first!
+  // Determine stable ID: match against local DATA or BASE_DATA to preserve real id
+  if(o.id != null && o.id !== "" && !String(o.id).startsWith("srv_")){
+    r.id = +o.id || o.id;
+  } else {
+    const existing = findMatchingRecord(r, (typeof DATA !== "undefined" && Array.isArray(DATA)) ? DATA : getBaseData());
+    if(existing && existing.id != null){
+      r.id = existing.id;
+    } else if(isValidCmnd(r.cmnd) && +r.cmnd){
+      r.id = +r.cmnd;
+    } else {
+      r.id = "srv_" + Math.random().toString(36).slice(2, 8);
+    }
+  }
+
+  // Extract phone number from server record
   let phone = getPhone(o);
   if(!phone) phone = getPhone(r);
-  if(!phone && r.id) phone = lookupPhoneFromCache(r.id, r.cmnd);
-
-  if(phone){
-    r.so_dt = phone;
-    r.sdt = phone;
-    savePhoneToCache(r.id, r.cmnd, phone);
-  } else {
-    r.so_dt = "";
-    r.sdt = "";
-  }
+  r.so_dt = phone || "";
+  r.sdt = phone || "";
 
   return r;
 }
 
 function mergeServerData(serverList, queuedList){
-  const localMapById = new Map();
-  const localMapByCmnd = new Map();
-  DATA.forEach(p => {
-    if(p.id != null) localMapById.set(String(p.id), p);
-    if(p.cmnd) localMapByCmnd.set(String(p.cmnd).trim(), p);
-  });
+  const merged = [];
+  const matchedLocalIds = new Set();
+  const queueArr = Array.isArray(queuedList) ? queuedList : [];
 
-  const queueMapById = new Map();
-  const queueMapByCmnd = new Map();
-  (queuedList || []).forEach(p => {
-    if(p.id != null) queueMapById.set(String(p.id), p);
-    if(p.cmnd) queueMapByCmnd.set(String(p.cmnd).trim(), p);
-  });
-
-  const merged = serverList.map(rawRec => {
+  (serverList || []).forEach(rawRec => {
     const srec = normServerRec(rawRec);
-    const existing = localMapById.get(String(srec.id)) || (srec.cmnd ? localMapByCmnd.get(String(srec.cmnd).trim()) : null);
-    const queued = queueMapById.get(String(srec.id)) || (srec.cmnd ? queueMapByCmnd.get(String(srec.cmnd).trim()) : null);
 
-    // Phone priority: raw server > queue > existing local > persistent phone cache
-    let phone = getPhone(srec);
-    if(!phone){
-      if(queued && getPhone(queued)){
-        phone = getPhone(queued);
-      } else if(existing && getPhone(existing)){
-        phone = getPhone(existing);
-      } else {
-        phone = lookupPhoneFromCache(srec.id, srec.cmnd);
-      }
+    // Find corresponding local record and queued record with 100% precision
+    const existing = findMatchingRecord(srec, DATA);
+    const queued = findMatchingRecord(srec, queueArr);
+
+    if(existing) {
+      matchedLocalIds.add(String(existing.id));
+      srec.id = existing.id; // Keep local stable id
+    }
+
+    // Determine phone with strict precedence:
+    // 1. Queued edit (local unsynced change)
+    // 2. Server's non-empty phone (if server has one)
+    // 3. Existing local record's phone (preserve local phone if server was empty!)
+    // 4. Phone cache lookup
+    let phone = "";
+    const queuedPhone = queued ? getPhone(queued) : "";
+    const serverPhone = getPhone(srec);
+    const existingPhone = existing ? getPhone(existing) : "";
+    const cachedPhone = lookupPhoneFromCache(srec) || (existing ? lookupPhoneFromCache(existing) : "");
+
+    if(queuedPhone){
+      phone = queuedPhone;
+    } else if(serverPhone){
+      phone = serverPhone;
+    } else if(existingPhone){
+      phone = existingPhone;
+    } else if(cachedPhone){
+      phone = cachedPhone;
     }
 
     if(phone){
       srec.so_dt = phone;
       srec.sdt = phone;
-      savePhoneToCache(srec.id, srec.cmnd, phone);
+      srec.phone = phone;
+      srec["Số điện thoại"] = phone;
+      srec["Số ĐT"] = phone;
+      savePhoneToCache(srec, phone);
+    } else {
+      srec.so_dt = "";
+      srec.sdt = "";
     }
 
     // Preserve edited badge if record was edited locally
@@ -2792,7 +2966,14 @@ function mergeServerData(serverList, queuedList){
       srec._edited = true;
     }
 
-    return srec;
+    merged.push(srec);
+  });
+
+  // Preserve local records that were added locally and not yet in server
+  (DATA || []).forEach(p => {
+    if(!matchedLocalIds.has(String(p.id))){
+      merged.push(p);
+    }
   });
 
   return merged;
@@ -3351,20 +3532,41 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("Tổng") || ss.getSheets()[0];
     
+    function cleanNorm(s) {
+      return (s || "").toString().toLowerCase().trim().replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d");
+    }
+
     // Tự động tìm hoặc tạo cột "Số điện thoại"
     var lastCol = Math.max(sheet.getLastColumn(), 1);
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     var phoneCol = -1;
+    var cmndCol = -1;
+    var nameCol = -1;
+    var roomCol = -1;
+    var dobCol = -1;
+    var chuCol = -1;
+
     for (var c = 0; c < headers.length; c++) {
-      var h = headers[c].toString().toLowerCase().trim();
-      if (h === "số điện thoại" || h === "số đt" || h === "sđt" || h === "sdt" || h === "so_dt" || h === "điện thoại") {
+      var h = cleanNorm(headers[c]);
+      if (h === "so dien thoai" || h === "so dt" || h === "sdt" || h === "dien thoai" || h === "phone" || h === "mobile") {
         phoneCol = c + 1;
-        break;
+      } else if (h === "cmnd" || h === "cccd" || h === "cmnd / cccd" || h === "so cmnd") {
+        cmndCol = c + 1;
+      } else if (h.indexOf("ho va ten") >= 0 || h === "ho ten" || h === "ten that") {
+        nameCol = c + 1;
+      } else if (h === "phong o" || h === "phong") {
+        roomCol = c + 1;
+      } else if (h === "ngay sinh") {
+        dobCol = c + 1;
+      } else if (h === "chu phong") {
+        chuCol = c + 1;
       }
     }
+
     if (phoneCol === -1) {
       phoneCol = headers.length + 1;
       sheet.getRange(1, phoneCol).setValue("Số điện thoại");
+      sheet.getRange(1, phoneCol).setFontWeight("bold");
     }
 
     if (act === "sync" || act === "syncData") {
@@ -3372,27 +3574,60 @@ function doPost(e) {
       if (Array.isArray(records) && records.length > 0) {
         var dataRange = sheet.getDataRange();
         var rows = dataRange.getValues();
-        var hMap = {};
-        for (var col = 0; col < rows[0].length; col++) {
-          hMap[rows[0][col].toString().trim()] = col + 1;
-        }
 
         for (var i = 0; i < records.length; i++) {
           var r = records[i];
           var targetRow = -1;
+
+          var rCmnd = cleanNorm(r.cmnd);
+          var isRCmndValid = rCmnd && rCmnd !== "khong co" && rCmnd !== "chua co" && rCmnd !== "0" && rCmnd.length >= 5;
+          var rName = cleanNorm(r.ten_that);
+          var rRoom = cleanNorm(r.phong_o);
+          var rDob = cleanNorm(r.ngay_sinh);
+
           for (var rowIdx = 1; rowIdx < rows.length; rowIdx++) {
-            var rowId = rows[rowIdx][0];
-            var rowCmnd = hMap["CMND"] ? rows[rowIdx][hMap["CMND"] - 1] : "";
-            if (rowId == r.id || (r.cmnd && rowCmnd == r.cmnd)) {
+            var row = rows[rowIdx];
+            var rowId = row[0];
+            var rowCmnd = cmndCol > 0 ? cleanNorm(row[cmndCol - 1]) : "";
+            var isRowCmndValid = rowCmnd && rowCmnd !== "khong co" && rowCmnd !== "chua co" && rowCmnd !== "0" && rowCmnd.length >= 5;
+            var rowName = nameCol > 0 ? cleanNorm(row[nameCol - 1]) : "";
+            var rowRoom = roomCol > 0 ? cleanNorm(row[roomCol - 1]) : "";
+            var rowDob = dobCol > 0 ? cleanNorm(row[dobCol - 1]) : "";
+
+            // 1. Direct ID / STT match
+            if (r.id != null && rowId != null && String(rowId).trim() == String(r.id).trim()) {
+              targetRow = rowIdx + 1;
+              break;
+            }
+            // 2. Valid CMND match (ONLY if both are valid!)
+            if (isRCmndValid && isRowCmndValid && rCmnd === rowCmnd) {
+              targetRow = rowIdx + 1;
+              break;
+            }
+            // 3. Name + Room match (100% unique in dataset!)
+            if (rName && rRoom && rowName === rName && rowRoom === rRoom) {
+              targetRow = rowIdx + 1;
+              break;
+            }
+            // 4. Name + DOB match
+            if (rName && rDob && rowName === rName && rowDob === rDob) {
               targetRow = rowIdx + 1;
               break;
             }
           }
+
           if (targetRow > 0) {
             var phoneVal = r["Số điện thoại"] || r.so_dt || r.sdt || r.so_dien_thoai || r.phone || "";
-            if (phoneVal) sheet.getRange(targetRow, phoneCol).setValue("'" + phoneVal);
-            if (hMap["PHÒNG Ở"] && r.phong_o != null) sheet.getRange(targetRow, hMap["PHÒNG Ở"]).setValue(r.phong_o);
-            if (hMap["Chủ phòng"] && r.chu_phong != null) sheet.getRange(targetRow, hMap["Chủ phòng"]).setValue(r.chu_phong ? "x" : "");
+            if (phoneVal) {
+              var cleanP = phoneVal.toString().replace(/[^0-9+]/g, "").trim();
+              sheet.getRange(targetRow, phoneCol).setValue("'" + (cleanP || phoneVal));
+            }
+            if (roomCol > 0 && r.phong_o != null) {
+              sheet.getRange(targetRow, roomCol).setValue(r.phong_o);
+            }
+            if (chuCol > 0 && r.chu_phong != null) {
+              sheet.getRange(targetRow, chuCol).setValue(r.chu_phong ? "x" : "");
+            }
           }
         }
       }
