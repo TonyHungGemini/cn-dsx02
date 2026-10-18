@@ -50,8 +50,10 @@ function cleanPhone(raw){
   let cl = s.replace(/[^0-9+]/g, "").trim();
   if(!cl) return "";
   // Excel or Google Sheets stripped leading zero (e.g. 97123456 -> 097123456 or 912345678 -> 0912345678)
-  if(/^[1-9]\d{7,8}$/.test(cl)){
+  if(/^[1-9]\d{7,9}$/.test(cl)){
     cl = "0" + cl;
+  } else if(/^84[1-9]\d{7,9}$/.test(cl)){
+    cl = "0" + cl.slice(2);
   } else if(/^855\d{7,9}$/.test(cl)){
     cl = "+" + cl;
   } else if(/^\+8550\d{7,9}$/.test(cl)){
@@ -322,15 +324,79 @@ function getBaseData(){
   return [];
 }
 
+function dedupeDataset(list){
+  if(!Array.isArray(list)) return [];
+  const out = [];
+  const seenKeys = new Set();
+
+  list.forEach(r => {
+    if(!r || typeof r !== "object") return;
+    const name = cleanStr(r.ten_that);
+    const room = cleanStr(r.phong_o);
+    const dob = String(r.ngay_sinh || "").trim();
+    const cmnd = isValidCmnd(r.cmnd) ? String(r.cmnd).trim().toLowerCase() : "";
+
+    // Skip empty placeholder records
+    if(!name && !cmnd && !room) return;
+
+    let key = "";
+    if(cmnd && name) key = `cmnd:${cmnd}__${name}`;
+    else if(cmnd && !name) key = `cmnd:${cmnd}`;
+    else if(name && room && dob) key = `nrd:${name}__${room}__${dob}`;
+    else if(name && room) key = `nr:${name}__${room}`;
+    else if(name && dob) key = `nd:${name}__${dob}`;
+    else if(r.id != null && r.id !== "" && r.id !== "__new__" && !String(r.id).startsWith("srv_")) key = `id:${r.id}`;
+    else key = `name:${name}`;
+
+    if(seenKeys.has(key)){
+      const existing = out.find(x => {
+        if(cmnd && name && isValidCmnd(x.cmnd) && String(x.cmnd).trim().toLowerCase() === cmnd && cleanStr(x.ten_that) === name) return true;
+        if(name && room && cleanStr(x.ten_that) === name && cleanStr(x.phong_o) === room) return true;
+        if(x.id != null && r.id != null && String(x.id) === String(r.id)) return true;
+        return false;
+      });
+      if(existing){
+        const ph = getPhone(r);
+        if(ph && !getPhone(existing)){
+          existing.so_dt = ph;
+          existing.sdt = ph;
+          existing.phone = ph;
+          existing["Số điện thoại"] = ph;
+          existing["Số ĐT"] = ph;
+          savePhoneToCache(existing, ph);
+        }
+        if(r._edited) existing._edited = true;
+      }
+      return;
+    }
+    seenKeys.add(key);
+    out.push(r);
+  });
+  return out;
+}
+
 function load(){
   try{
     const s = localStorage.getItem(LS_KEY);
     if(s && s!=="undefined" && s!=="null"){
-      const parsed = JSON.parse(s);
+      let parsed = JSON.parse(s);
       if(Array.isArray(parsed) && parsed.length>0){
-        return parsed.map(p => {
+        // Auto-clean inflated/duplicate data (e.g. from duplicate sync)
+        if(parsed.length > 570){
+          parsed = dedupeDataset(parsed);
+          try { localStorage.setItem(LS_KEY, JSON.stringify(parsed)); } catch(e){}
+        }
+        const base = getBaseData();
+        const baseMap = new Map();
+        base.forEach(b => {
+          if(b.id != null) baseMap.set(String(b.id), b);
+        });
+        const mapped = parsed.map(p => {
           let ph = getPhone(p);
           if(!ph) ph = lookupPhoneFromCache(p);
+          if(!ph && p.id != null && baseMap.has(String(p.id))){
+            ph = getPhone(baseMap.get(String(p.id)));
+          }
           if(ph) {
             p.so_dt = ph;
             p.sdt = ph;
@@ -340,13 +406,14 @@ function load(){
           }
           return p;
         });
+        return dedupeDataset(mapped);
       }
     }
   }catch(e){
     console.warn("Lỗi đọc localStorage:", e);
   }
   const base = getBaseData();
-  return clone(base).map(p => {
+  return dedupeDataset(clone(base).map(p => {
     let ph = getPhone(p);
     if(!ph) ph = lookupPhoneFromCache(p);
     if(ph) {
@@ -357,7 +424,7 @@ function load(){
       savePhoneToCache(p, ph);
     }
     return p;
-  });
+  }));
 }
 
 function save(){
@@ -2676,7 +2743,7 @@ function clearImgCache(){
   }
 }
 
-let RESOLVED_ACTIONS = { sync: "sync", uploadImage: "uploadImage", deleteImage: "deleteImage" };
+let RESOLVED_ACTIONS = { sync: "pull", pull: "pull", push: "push", uploadImage: "uploadImage", deleteImage: "deleteImage" };
 
 async function rawApiCall(url, payload, method = "POST"){
   const cleanUrl = (url || "").trim();
@@ -2773,6 +2840,11 @@ async function api(act, data){
       u: cleanUser
     }, data || {});
 
+    // Ensure compatibility with Google Apps Script push format
+    if(actionName === "push" && !payload.changes && Array.isArray(payload.records)){
+      payload.changes = payload.records.map(r => ({ rec: r }));
+    }
+
     return { targetUrl, payload };
   }
 
@@ -2782,10 +2854,10 @@ async function api(act, data){
 
   // 2. If unknown_action, auto-negotiate with fallback candidate actions
   const isUnknown = res.error === "unknown_action" || res.msg === "unknown_action" || res.err === "unknown_action";
-  if(isUnknown && act === "sync"){
+  if(isUnknown && (act === "sync" || act === "pull")){
     const candidates = [
-      "sync", "syncData", "sync_data", "getData", "get_data", "get", "read",
-      "load", "fetch", "getAll", "get_all", "list", "save", "saveData", "pull", "push"
+      "pull", "sync", "syncData", "getData", "sync_data", "get_data", "get", "read",
+      "load", "fetch", "getAll", "get_all", "list", "save", "saveData", "push"
     ];
     for(const cand of candidates){
       if(cand === effectiveAct) continue;
@@ -2801,7 +2873,7 @@ async function api(act, data){
 
     // Also try GET method if all POST actions fail
     try {
-      const getBuild = buildUrlAndPayload("sync");
+      const getBuild = buildUrlAndPayload("pull");
       const getRes = normalizeApiResponse(await rawApiCall(getBuild.targetUrl, null, "GET"));
       if(getRes.ok && Array.isArray(getRes.data)){
         return getRes;
@@ -2967,6 +3039,13 @@ function mergeServerData(serverList, queuedList){
   const queueArr = Array.isArray(queuedList) ? queuedList : [];
 
   (serverList || []).forEach(rawRec => {
+    if(!rawRec || typeof rawRec !== "object") return;
+    const cleanN = cleanStr(rawRec.ten_that);
+    const cleanC = isValidCmnd(rawRec.cmnd) ? String(rawRec.cmnd).trim() : "";
+    const cleanR = cleanStr(rawRec.phong_o);
+    // Skip empty trailing rows from spreadsheet
+    if(!cleanN && !cleanC && !cleanR) return;
+
     const srec = normServerRec(rawRec);
 
     // Find corresponding local record and queued record with 100% precision
@@ -3021,12 +3100,14 @@ function mergeServerData(serverList, queuedList){
 
   // Preserve local records that were added locally and not yet in server
   (DATA || []).forEach(p => {
-    if(!matchedLocalIds.has(String(p.id))){
+    if(!p || typeof p !== "object") return;
+    const isMatched = matchedLocalIds.has(String(p.id)) || findMatchingRecord(p, merged);
+    if(!isMatched){
       merged.push(p);
     }
   });
 
-  return merged;
+  return dedupeDataset(merged);
 }
 
 async function fetchServerImages(imgs, deleted){
@@ -3180,7 +3261,26 @@ async function syncNow(silent){
 
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
     const enrichedQ = q.map(enrichRecordForServer);
-    const res = await api("sync", { records: enrichedQ });
+
+    // Push local changes to Google Apps Script if there are any pending edits
+    if(enrichedQ.length > 0){
+      try {
+        await api("push", {
+          changes: enrichedQ.map(r => ({ rec: r })),
+          records: enrichedQ
+        });
+      } catch(pushErr){
+        console.warn("GAS push error:", pushErr);
+      }
+    }
+
+    // Pull latest data from Google Apps Script
+    let res = null;
+    try {
+      res = await api("pull", { records: enrichedQ });
+    } catch(pullErr){
+      res = await api("sync", { records: enrichedQ });
+    }
 
     if(!res.ok){
       if(res.error === "unauthorized" || res.msg === "Sai khoá truy cập." || res.err === "unauthorized"){
@@ -3201,8 +3301,9 @@ async function syncNow(silent){
     localStorage.removeItem("cn_queue_v1");
     updateSyncBadge();
 
-    if(Array.isArray(res.data) && res.data.length > 0){
-      DATA = mergeServerData(res.data, q);
+    const incomingData = (res && (res.data || res.rows || res.records)) || [];
+    if(Array.isArray(incomingData) && incomingData.length > 0){
+      DATA = mergeServerData(incomingData, q);
       save();
       initFilterOptions();
       render();
@@ -3217,7 +3318,7 @@ async function syncNow(silent){
       } catch(e){}
     }
     if(res.images) fetchServerImages(res.images, res.deletedImages);
-    addLog("Đồng bộ đám mây", `Thành công (${(res.data||[]).length} hồ sơ)`);
+    addLog("Đồng bộ đám mây", `Thành công (${incomingData.length} hồ sơ)`);
     if(!silent) toast("Đồng bộ đám mây thành công ✓");
   }catch(e){
     if(!silent) toast("✓ Đã đồng bộ máy chủ nội bộ. Google Sheet: " + e.message);
@@ -3227,12 +3328,18 @@ async function syncNow(silent){
 async function connect(silent = false){
   if(!CFG.url || !CFG.key) return false;
   try{
-    const r = await api("sync", { records: [] });
+    let r = null;
+    try {
+      r = await api("pull", { records: [] });
+    } catch(e) {
+      r = await api("sync", { records: [] });
+    }
     if(r.ok){
       ROLE = r.role || "vip";
       applyRole();
-      if(Array.isArray(r.data) && r.data.length > 0){
-        DATA = mergeServerData(r.data, []);
+      const rData = (r && (r.data || r.rows || r.records)) || [];
+      if(Array.isArray(rData) && rData.length > 0){
+        DATA = mergeServerData(rData, []);
         save();
         initFilterOptions();
         render();
@@ -3889,6 +3996,11 @@ function toast(msg){
 /* ---------- Init & Event Listeners ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   idbOpen().then(idbAll).then(async () => {
+    // If local storage has inflated/duplicate records (> 570), clean it immediately!
+    if(DATA.length > 570){
+      DATA = dedupeDataset(DATA);
+      save();
+    }
     initFilterOptions();
     render();
     updateSyncBadge();

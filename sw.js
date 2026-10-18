@@ -1,5 +1,5 @@
-var CACHE = "cn-dsx02-v38";
-var ASSETS = ["./", "./index.html", "./app_script.js?v=38", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+var CACHE = "cn-dsx02-v40";
+var ASSETS = ["./", "./index.html", "./app_script.js?v=40", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(e) {
   self.skipWaiting();
