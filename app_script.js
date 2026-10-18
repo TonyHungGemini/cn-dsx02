@@ -86,6 +86,23 @@ function setPhoneCache(c){
   try { localStorage.setItem(PHONES_KEY, JSON.stringify(c)); } catch(e){}
 }
 
+let _phoneSyncTimer = null;
+function scheduleServerPhoneSync(){
+  if(_phoneSyncTimer) clearTimeout(_phoneSyncTimer);
+  _phoneSyncTimer = setTimeout(() => {
+    try {
+      fetch("/api/sync-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phones: getPhoneCache(),
+          config: (typeof CFG !== "undefined") ? CFG : {}
+        })
+      }).catch(e => {});
+    } catch(e){}
+  }, 400);
+}
+
 function savePhoneToCache(p, phone){
   if(!p) return;
   const ph = cleanPhone(phone || (typeof p === "object" ? getPhone(p) : p));
@@ -115,7 +132,10 @@ function savePhoneToCache(p, phone){
     c["nd:" + name + "__" + dob] = ph;
     changed = true;
   }
-  if(changed) setPhoneCache(c);
+  if(changed) {
+    setPhoneCache(c);
+    scheduleServerPhoneSync();
+  }
 }
 
 function lookupPhoneFromCache(p){
@@ -2035,10 +2055,15 @@ function saveEdit(id) {
 
   // Instant server persistence for cross-device synchronization (Admin Phone <-> Computer)
   try {
-    fetch("/api/save-record", {
+    fetch("/api/sync-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ record: rec })
+      body: JSON.stringify({
+        records: [rec],
+        phones: getPhoneCache(),
+        queue: JSON.parse(localStorage.getItem("cn_queue_v1") || "[]"),
+        config: CFG
+      })
     }).catch(e => console.warn("Server save error:", e));
   } catch(e){}
 
@@ -3034,53 +3059,83 @@ async function fetchServerImages(imgs, deleted){
 }
 
 async function syncNow(silent){
-  // Check if we can auto-fill CFG from server before warning
-  if(!CFG.url || !CFG.key){
-    try {
-      const srvRes = await fetch("/api/records");
-      if(srvRes.ok){
-        const srvData = await srvRes.json();
-        if(srvData.config && srvData.config.url && srvData.config.key){
-          CFG.url = srvData.config.url;
-          CFG.key = srvData.config.key;
-          if(srvData.config.user) CFG.user = srvData.config.user;
-          localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
-        }
-      }
-    } catch(e){}
-  }
+  if(!silent) toast("Đang đồng bộ dữ liệu…");
 
-  if(!CFG.url){
-    // Still perform server sync between devices (Phone <-> PC)
-    try {
-      const srvRes = await fetch("/api/records");
-      if(srvRes.ok){
-        const srvData = await srvRes.json();
+  // 1. STEP 1: ALWAYS perform full bidirectional 2-way sync with server.js
+  // Pushes all local phones, queued changes, modified records, and config.
+  // Pulls master records and master phone registry.
+  let serverSyncSuccess = false;
+  try {
+    const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+    const pCache = getPhoneCache();
+    const recordsWithPhones = (DATA || []).filter(p => getPhone(p));
+
+    const srvRes = await fetch("/api/sync-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        records: recordsWithPhones,
+        phones: pCache,
+        queue: q,
+        config: CFG
+      })
+    });
+
+    if(srvRes.ok){
+      const srvData = await srvRes.json();
+      if(srvData.ok){
+        serverSyncSuccess = true;
+
+        // Auto-adopt config from server if missing locally
+        if(srvData.config && srvData.config.url){
+          let cfgUpdated = false;
+          if(!CFG.url && srvData.config.url){ CFG.url = srvData.config.url; cfgUpdated = true; }
+          if(!CFG.key && srvData.config.key){ CFG.key = srvData.config.key; cfgUpdated = true; }
+          if(!CFG.user && srvData.config.user){ CFG.user = srvData.config.user; cfgUpdated = true; }
+          if(cfgUpdated) localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
+        }
+
+        // Merge server phone registry into local cache
+        if(srvData.phones && typeof srvData.phones === "object"){
+          const localCache = getPhoneCache();
+          let pChanged = false;
+          for(const pk in srvData.phones){
+            if(srvData.phones[pk] && localCache[pk] !== srvData.phones[pk]){
+              localCache[pk] = cleanPhone(srvData.phones[pk]);
+              pChanged = true;
+            }
+          }
+          if(pChanged) setPhoneCache(localCache);
+        }
+
+        // Merge master records from server
         if(Array.isArray(srvData.data) && srvData.data.length > 0){
-          const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
           DATA = mergeServerData(srvData.data, q);
           save();
           initFilterOptions();
           render();
         }
       }
-    } catch(e){}
-    if(!silent){
-      toast("Vui lòng cấu hình Web App URL trong ⚙️ Cài đặt");
-      openSettings("sync");
     }
-    return;
+  } catch(srvErr){
+    console.warn("Server sync-data error:", srvErr);
   }
-  if(!CFG.key){
-    if(!silent){
-      toast("Vui lòng nhập Mã bảo mật (Key) trong ⚙️ Cài đặt");
-      openSettings("sync");
-    }
-    return;
-  }
-  if(!silent) toast("Đang đồng bộ dữ liệu đám mây…");
 
-  try{
+  // 2. STEP 2: If Google Apps Script Web App URL and Key are not configured
+  if(!CFG.url || !CFG.key){
+    if(serverSyncSuccess){
+      if(!silent) toast("✓ Đã đồng bộ máy chủ (mọi máy tính/điện thoại đều đã nhận SĐT)");
+    } else {
+      if(!silent){
+        toast("Vui lòng cấu hình Web App URL và Key trong ⚙️ Cài đặt để đồng bộ Google Sheet");
+        openSettings("sync");
+      }
+    }
+    return;
+  }
+
+  // 3. STEP 3: Proceed with Google Apps Script cloud sync (Images & Sheet rows)
+  try {
     let pend = getPendImg();
     const stillP = [];
     for(const k of pend){
@@ -3092,7 +3147,7 @@ async function syncNow(silent){
         if(!r.ok){
           if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
             if(!silent){
-              toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+              toast("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
               openSettings("sync");
             }
             return;
@@ -3112,7 +3167,7 @@ async function syncNow(silent){
         if(!r.ok){
           if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
             if(!silent){
-              toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+              toast("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
               openSettings("sync");
             }
             return;
@@ -3126,15 +3181,16 @@ async function syncNow(silent){
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
     const enrichedQ = q.map(enrichRecordForServer);
     const res = await api("sync", { records: enrichedQ });
+
     if(!res.ok){
       if(res.error === "unauthorized" || res.msg === "Sai khoá truy cập." || res.err === "unauthorized"){
         if(!silent){
-          toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+          toast("✓ Đã đồng bộ máy chủ, nhưng Key Google Sheet chưa đúng.");
           openSettings("sync");
         }
       } else {
-        const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ";
-        if(!silent) toast("Lỗi: " + errMsg);
+        const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ Google Sheet";
+        if(!silent) toast("✓ Đã đồng bộ máy chủ. Google Sheet: " + errMsg);
       }
       return;
     }
@@ -3151,12 +3207,12 @@ async function syncNow(silent){
       initFilterOptions();
       render();
 
-      // Persist merged data and phones to server.js for cross-device synchronization
+      // Broadcast merged dataset back to server.js
       try {
-        fetch("/api/save-all", {
+        fetch("/api/sync-data", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ records: DATA, phones: getPhoneCache() })
+          body: JSON.stringify({ records: DATA, phones: getPhoneCache(), config: CFG })
         }).catch(e => {});
       } catch(e){}
     }
@@ -3164,7 +3220,7 @@ async function syncNow(silent){
     addLog("Đồng bộ đám mây", `Thành công (${(res.data||[]).length} hồ sơ)`);
     if(!silent) toast("Đồng bộ đám mây thành công ✓");
   }catch(e){
-    if(!silent) toast("Không kết nối được máy chủ: " + e.message);
+    if(!silent) toast("✓ Đã đồng bộ máy chủ nội bộ. Google Sheet: " + e.message);
   }
 }
 
@@ -3838,56 +3894,25 @@ document.addEventListener("DOMContentLoaded", () => {
     updateSyncBadge();
 
     // Cross-device synchronization on launch (Admin Phone <-> Computer)
-    try {
-      const srvRes = await fetch("/api/records");
-      if(srvRes.ok){
-        const srvData = await srvRes.json();
-        let shouldRender = false;
-
-        // 1. Auto-apply cloud config from server if missing locally
-        if(srvData.config && srvData.config.url && (!CFG.url || !CFG.key)){
-          if(!CFG.url) CFG.url = srvData.config.url;
-          if(!CFG.key && srvData.config.key) CFG.key = srvData.config.key;
-          if(!CFG.user && srvData.config.user) CFG.user = srvData.config.user;
-          localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
-        }
-
-        // 2. Merge server persistent phone numbers
-        if(srvData.phones && typeof srvData.phones === "object"){
-          const pCache = getPhoneCache();
-          let pChanged = false;
-          for(const pk in srvData.phones){
-            if(srvData.phones[pk] && !pCache[pk]){
-              pCache[pk] = cleanPhone(srvData.phones[pk]);
-              pChanged = true;
-            }
-          }
-          if(pChanged){
-            setPhoneCache(pCache);
-            shouldRender = true;
-          }
-        }
-
-        // 3. Merge server records if server has records
-        if(Array.isArray(srvData.data) && srvData.data.length > 0){
-          const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
-          DATA = mergeServerData(srvData.data, q);
-          save();
-          shouldRender = true;
-        }
-
-        if(shouldRender){
-          initFilterOptions();
-          render();
-        }
-      }
-    } catch(err){
-      console.warn("Server launch sync:", err);
-    }
-
-    if(CFG.url && CFG.key) connect(true).then(ok => { if(ok) syncNow(true); });
+    syncNow(true);
   });
 });
+
+// Auto-sync across devices whenever user focuses window or returns to the tab
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible"){
+    syncNow(true);
+  }
+});
+window.addEventListener("focus", () => {
+  syncNow(true);
+});
+// Periodic silent background sync every 10 seconds to keep devices in lockstep
+setInterval(() => {
+  if(!document.hidden){
+    syncNow(true);
+  }
+}, 10000);
 
 // Search input
 const qEl = document.getElementById("q");

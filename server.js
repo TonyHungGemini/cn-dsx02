@@ -539,19 +539,221 @@ function isValidCmndHelper(c) {
   return s.length >= 5;
 }
 
+// Helper: lookup phone from registry
+function lookupPhoneForRecord(rec, phones) {
+  if (!rec || typeof rec !== 'object' || !phones) return '';
+  const recName = cleanStrHelper(rec.ten_that);
+  const recRoom = cleanStrHelper(rec.phong_o);
+  const recDob = String(rec.ngay_sinh || '').trim();
+  const recCmnd = isValidCmndHelper(rec.cmnd) ? String(rec.cmnd).trim().toLowerCase() : '';
+
+  if (rec.id != null && phones['id:' + rec.id]) return phones['id:' + rec.id];
+  if (recCmnd && phones['cmnd:' + recCmnd]) return phones['cmnd:' + recCmnd];
+  if (recName && recRoom && phones['nr:' + recName + '__' + recRoom]) return phones['nr:' + recName + '__' + recRoom];
+  if (recName && recDob && phones['nd:' + recName + '__' + recDob]) return phones['nd:' + recName + '__' + recDob];
+  return '';
+}
+
+// Helper: register phone in registry across all matching dimensions
+function registerRecordPhone(rec, phones) {
+  if (!rec || typeof rec !== 'object' || !phones) return false;
+  const ph = (rec.so_dt || rec.sdt || rec['Số điện thoại'] || rec['Số ĐT'] || rec.phone || '').toString().trim();
+  if (!ph) return false;
+  const recName = cleanStrHelper(rec.ten_that);
+  const recRoom = cleanStrHelper(rec.phong_o);
+  const recDob = String(rec.ngay_sinh || '').trim();
+  const recCmnd = isValidCmndHelper(rec.cmnd) ? String(rec.cmnd).trim().toLowerCase() : '';
+  let changed = false;
+
+  if (rec.id != null && rec.id !== '' && rec.id !== '__new__' && !String(rec.id).startsWith('srv_')) {
+    if (phones['id:' + rec.id] !== ph) { phones['id:' + rec.id] = ph; changed = true; }
+  }
+  if (recCmnd) {
+    if (phones['cmnd:' + recCmnd] !== ph) { phones['cmnd:' + recCmnd] = ph; changed = true; }
+  }
+  if (recName && recRoom) {
+    if (phones['nr:' + recName + '__' + recRoom] !== ph) { phones['nr:' + recName + '__' + recRoom] = ph; changed = true; }
+  }
+  if (recName && recDob) {
+    if (phones['nd:' + recName + '__' + recDob] !== ph) { phones['nd:' + recName + '__' + recDob] = ph; changed = true; }
+  }
+  return changed;
+}
+
 // 1. Get all current records and persistent phone registry
 app.get('/api/records', (req, res) => {
   try {
     const records = getStoredRecords();
     const phones = getStoredPhones();
     const config = getStoredConfig();
+
+    // Ensure all records have their phone number attached
+    let changed = false;
+    records.forEach(r => {
+      const curPh = r.so_dt || r.sdt || r.phone || r['Số điện thoại'] || '';
+      if (!curPh) {
+        const ph = lookupPhoneForRecord(r, phones);
+        if (ph) {
+          r.so_dt = ph;
+          r.sdt = ph;
+          r.phone = ph;
+          r['Số điện thoại'] = ph;
+          changed = true;
+        }
+      } else {
+        if (registerRecordPhone(r, phones)) changed = true;
+      }
+    });
+    if (changed) {
+      saveStoredRecords(records);
+      saveStoredPhones(phones);
+    }
+
     return res.json({ ok: true, data: records, phones: phones, config: config, count: records.length });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// 2. Save / update a single record (called on every saveEdit)
+// 2. Comprehensive Bidirectional Sync Endpoint across Admin Phone <-> Computer <-> Any Device
+app.post('/api/sync-data', (req, res) => {
+  try {
+    const { records: clientRecords, phones: clientPhones, queue, config: clientConfig } = req.body || {};
+    const records = getStoredRecords();
+    const phones = getStoredPhones();
+    const config = getStoredConfig();
+    let recordsChanged = false;
+    let phonesChanged = false;
+    let configChanged = false;
+
+    // 2a. Sync configuration: save if client has valid config
+    if (clientConfig && typeof clientConfig === 'object') {
+      if (clientConfig.url && clientConfig.url !== config.url) {
+        config.url = String(clientConfig.url).trim();
+        configChanged = true;
+      }
+      if (clientConfig.key && clientConfig.key !== config.key) {
+        config.key = String(clientConfig.key).trim();
+        configChanged = true;
+      }
+      if (clientConfig.user && clientConfig.user !== config.user) {
+        config.user = String(clientConfig.user).trim();
+        configChanged = true;
+      }
+      if (configChanged) saveStoredConfig(config);
+    }
+
+    // 2b. Merge incoming client phone cache into server phone registry
+    if (clientPhones && typeof clientPhones === 'object') {
+      for (const k of Object.keys(clientPhones)) {
+        const pVal = String(clientPhones[k] || '').trim();
+        if (pVal && phones[k] !== pVal) {
+          phones[k] = pVal;
+          phonesChanged = true;
+        }
+      }
+    }
+
+    function findRecordIdx(rec) {
+      const recName = cleanStrHelper(rec.ten_that);
+      const recRoom = cleanStrHelper(rec.phong_o);
+      const recDob = String(rec.ngay_sinh || '').trim();
+      const recCmnd = isValidCmndHelper(rec.cmnd) ? String(rec.cmnd).trim().toLowerCase() : '';
+
+      if (recCmnd) {
+        const idx = records.findIndex(x => isValidCmndHelper(x.cmnd) && String(x.cmnd).trim().toLowerCase() === recCmnd);
+        if (idx >= 0) return idx;
+      }
+      if (recName && recRoom) {
+        const idx = records.findIndex(x => cleanStrHelper(x.ten_that) === recName && cleanStrHelper(x.phong_o) === recRoom);
+        if (idx >= 0) return idx;
+      }
+      if (recName && recDob) {
+        const idx = records.findIndex(x => cleanStrHelper(x.ten_that) === recName && String(x.ngay_sinh || '').trim() === recDob);
+        if (idx >= 0) return idx;
+      }
+      if (rec.id != null && rec.id !== '' && rec.id !== '__new__' && !String(rec.id).startsWith('srv_')) {
+        const idx = records.findIndex(x => String(x.id) === String(rec.id) && (!recName || !x.ten_that || cleanStrHelper(x.ten_that) === recName));
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    }
+
+    // 2c. Merge queued records (user modifications waiting to be saved)
+    if (Array.isArray(queue) && queue.length > 0) {
+      queue.forEach(qRec => {
+        if (registerRecordPhone(qRec, phones)) phonesChanged = true;
+        const idx = findRecordIdx(qRec);
+        if (idx >= 0) {
+          records[idx] = Object.assign({}, records[idx], qRec);
+          recordsChanged = true;
+        } else {
+          records.unshift(qRec);
+          recordsChanged = true;
+        }
+      });
+    }
+
+    // 2d. Merge client records (records with phones or local edits)
+    if (Array.isArray(clientRecords) && clientRecords.length > 0) {
+      clientRecords.forEach(cRec => {
+        const ph = (cRec.so_dt || cRec.sdt || cRec['Số điện thoại'] || cRec['Số ĐT'] || cRec.phone || '').toString().trim();
+        if (ph) {
+          if (registerRecordPhone(cRec, phones)) phonesChanged = true;
+          const idx = findRecordIdx(cRec);
+          if (idx >= 0) {
+            const curPh = records[idx].so_dt || records[idx].sdt || '';
+            if (curPh !== ph || cRec._edited) {
+              records[idx] = Object.assign({}, records[idx], cRec);
+              records[idx].so_dt = ph;
+              records[idx].sdt = ph;
+              records[idx]['Số điện thoại'] = ph;
+              records[idx]['Số ĐT'] = ph;
+              records[idx].phone = ph;
+              recordsChanged = true;
+            }
+          }
+        }
+      });
+    }
+
+    // 2e. Cross-check: guarantee EVERY record has its phone populated from phone registry
+    records.forEach(r => {
+      const curPh = r.so_dt || r.sdt || r.phone || r['Số điện thoại'] || '';
+      if (!curPh) {
+        const ph = lookupPhoneForRecord(r, phones);
+        if (ph) {
+          r.so_dt = ph;
+          r.sdt = ph;
+          r.phone = ph;
+          r['Số điện thoại'] = ph;
+          r['Số ĐT'] = ph;
+          recordsChanged = true;
+        }
+      } else {
+        if (registerRecordPhone(r, phones)) phonesChanged = true;
+      }
+    });
+
+    if (phonesChanged) saveStoredPhones(phones);
+    if (recordsChanged) saveStoredRecords(records);
+
+    return res.json({
+      ok: true,
+      data: records,
+      phones: phones,
+      config: config,
+      count: records.length,
+      phonesCount: Object.keys(phones).length,
+      serverTime: Date.now()
+    });
+  } catch (err) {
+    console.error('sync-data error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 3. Save / update a single record (called on every saveEdit)
 app.post('/api/save-record', (req, res) => {
   try {
     const { record } = req.body;
@@ -567,7 +769,6 @@ app.post('/api/save-record', (req, res) => {
     const recCmnd = isValidCmndHelper(record.cmnd) ? String(record.cmnd).trim().toLowerCase() : '';
 
     let matchIdx = -1;
-    // Matching hierarchy
     if (recCmnd) {
       matchIdx = records.findIndex(x => isValidCmndHelper(x.cmnd) && String(x.cmnd).trim().toLowerCase() === recCmnd);
     }
@@ -581,17 +782,19 @@ app.post('/api/save-record', (req, res) => {
       matchIdx = records.findIndex(x => String(x.id) === String(record.id) && (!recName || !x.ten_that || cleanStrHelper(x.ten_that) === recName));
     }
 
-    const phoneVal = (record.so_dt || record.sdt || record['Số điện thoại'] || '').toString().trim();
+    const phoneVal = (record.so_dt || record.sdt || record['Số điện thoại'] || record['Số ĐT'] || record.phone || '').toString().trim();
     if (phoneVal) {
-      if (record.id) phones['id:' + record.id] = phoneVal;
-      if (recCmnd) phones['cmnd:' + recCmnd] = phoneVal;
-      if (recName && recRoom) phones['nr:' + recName + '__' + recRoom] = phoneVal;
-      if (recName && recDob) phones['nd:' + recName + '__' + recDob] = phoneVal;
+      registerRecordPhone(record, phones);
       saveStoredPhones(phones);
     }
 
     if (matchIdx >= 0) {
       records[matchIdx] = Object.assign({}, records[matchIdx], record);
+      if (phoneVal) {
+        records[matchIdx].so_dt = phoneVal;
+        records[matchIdx].sdt = phoneVal;
+        records[matchIdx]['Số điện thoại'] = phoneVal;
+      }
     } else {
       records.unshift(record);
     }
@@ -603,7 +806,7 @@ app.post('/api/save-record', (req, res) => {
   }
 });
 
-// 3. Batch save / sync all records
+// 4. Batch save / sync all records
 app.post('/api/save-all', (req, res) => {
   try {
     const { records, phones } = req.body;
@@ -621,7 +824,7 @@ app.post('/api/save-all', (req, res) => {
   }
 });
 
-// 4. Central config getters and setters (syncs Web App URL & Key across devices)
+// 5. Central config getters and setters (syncs Web App URL & Key across devices)
 app.get('/api/config', (req, res) => {
   try {
     return res.json({ ok: true, config: getStoredConfig() });

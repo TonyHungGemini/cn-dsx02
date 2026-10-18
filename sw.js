@@ -1,5 +1,5 @@
-var CACHE = "cn-dsx02-v36";
-var ASSETS = ["./", "./index.html", "./app_script.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+var CACHE = "cn-dsx02-v38";
+var ASSETS = ["./", "./index.html", "./app_script.js?v=38", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(e) {
   self.skipWaiting();
@@ -28,6 +28,7 @@ self.addEventListener("activate", function(e) {
 self.addEventListener("fetch", function(e) {
   var u = new URL(e.request.url);
   if (u.hostname.indexOf("script.google") >= 0 || u.hostname.indexOf("googleusercontent") >= 0) return;
+  if (u.pathname.indexOf("/api/") >= 0) return;
   if (e.request.method !== "GET") return;
 
   e.respondWith(
