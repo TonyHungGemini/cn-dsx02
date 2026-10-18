@@ -2202,8 +2202,13 @@ function openEdit(id, prefillRoom, backRoom) {
   body += mkInput("ghi_chu", "Ghi chú", "textarea");
 
   const sheet = document.getElementById("sheet");
+  const workerName = (cur.ten_that || cur.ten_ho_so || "").trim();
+  const modalTitle = id === "__new__" 
+    ? "➕ Thêm người mới" 
+    : ("✏️ " + esc(workerName || "Hồ sơ công nhân"));
+
   sheet.innerHTML =
-    '<div class="sheet-h"><h2>' + (id === "__new__" ? "➕ Thêm người mới" : "✏️ Chỉnh sửa hồ sơ") + '</h2><button class="x" id="bClose">×</button></div>' +
+    '<div class="sheet-h"><h2 id="sheetTitle">' + modalTitle + '</h2><button class="x" id="bClose">×</button></div>' +
     '<div class="sheet-b">' + body + '</div>' +
     '<div class="sheet-f">' +
     (id !== "__new__" ? '<button class="btn del" id="bDel">🗑 Xóa</button>' : '') +
@@ -2214,6 +2219,18 @@ function openEdit(id, prefillRoom, backRoom) {
   document.getElementById("bClose").onclick = closeEdit;
   document.getElementById("bSave").onclick = () => saveEdit(id);
   if (id !== "__new__") document.getElementById("bDel").onclick = () => delRec(id);
+
+  // Dynamically update title if worker name is edited in input
+  const nameInput = sheet.querySelector("input[data-k='ten_that']");
+  if (nameInput && id !== "__new__") {
+    nameInput.addEventListener("input", e => {
+      const titleEl = sheet.querySelector("#sheetTitle");
+      if (titleEl) {
+        const val = e.target.value.trim();
+        titleEl.textContent = "✏️ " + (val || cur.ten_ho_so || "Hồ sơ công nhân");
+      }
+    });
+  }
 
   // Phone input listener to show call button dynamically
   const phInput = sheet.querySelector("input[data-k='so_dt']");
