@@ -20,11 +20,14 @@
     "chu_phong": false,
     "deleted": false,
     "id": 1,
-    "so_dt": "0971234567",
-    "sdt": "0971234567",
-    "phone": "0971234567",
-    "Số điện thoại": "0971234567",
-    "Số ĐT": "0971234567"
+    "so_dt": "0975102105",
+    "sdt": "0975102105",
+    "phone": "0975102105",
+    "Số điện thoại": "0975102105",
+    "Số ĐT": "0975102105",
+    "nhom_mau": "",
+    "danh_gia_ky_nang": 5,
+    "danh_gia_dao_duc": 5
   },
   {
     "cmnd": "150599313",
@@ -75,7 +78,10 @@
     "sdt": "0988776655",
     "Số điện thoại": "0988776655",
     "Số ĐT": "0988776655",
-    "phone": "0988776655"
+    "phone": "0988776655",
+    "nhom_mau": "",
+    "danh_gia_ky_nang": 5,
+    "danh_gia_dao_duc": 5
   },
   {
     "cmnd": "151006923",
@@ -99,7 +105,9 @@
     "deleted": false,
     "id": 4,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151035794",
@@ -123,7 +131,9 @@
     "deleted": false,
     "id": 5,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150533141",
@@ -147,7 +157,9 @@
     "deleted": false,
     "id": 6,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150532961",
@@ -171,7 +183,9 @@
     "deleted": false,
     "id": 7,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -195,7 +209,9 @@
     "deleted": false,
     "id": 8,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150970039",
@@ -219,7 +235,9 @@
     "deleted": false,
     "id": 9,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150414727",
@@ -243,7 +261,41 @@
     "deleted": false,
     "id": 10,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "nhom_mau": "O",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3,
+    "so_dien_thoai": "",
+    "dien_thoai": "",
+    "phone": "",
+    "Số điện thoại": "",
+    "Số ĐT": "",
+    "SĐT": "",
+    "SDT": "",
+    "Điện thoại": "",
+    "_edited": true,
+    "CMND": "150414727",
+    "HỌ VÀ TÊN (Tên thật)": "LOU MALIN",
+    "Họ và tên (tên thật)": "LOU MALIN",
+    "Họ và tên": "LOU MALIN",
+    "TÊN TRONG HỒ SƠ": "LOU MALIN",
+    "Tên trong hồ sơ": "LOU MALIN",
+    "Ngày sinh": "11/02/1990",
+    "Tuổi": "36",
+    "Nơi sinh": "",
+    "Giới tính": "F",
+    "Loại": "Lao động",
+    "Tổ": "Tổ 1",
+    "Khu vực": "KV1",
+    "Phần cây hiện tại": "39-KV1",
+    "Quan hệ": "Vợ",
+    "PHÒNG Ở": "A2",
+    "Phòng ở": "A2",
+    "Số bảo hiểm": "",
+    "Chi tiết nơi ở": "CHAMNAKROM-STOUNG-KAMPONGTHOM",
+    "Địa chỉ thường trú": "Làng Samr, Xã Chamnakrap, Huyện Stoung, Kampong Thom",
+    "Ghi chú": "LV",
+    "Chủ phòng": ""
   },
   {
     "cmnd": "",
@@ -291,7 +343,9 @@
     "deleted": false,
     "id": 12,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150530877",
@@ -315,7 +369,9 @@
     "deleted": false,
     "id": 13,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -363,7 +419,9 @@
     "deleted": false,
     "id": 15,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -387,7 +445,9 @@
     "deleted": false,
     "id": 16,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "140082179",
@@ -411,7 +471,9 @@
     "deleted": false,
     "id": 17,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -459,7 +521,9 @@
     "deleted": false,
     "id": 19,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150533226",
@@ -483,7 +547,9 @@
     "deleted": false,
     "id": 20,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150533140",
@@ -507,7 +573,9 @@
     "deleted": false,
     "id": 21,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150710684",
@@ -531,7 +599,9 @@
     "deleted": false,
     "id": 22,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -555,7 +625,9 @@
     "deleted": false,
     "id": 23,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150966079",
@@ -579,7 +651,9 @@
     "deleted": false,
     "id": 24,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150966081",
@@ -603,7 +677,9 @@
     "deleted": false,
     "id": 25,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -627,7 +703,9 @@
     "deleted": false,
     "id": 26,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -771,7 +849,9 @@
     "deleted": false,
     "id": 32,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150321058",
@@ -939,7 +1019,9 @@
     "deleted": false,
     "id": 39,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151027052",
@@ -1035,7 +1117,9 @@
     "deleted": false,
     "id": 43,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150966077",
@@ -1059,7 +1143,9 @@
     "deleted": false,
     "id": 44,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150966065",
@@ -1083,7 +1169,9 @@
     "deleted": false,
     "id": 45,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -1107,7 +1195,9 @@
     "deleted": false,
     "id": 46,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150927356",
@@ -1131,7 +1221,9 @@
     "deleted": false,
     "id": 47,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150327357",
@@ -1155,7 +1247,9 @@
     "deleted": false,
     "id": 48,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -1179,7 +1273,9 @@
     "deleted": false,
     "id": 49,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -1275,7 +1371,9 @@
     "deleted": false,
     "id": 53,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200223967",
@@ -1299,7 +1397,9 @@
     "deleted": false,
     "id": 54,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -1347,7 +1447,9 @@
     "deleted": false,
     "id": 56,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151026786",
@@ -1371,7 +1473,9 @@
     "deleted": false,
     "id": 57,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -1395,7 +1499,9 @@
     "deleted": false,
     "id": 58,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -1419,7 +1525,9 @@
     "deleted": false,
     "id": 59,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -1491,7 +1599,9 @@
     "deleted": false,
     "id": 62,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "51562395",
@@ -1515,7 +1625,9 @@
     "deleted": false,
     "id": 63,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "110444617",
@@ -1539,7 +1651,9 @@
     "deleted": false,
     "id": 64,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -1563,7 +1677,9 @@
     "deleted": false,
     "id": 65,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200269481",
@@ -1587,7 +1703,9 @@
     "deleted": false,
     "id": 66,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200218244",
@@ -1611,7 +1729,9 @@
     "deleted": false,
     "id": 67,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200238094",
@@ -1755,7 +1875,9 @@
     "deleted": false,
     "id": 73,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "31043393",
@@ -1779,7 +1901,9 @@
     "deleted": false,
     "id": 74,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200186628",
@@ -1899,7 +2023,9 @@
     "deleted": false,
     "id": 79,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180309235",
@@ -1923,7 +2049,9 @@
     "deleted": false,
     "id": 80,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -2019,7 +2147,9 @@
     "deleted": false,
     "id": 84,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "181019509",
@@ -2043,7 +2173,9 @@
     "deleted": false,
     "id": 85,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "181019507",
@@ -2115,7 +2247,9 @@
     "deleted": false,
     "id": 88,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150934886",
@@ -2139,7 +2273,9 @@
     "deleted": false,
     "id": 89,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -2235,7 +2371,9 @@
     "deleted": false,
     "id": 93,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150708357",
@@ -2259,7 +2397,9 @@
     "deleted": false,
     "id": 94,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -2331,7 +2471,9 @@
     "deleted": false,
     "id": 97,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150865549",
@@ -2355,7 +2497,9 @@
     "deleted": false,
     "id": 98,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -2427,7 +2571,9 @@
     "deleted": false,
     "id": 101,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -2451,7 +2597,9 @@
     "deleted": false,
     "id": 102,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -2499,7 +2647,9 @@
     "deleted": false,
     "id": 104,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151050780",
@@ -2523,7 +2673,9 @@
     "deleted": false,
     "id": 105,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -2571,7 +2723,9 @@
     "deleted": false,
     "id": 107,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200225384",
@@ -2595,7 +2749,9 @@
     "deleted": false,
     "id": 108,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180657648",
@@ -2619,7 +2775,9 @@
     "deleted": false,
     "id": 109,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -2691,7 +2849,9 @@
     "deleted": false,
     "id": 112,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "190350155",
@@ -2715,7 +2875,9 @@
     "deleted": false,
     "id": 113,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200309685",
@@ -2739,7 +2901,9 @@
     "deleted": false,
     "id": 114,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -2763,7 +2927,9 @@
     "deleted": false,
     "id": 115,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150580997",
@@ -2787,7 +2953,9 @@
     "deleted": false,
     "id": 116,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150580999",
@@ -2811,7 +2979,9 @@
     "deleted": false,
     "id": 117,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -2883,7 +3053,9 @@
     "deleted": false,
     "id": 120,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151058284",
@@ -3027,7 +3199,9 @@
     "deleted": false,
     "id": 126,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -3123,7 +3297,9 @@
     "deleted": false,
     "id": 130,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -3147,7 +3323,9 @@
     "deleted": false,
     "id": 131,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150855387",
@@ -3171,7 +3349,9 @@
     "deleted": false,
     "id": 132,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -3267,7 +3447,9 @@
     "deleted": false,
     "id": 136,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150968190",
@@ -3291,7 +3473,9 @@
     "deleted": false,
     "id": 137,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -3315,7 +3499,9 @@
     "deleted": false,
     "id": 138,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -3363,7 +3549,9 @@
     "deleted": false,
     "id": 140,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "181167192",
@@ -3387,7 +3575,9 @@
     "deleted": false,
     "id": 141,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -3459,7 +3649,9 @@
     "deleted": false,
     "id": 144,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151064136",
@@ -3483,7 +3675,9 @@
     "deleted": false,
     "id": 145,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151064132",
@@ -3531,7 +3725,9 @@
     "deleted": false,
     "id": 147,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -3603,7 +3799,9 @@
     "deleted": false,
     "id": 150,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -3627,7 +3825,9 @@
     "deleted": false,
     "id": 151,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -3723,7 +3923,9 @@
     "deleted": false,
     "id": 155,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -3843,7 +4045,9 @@
     "deleted": false,
     "id": 160,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -3891,7 +4095,9 @@
     "deleted": false,
     "id": 162,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "250318393",
@@ -3915,7 +4121,9 @@
     "deleted": false,
     "id": 163,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150957817",
@@ -3987,7 +4195,9 @@
     "deleted": false,
     "id": 166,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "250173567",
@@ -4011,7 +4221,9 @@
     "deleted": false,
     "id": 167,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "250445229",
@@ -4035,7 +4247,9 @@
     "deleted": false,
     "id": 168,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -4083,7 +4297,9 @@
     "deleted": false,
     "id": 170,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -4131,7 +4347,9 @@
     "deleted": false,
     "id": 172,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150865498",
@@ -4155,7 +4373,9 @@
     "deleted": false,
     "id": 173,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150353140",
@@ -4178,8 +4398,14 @@
     "chu_phong": false,
     "deleted": false,
     "id": 174,
-    "so_dt": "",
-    "sdt": ""
+    "so_dt": "0976348797",
+    "sdt": "0976348797",
+    "phone": "0976348797",
+    "Số điện thoại": "0976348797",
+    "Số ĐT": "0976348797",
+    "nhom_mau": "",
+    "danh_gia_ky_nang": 5,
+    "danh_gia_dao_duc": 5
   },
   {
     "cmnd": "10828787",
@@ -4202,8 +4428,14 @@
     "chu_phong": false,
     "deleted": false,
     "id": 175,
-    "so_dt": "",
-    "sdt": ""
+    "so_dt": "0976348797",
+    "sdt": "0976348797",
+    "phone": "0976348797",
+    "Số điện thoại": "0976348797",
+    "Số ĐT": "0976348797",
+    "nhom_mau": "",
+    "danh_gia_ky_nang": 5,
+    "danh_gia_dao_duc": 5
   },
   {
     "cmnd": "80116759",
@@ -4227,7 +4459,9 @@
     "deleted": false,
     "id": 176,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -4275,7 +4509,9 @@
     "deleted": false,
     "id": 178,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80068578",
@@ -4299,7 +4535,9 @@
     "deleted": false,
     "id": 179,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -4419,7 +4657,9 @@
     "deleted": false,
     "id": 184,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -4443,7 +4683,9 @@
     "deleted": false,
     "id": 185,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -4539,7 +4781,9 @@
     "deleted": false,
     "id": 189,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "240220769",
@@ -4563,7 +4807,9 @@
     "deleted": false,
     "id": 190,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150887215",
@@ -4587,7 +4833,9 @@
     "deleted": false,
     "id": 191,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200142952",
@@ -4611,7 +4859,9 @@
     "deleted": false,
     "id": 192,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200185849",
@@ -4635,7 +4885,9 @@
     "deleted": false,
     "id": 193,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200144219",
@@ -4659,7 +4911,9 @@
     "deleted": false,
     "id": 194,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200309694",
@@ -4683,7 +4937,9 @@
     "deleted": false,
     "id": 195,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -4755,7 +5011,9 @@
     "deleted": false,
     "id": 198,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200255912",
@@ -4779,7 +5037,9 @@
     "deleted": false,
     "id": 199,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200277377",
@@ -4803,7 +5063,9 @@
     "deleted": false,
     "id": 200,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -4851,7 +5113,9 @@
     "deleted": false,
     "id": 202,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80136035",
@@ -4875,7 +5139,9 @@
     "deleted": false,
     "id": 203,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80043827",
@@ -4899,7 +5165,9 @@
     "deleted": false,
     "id": 204,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80043856",
@@ -4923,7 +5191,9 @@
     "deleted": false,
     "id": 205,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151021372",
@@ -4947,7 +5217,9 @@
     "deleted": false,
     "id": 206,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5091,7 +5363,9 @@
     "deleted": false,
     "id": 212,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200143333",
@@ -5115,7 +5389,9 @@
     "deleted": false,
     "id": 213,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200143318",
@@ -5139,7 +5415,9 @@
     "deleted": false,
     "id": 214,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5259,7 +5537,9 @@
     "deleted": false,
     "id": 219,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5307,7 +5587,9 @@
     "deleted": false,
     "id": 221,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80030533",
@@ -5331,7 +5613,9 @@
     "deleted": false,
     "id": 222,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5403,7 +5687,9 @@
     "deleted": false,
     "id": 225,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5451,7 +5737,9 @@
     "deleted": false,
     "id": 227,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80132704",
@@ -5475,7 +5763,9 @@
     "deleted": false,
     "id": 228,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5523,7 +5813,9 @@
     "deleted": false,
     "id": 230,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "170823701",
@@ -5547,7 +5839,9 @@
     "deleted": false,
     "id": 231,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5595,7 +5889,9 @@
     "deleted": false,
     "id": 233,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160242762",
@@ -5619,7 +5915,9 @@
     "deleted": false,
     "id": 234,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160362891",
@@ -5643,7 +5941,9 @@
     "deleted": false,
     "id": 235,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5763,7 +6063,9 @@
     "deleted": false,
     "id": 240,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150801594",
@@ -5787,7 +6089,9 @@
     "deleted": false,
     "id": 241,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -5859,7 +6163,9 @@
     "deleted": false,
     "id": 244,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -5883,7 +6189,9 @@
     "deleted": false,
     "id": 245,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -6003,7 +6311,9 @@
     "deleted": false,
     "id": 250,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -6027,7 +6337,9 @@
     "deleted": false,
     "id": 251,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "240142304",
@@ -6075,7 +6387,9 @@
     "deleted": false,
     "id": 253,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "181138574",
@@ -6099,7 +6413,9 @@
     "deleted": false,
     "id": 254,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "70266075",
@@ -6123,7 +6439,9 @@
     "deleted": false,
     "id": 255,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "250376437",
@@ -6147,7 +6465,9 @@
     "deleted": false,
     "id": 256,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -6195,7 +6515,9 @@
     "deleted": false,
     "id": 258,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -6219,7 +6541,9 @@
     "deleted": false,
     "id": 259,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -6243,7 +6567,9 @@
     "deleted": false,
     "id": 260,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151009038",
@@ -6267,7 +6593,9 @@
     "deleted": false,
     "id": 261,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151009037",
@@ -6291,7 +6619,9 @@
     "deleted": false,
     "id": 262,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150883131",
@@ -6315,7 +6645,9 @@
     "deleted": false,
     "id": 263,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150530292",
@@ -6339,7 +6671,9 @@
     "deleted": false,
     "id": 264,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150615191",
@@ -6363,7 +6697,9 @@
     "deleted": false,
     "id": 265,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150905181",
@@ -6387,7 +6723,9 @@
     "deleted": false,
     "id": 266,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -6411,7 +6749,9 @@
     "deleted": false,
     "id": 267,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150911292",
@@ -6435,7 +6775,9 @@
     "deleted": false,
     "id": 268,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180724785",
@@ -6459,7 +6801,9 @@
     "deleted": false,
     "id": 269,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200266667",
@@ -6483,7 +6827,9 @@
     "deleted": false,
     "id": 270,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160582605",
@@ -6507,7 +6853,9 @@
     "deleted": false,
     "id": 271,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160582577",
@@ -6531,7 +6879,9 @@
     "deleted": false,
     "id": 272,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -6651,7 +7001,9 @@
     "deleted": false,
     "id": 277,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -6675,7 +7027,9 @@
     "deleted": false,
     "id": 278,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -6771,7 +7125,9 @@
     "deleted": false,
     "id": 282,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -6795,7 +7151,9 @@
     "deleted": false,
     "id": 283,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -6843,7 +7201,9 @@
     "deleted": false,
     "id": 285,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -6867,7 +7227,9 @@
     "deleted": false,
     "id": 286,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -6915,7 +7277,9 @@
     "deleted": false,
     "id": 288,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "61771914",
@@ -6939,7 +7303,9 @@
     "deleted": false,
     "id": 289,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -7011,7 +7377,9 @@
     "deleted": false,
     "id": 292,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200250685",
@@ -7035,7 +7403,9 @@
     "deleted": false,
     "id": 293,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -7107,7 +7477,9 @@
     "deleted": false,
     "id": 296,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "181162341",
@@ -7131,7 +7503,9 @@
     "deleted": false,
     "id": 297,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "62358303",
@@ -7155,7 +7529,9 @@
     "deleted": false,
     "id": 298,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151088790",
@@ -7179,7 +7555,9 @@
     "deleted": false,
     "id": 299,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "70399248",
@@ -7203,7 +7581,9 @@
     "deleted": false,
     "id": 300,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151058022",
@@ -7323,7 +7703,9 @@
     "deleted": false,
     "id": 305,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80116088",
@@ -7347,7 +7729,9 @@
     "deleted": false,
     "id": 306,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -7395,7 +7779,9 @@
     "deleted": false,
     "id": 308,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150926273",
@@ -7419,7 +7805,9 @@
     "deleted": false,
     "id": 309,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150561021",
@@ -7443,7 +7831,9 @@
     "deleted": false,
     "id": 314,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150561020",
@@ -7467,7 +7857,9 @@
     "deleted": false,
     "id": 315,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151081969",
@@ -7491,7 +7883,9 @@
     "deleted": false,
     "id": 316,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -7611,7 +8005,9 @@
     "deleted": false,
     "id": 321,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150527833",
@@ -7635,7 +8031,9 @@
     "deleted": false,
     "id": 322,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -7683,7 +8081,9 @@
     "deleted": false,
     "id": 324,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "1510002674",
@@ -7707,7 +8107,9 @@
     "deleted": false,
     "id": 325,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "61372460",
@@ -7731,7 +8133,9 @@
     "deleted": false,
     "id": 326,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -7803,7 +8207,9 @@
     "deleted": false,
     "id": 329,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -7851,7 +8257,9 @@
     "deleted": false,
     "id": 331,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150708596",
@@ -7875,7 +8283,9 @@
     "deleted": false,
     "id": 332,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151064194",
@@ -7899,7 +8309,9 @@
     "deleted": false,
     "id": 333,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160493495",
@@ -7923,7 +8335,9 @@
     "deleted": false,
     "id": 334,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "170687094",
@@ -7947,7 +8361,9 @@
     "deleted": false,
     "id": 335,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160366456",
@@ -7971,7 +8387,9 @@
     "deleted": false,
     "id": 336,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160366454",
@@ -7995,7 +8413,9 @@
     "deleted": false,
     "id": 337,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160430939",
@@ -8019,7 +8439,9 @@
     "deleted": false,
     "id": 338,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -8067,7 +8489,9 @@
     "deleted": false,
     "id": 340,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160336209",
@@ -8091,7 +8515,9 @@
     "deleted": false,
     "id": 341,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160549163",
@@ -8115,7 +8541,9 @@
     "deleted": false,
     "id": 342,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "40455330",
@@ -8139,7 +8567,9 @@
     "deleted": false,
     "id": 343,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "1509960651",
@@ -8163,7 +8593,9 @@
     "deleted": false,
     "id": 344,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160430903",
@@ -8187,7 +8619,9 @@
     "deleted": false,
     "id": 345,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160430890",
@@ -8211,7 +8645,9 @@
     "deleted": false,
     "id": 346,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160372044",
@@ -8235,7 +8671,9 @@
     "deleted": false,
     "id": 347,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200315443",
@@ -8259,7 +8697,9 @@
     "deleted": false,
     "id": 348,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160604806",
@@ -8283,7 +8723,9 @@
     "deleted": false,
     "id": 349,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160555265",
@@ -8307,7 +8749,9 @@
     "deleted": false,
     "id": 350,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151042263",
@@ -8331,7 +8775,9 @@
     "deleted": false,
     "id": 351,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80082980",
@@ -8355,7 +8801,9 @@
     "deleted": false,
     "id": 352,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80082978",
@@ -8379,7 +8827,9 @@
     "deleted": false,
     "id": 353,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80109523",
@@ -8403,7 +8853,9 @@
     "deleted": false,
     "id": 354,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -8475,7 +8927,9 @@
     "deleted": false,
     "id": 357,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150748424",
@@ -8499,7 +8953,9 @@
     "deleted": false,
     "id": 358,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80140670",
@@ -8523,7 +8979,9 @@
     "deleted": false,
     "id": 359,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150996050",
@@ -8547,7 +9005,9 @@
     "deleted": false,
     "id": 360,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150996059",
@@ -8571,7 +9031,9 @@
     "deleted": false,
     "id": 361,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150922851",
@@ -8595,7 +9057,9 @@
     "deleted": false,
     "id": 362,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -8643,7 +9107,9 @@
     "deleted": false,
     "id": 364,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -8691,7 +9157,9 @@
     "deleted": false,
     "id": 366,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150922852",
@@ -8715,7 +9183,9 @@
     "deleted": false,
     "id": 367,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -8763,7 +9233,9 @@
     "deleted": false,
     "id": 369,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -8883,7 +9355,9 @@
     "deleted": false,
     "id": 374,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150897477",
@@ -8907,7 +9381,9 @@
     "deleted": false,
     "id": 375,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -8955,7 +9431,9 @@
     "deleted": false,
     "id": 377,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151011752",
@@ -8979,7 +9457,9 @@
     "deleted": false,
     "id": 378,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9051,7 +9531,9 @@
     "deleted": false,
     "id": 381,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9099,7 +9581,9 @@
     "deleted": false,
     "id": 37,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150530283",
@@ -9123,7 +9607,9 @@
     "deleted": false,
     "id": 384,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9171,7 +9657,9 @@
     "deleted": false,
     "id": 386,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9219,7 +9707,9 @@
     "deleted": false,
     "id": 388,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150947940",
@@ -9243,7 +9733,9 @@
     "deleted": false,
     "id": 389,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9291,7 +9783,9 @@
     "deleted": false,
     "id": 391,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9339,7 +9833,9 @@
     "deleted": false,
     "id": 393,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151038502",
@@ -9363,7 +9859,9 @@
     "deleted": false,
     "id": 394,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9435,7 +9933,9 @@
     "deleted": false,
     "id": 397,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151035954",
@@ -9459,7 +9959,9 @@
     "deleted": false,
     "id": 398,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150966088",
@@ -9483,7 +9985,9 @@
     "deleted": false,
     "id": 399,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9555,7 +10059,9 @@
     "deleted": false,
     "id": 402,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9603,7 +10109,9 @@
     "deleted": false,
     "id": 404,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150561065",
@@ -9627,7 +10135,9 @@
     "deleted": false,
     "id": 405,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9675,7 +10185,9 @@
     "deleted": false,
     "id": 407,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9723,7 +10235,9 @@
     "deleted": false,
     "id": 409,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9771,7 +10285,9 @@
     "deleted": false,
     "id": 411,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200093612",
@@ -9795,7 +10311,9 @@
     "deleted": false,
     "id": 412,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9843,7 +10361,9 @@
     "deleted": false,
     "id": 414,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151053234",
@@ -9867,7 +10387,9 @@
     "deleted": false,
     "id": 415,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151053235",
@@ -9891,7 +10413,9 @@
     "deleted": false,
     "id": 416,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "61601196",
@@ -9915,7 +10439,9 @@
     "deleted": false,
     "id": 417,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -9963,7 +10489,9 @@
     "deleted": false,
     "id": 419,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180724800",
@@ -9987,7 +10515,9 @@
     "deleted": false,
     "id": 420,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200218334",
@@ -10011,7 +10541,9 @@
     "deleted": false,
     "id": 421,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -10059,7 +10591,9 @@
     "deleted": false,
     "id": 423,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160430920",
@@ -10083,7 +10617,9 @@
     "deleted": false,
     "id": 424,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -10107,7 +10643,9 @@
     "deleted": false,
     "id": 425,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160285876",
@@ -10131,7 +10669,9 @@
     "deleted": false,
     "id": 426,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151036105",
@@ -10203,7 +10743,9 @@
     "deleted": false,
     "id": 429,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "250445707",
@@ -10227,7 +10769,9 @@
     "deleted": false,
     "id": 430,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150813649",
@@ -10251,7 +10795,9 @@
     "deleted": false,
     "id": 431,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150909593",
@@ -10275,7 +10821,9 @@
     "deleted": false,
     "id": 432,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200178814",
@@ -10299,7 +10847,9 @@
     "deleted": false,
     "id": 433,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150879711",
@@ -10371,7 +10921,9 @@
     "deleted": false,
     "id": 436,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150698350",
@@ -10395,7 +10947,9 @@
     "deleted": false,
     "id": 437,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150660822",
@@ -10419,7 +10973,9 @@
     "deleted": false,
     "id": 438,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -10467,7 +11023,9 @@
     "deleted": false,
     "id": 440,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151091625",
@@ -10515,7 +11073,9 @@
     "deleted": false,
     "id": 442,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -10611,7 +11171,9 @@
     "deleted": false,
     "id": 446,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151064133",
@@ -10683,7 +11245,9 @@
     "deleted": false,
     "id": 449,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150532950",
@@ -10707,7 +11271,9 @@
     "deleted": false,
     "id": 450,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -10755,7 +11321,9 @@
     "deleted": false,
     "id": 452,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200137923",
@@ -10779,7 +11347,9 @@
     "deleted": false,
     "id": 453,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "Không có",
@@ -10803,7 +11373,9 @@
     "deleted": false,
     "id": 454,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150898276",
@@ -10827,7 +11399,9 @@
     "deleted": false,
     "id": 455,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150898344",
@@ -10851,7 +11425,9 @@
     "deleted": false,
     "id": 456,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -10899,7 +11475,9 @@
     "deleted": false,
     "id": 458,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150580722",
@@ -10923,7 +11501,9 @@
     "deleted": false,
     "id": 459,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -11019,7 +11599,9 @@
     "deleted": false,
     "id": 463,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200299559",
@@ -11091,7 +11673,9 @@
     "deleted": false,
     "id": 466,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160341637",
@@ -11115,7 +11699,9 @@
     "deleted": false,
     "id": 467,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -11187,7 +11773,9 @@
     "deleted": false,
     "id": 470,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180372786",
@@ -11211,7 +11799,9 @@
     "deleted": false,
     "id": 471,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180521214",
@@ -11235,7 +11825,9 @@
     "deleted": false,
     "id": 472,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "160407819",
@@ -11259,7 +11851,9 @@
     "deleted": false,
     "id": 473,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150780351",
@@ -11283,7 +11877,9 @@
     "deleted": false,
     "id": 474,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150478625",
@@ -11307,7 +11903,9 @@
     "deleted": false,
     "id": 475,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180543502",
@@ -11331,7 +11929,9 @@
     "deleted": false,
     "id": 476,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151037893",
@@ -11355,7 +11955,9 @@
     "deleted": false,
     "id": 477,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150879710",
@@ -11379,7 +11981,9 @@
     "deleted": false,
     "id": 478,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151037892",
@@ -11403,7 +12007,9 @@
     "deleted": false,
     "id": 479,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150921906",
@@ -11427,7 +12033,9 @@
     "deleted": false,
     "id": 480,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151061170",
@@ -11451,7 +12059,9 @@
     "deleted": false,
     "id": 481,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "220206234",
@@ -11475,7 +12085,9 @@
     "deleted": false,
     "id": 482,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -11547,7 +12159,9 @@
     "deleted": false,
     "id": 485,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180885632",
@@ -11571,7 +12185,9 @@
     "deleted": false,
     "id": 486,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -11643,7 +12259,9 @@
     "deleted": false,
     "id": 489,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "70313839",
@@ -11667,7 +12285,9 @@
     "deleted": false,
     "id": 490,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -11787,7 +12407,9 @@
     "deleted": false,
     "id": 497,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -11835,7 +12457,9 @@
     "deleted": false,
     "id": 500,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150536154",
@@ -11859,7 +12483,9 @@
     "deleted": false,
     "id": 501,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150855386",
@@ -11883,7 +12509,9 @@
     "deleted": false,
     "id": 502,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150944366",
@@ -11907,7 +12535,9 @@
     "deleted": false,
     "id": 503,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12003,7 +12633,9 @@
     "deleted": false,
     "id": 507,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200243396",
@@ -12027,7 +12659,9 @@
     "deleted": false,
     "id": 508,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200054549",
@@ -12051,7 +12685,9 @@
     "deleted": false,
     "id": 509,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200299079",
@@ -12075,7 +12711,9 @@
     "deleted": false,
     "id": 510,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12171,7 +12809,9 @@
     "deleted": false,
     "id": 519,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150932372",
@@ -12195,7 +12835,9 @@
     "deleted": false,
     "id": 520,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150988103",
@@ -12219,7 +12861,9 @@
     "deleted": false,
     "id": 521,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151062709",
@@ -12243,7 +12887,9 @@
     "deleted": false,
     "id": 522,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150747098",
@@ -12267,7 +12913,9 @@
     "deleted": false,
     "id": 523,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12363,7 +13011,9 @@
     "deleted": false,
     "id": 527,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150974815",
@@ -12387,7 +13037,9 @@
     "deleted": false,
     "id": 528,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "190860656",
@@ -12411,7 +13063,9 @@
     "deleted": false,
     "id": 529,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151086166",
@@ -12435,7 +13089,9 @@
     "deleted": false,
     "id": 530,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12483,7 +13139,9 @@
     "deleted": false,
     "id": 532,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "151070839",
@@ -12507,7 +13165,9 @@
     "deleted": false,
     "id": 533,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12555,7 +13215,9 @@
     "deleted": false,
     "id": 535,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150740351",
@@ -12579,7 +13241,9 @@
     "deleted": false,
     "id": 536,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12675,7 +13339,9 @@
     "deleted": false,
     "id": 540,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150996015",
@@ -12699,7 +13365,9 @@
     "deleted": false,
     "id": 541,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12795,7 +13463,9 @@
     "deleted": false,
     "id": 545,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150306980",
@@ -12819,7 +13489,9 @@
     "deleted": false,
     "id": 546,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12867,7 +13539,9 @@
     "deleted": false,
     "id": 548,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -12939,7 +13613,9 @@
     "deleted": false,
     "id": 551,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80082977",
@@ -12963,7 +13639,9 @@
     "deleted": false,
     "id": 552,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "80068586",
@@ -12987,7 +13665,9 @@
     "deleted": false,
     "id": 553,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "1802228766",
@@ -13011,7 +13691,9 @@
     "deleted": false,
     "id": 555,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180396905",
@@ -13035,7 +13717,9 @@
     "deleted": false,
     "id": 554,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -13059,7 +13743,9 @@
     "deleted": false,
     "id": 556,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "1508296120",
@@ -13083,7 +13769,9 @@
     "deleted": false,
     "id": 557,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150953820",
@@ -13107,7 +13795,9 @@
     "deleted": false,
     "id": 558,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "1106445195",
@@ -13131,7 +13821,9 @@
     "deleted": false,
     "id": 559,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -13155,7 +13847,9 @@
     "deleted": false,
     "id": 560,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -13179,7 +13873,9 @@
     "deleted": false,
     "id": 561,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "1509538205",
@@ -13203,7 +13899,9 @@
     "deleted": false,
     "id": 562,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "080086155",
@@ -13227,7 +13925,9 @@
     "deleted": false,
     "id": 80086155,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "080032299",
@@ -13251,7 +13951,9 @@
     "deleted": false,
     "id": 80032299,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "20064120",
@@ -13275,7 +13977,9 @@
     "deleted": false,
     "id": 20064120,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "200147003",
@@ -13299,7 +14003,9 @@
     "deleted": false,
     "id": 200147003,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -13371,7 +14077,9 @@
     "deleted": false,
     "id": 151062632,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150530458",
@@ -13395,7 +14103,9 @@
     "deleted": false,
     "id": 150530458,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180885796",
@@ -13419,7 +14129,9 @@
     "deleted": false,
     "id": 180885796,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180452710",
@@ -13443,7 +14155,9 @@
     "deleted": false,
     "id": 180452710,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -13491,7 +14205,9 @@
     "deleted": false,
     "id": 150923381,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "150923378",
@@ -13515,7 +14231,9 @@
     "deleted": false,
     "id": 150923378,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "180881090",
@@ -13539,7 +14257,9 @@
     "deleted": false,
     "id": 180881090,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   },
   {
     "cmnd": "",
@@ -13611,6 +14331,8 @@
     "deleted": false,
     "id": 383,
     "so_dt": "",
-    "sdt": ""
+    "sdt": "",
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3
   }
 ]

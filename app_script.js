@@ -18,10 +18,70 @@ const FIELDS = [
   ["chi_tiet_noi_o","Chi tiết nơi ở","input"],
   ["dia_chi","Địa chỉ thường trú","input"],
   ["so_dt","Số điện thoại","input"],
+  ["nhom_mau","Nhóm máu","input"],
+  ["danh_gia_ky_nang","Kỹ năng tay nghề (1-5 sao)","input"],
+  ["danh_gia_dao_duc","Đạo đức & Kỷ luật (1-5 sao)","input"],
+  ["ghi_chu_ky_luat","Ghi chú Sổ Kỷ luật (1-2★)","textarea"],
+  ["ngay_ky_luat","Ngày ghi nhận kỷ luật","input"],
   ["ghi_chu","Ghi chú","textarea"],
 ];
 
 const TO_LIST = ["Tổ 1","Tổ 2","Tổ 3","Tổ 4","Tổ 5","Tổ 6","Tổ 7","Tổ 8"];
+
+const SKILL_LABELS = {
+  1: "1★ Cần đào tạo lại",
+  2: "2★ Trung bình yếu",
+  3: "3★ Đạt yêu cầu (Mặc định)",
+  4: "4★ Giỏi - Thao tác vững",
+  5: "5★ Xuất sắc"
+};
+
+const ETHICS_LABELS = {
+  1: "1★ Cần chấn chỉnh",
+  2: "2★ Vi phạm nhắc nhở",
+  3: "3★ Đạt yêu cầu (Mặc định)",
+  4: "4★ Gương mẫu, trách nhiệm",
+  5: "5★ Rất tốt"
+};
+
+function getBloodType(p){
+  return (p && (p.nhom_mau || p.blood_type || p["Nhóm máu"] || p["nhom_mau"])) || "";
+}
+
+function getSkillRating(p){
+  if(!p || p.loai === "Gia thuộc") return null;
+  const v = p.danh_gia_ky_nang != null ? p.danh_gia_ky_nang : (p.ky_nang != null ? p.ky_nang : (p["Kỹ năng"] != null ? p["Kỹ năng"] : (p["danh_gia_ky_nang"] != null ? p["danh_gia_ky_nang"] : 3)));
+  const num = parseInt(v, 10);
+  return (!isNaN(num) && num >= 1 && num <= 5) ? num : 3;
+}
+
+function getEthicsRating(p){
+  if(!p || p.loai === "Gia thuộc") return null;
+  const v = p.danh_gia_dao_duc != null ? p.danh_gia_dao_duc : (p.dao_duc != null ? p.dao_duc : (p["Đạo đức"] != null ? p["Đạo đức"] : (p["danh_gia_dao_duc"] != null ? p["danh_gia_dao_duc"] : 3)));
+  const num = parseInt(v, 10);
+  return (!isNaN(num) && num >= 1 && num <= 5) ? num : 3;
+}
+
+function isDisciplineCase(p){
+  if(!p || p.loai === "Gia thuộc") return false;
+  const sk = getSkillRating(p);
+  const et = getEthicsRating(p);
+  const note = (p.ghi_chu_ky_luat || "").trim();
+  return (sk != null && sk <= 2) || (et != null && et <= 2) || Boolean(note);
+}
+
+function getDisciplineCount(){
+  if(!Array.isArray(DATA)) return 0;
+  return DATA.filter(p => !p.deleted && isDisciplineCase(p)).length;
+}
+
+function updateDisciplineBadge(){
+  const badge = document.getElementById("bDisciplineBadge");
+  if(!badge) return;
+  const cnt = getDisciplineCount();
+  badge.textContent = cnt;
+  badge.style.display = cnt > 0 ? "inline-block" : "none";
+}
 
 /* ===== Helper Functions ===== */
 function noAccent(s){
@@ -453,10 +513,71 @@ if(!DATA || DATA.length === 0){
 }
 window.DATA = DATA;
 
+// Apply 3-star standard to laborers in current list (KHÔNG xếp hạng cho Gia thuộc)
+function applyStandard3Stars(silent) {
+  let count = 0;
+  DATA.forEach(p => {
+    if (p.loai === "Gia thuộc") {
+      delete p.danh_gia_ky_nang;
+      delete p.danh_gia_dao_duc;
+    } else {
+      p.danh_gia_ky_nang = 3;
+      p.danh_gia_dao_duc = 3;
+      count++;
+    }
+  });
+
+  // Also clean queued modifications to prevent old ratings from reapplying
+  try {
+    const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+    let qChanged = false;
+    q.forEach(x => {
+      if (x.loai === "Gia thuộc") {
+        if (x.danh_gia_ky_nang != null || x.danh_gia_dao_duc != null) {
+          delete x.danh_gia_ky_nang;
+          delete x.danh_gia_dao_duc;
+          qChanged = true;
+        }
+      } else if (x.danh_gia_ky_nang != null || x.danh_gia_dao_duc != null) {
+        x.danh_gia_ky_nang = 3;
+        x.danh_gia_dao_duc = 3;
+        qChanged = true;
+      }
+    });
+    if (qChanged) localStorage.setItem("cn_queue_v1", JSON.stringify(q));
+  } catch (e) {}
+
+  save();
+  render();
+
+  // Notify server of the 3-star standard application
+  try {
+    fetch("/api/apply-standard-3stars", { method: "POST" }).catch(() => {});
+  } catch (e) {}
+
+  if (!silent) {
+    toast("Đã áp dụng tiêu chuẩn 3 sao cho " + count + " lao động");
+  }
+  return count;
+}
+
+// Auto-run once on existing client sessions to apply 3-star standard to all current laborers
+try {
+  const MIGRATION_KEY = "cn_standard_3star_v2";
+  if (!localStorage.getItem(MIGRATION_KEY)) {
+    applyStandard3Stars(true);
+    localStorage.setItem(MIGRATION_KEY, "true");
+  }
+} catch (e) {
+  console.warn("Standard 3-star migration error:", e);
+}
+
 let state = {
   q: "",
   to: "",
   loai: "",
+  blood: "",
+  rating: "",
   muon: false,
   hasPhone: false,
   view: "people", // "people" | "rooms"
@@ -1120,10 +1241,38 @@ function filtered(){
     if(state.muon && !isMuon(p)) return false;
     if(state.hasPhone && !getPhone(p)) return false;
 
+    if(state.blood){
+      const b = getBloodType(p).trim().toUpperCase();
+      if(state.blood === "has_blood" && !b) return false;
+      if(state.blood === "no_blood" && b) return false;
+      if(state.blood === "O" && !b.startsWith("O")) return false;
+      if(state.blood === "A" && (b.startsWith("AB") || !b.startsWith("A"))) return false;
+      if(state.blood === "B" && (b.startsWith("AB") || !b.startsWith("B"))) return false;
+      if(state.blood === "AB" && !b.startsWith("AB")) return false;
+      if(state.blood === "O+" && b !== "O+") return false;
+      if(state.blood === "A+" && b !== "A+") return false;
+      if(state.blood === "B+" && b !== "B+") return false;
+      if(state.blood === "AB+" && b !== "AB+") return false;
+    }
+
+    if(state.rating){
+      if(p.loai === "Gia thuộc") return false;
+      const sk = getSkillRating(p);
+      const et = getEthicsRating(p);
+      if(sk == null || et == null) return false;
+      if(state.rating === "5_all" && (sk !== 5 || et !== 5)) return false;
+      if(state.rating === "skill_5" && sk !== 5) return false;
+      if(state.rating === "skill_4plus" && sk < 4) return false;
+      if(state.rating === "ethics_5" && et !== 5) return false;
+      if(state.rating === "ethics_4plus" && et < 4) return false;
+      if(state.rating === "need_training" && (sk >= 4 && et >= 4)) return false;
+    }
+
     if(q){
       const phone = getPhone(p);
       const cleanP = cleanPhone(phone);
-      const hay = noAccent([p.ten_that, p.ten_ho_so, p.cmnd, phone, p.phong_o, p.phan_cay, p.khu_vuc, p.dia_chi, p.so_bao_hiem, p.quan_he, p.noi_sinh, p.ghi_chu].join(" "));
+      const blood = getBloodType(p);
+      const hay = noAccent([p.ten_that, p.ten_ho_so, p.cmnd, phone, blood, "nhom mau " + blood, p.phong_o, p.phan_cay, p.khu_vuc, p.dia_chi, p.so_bao_hiem, p.quan_he, p.noi_sinh, p.ghi_chu].join(" "));
       
       const textMatch = hay.includes(q);
       const phoneMatch = qDigits && cleanP && (cleanP.includes(qDigits) || phone.includes(qRaw));
@@ -1233,9 +1382,22 @@ function renderPeople(){
     const muon = isMuon(p);
     const phone = getPhone(p);
     const sub = [];
+    const blood = getBloodType(p);
+    const skill = getSkillRating(p);
+    const ethics = getEthicsRating(p);
 
     if(p.cmnd) sub.push('<span class="pill">CMND: '+esc(p.cmnd)+'</span>');
     if(phone) sub.push(phonePillHtml(p));
+    if(blood) sub.push('<span class="pill pill-blood" title="Nhóm máu: '+esc(blood)+'">🩸 Nhóm '+esc(blood)+'</span>');
+    
+    // Rating display pill (Skill & Ethics stars - Không xếp hạng cho Gia thuộc)
+    if (skill != null && ethics != null && p.loai !== "Gia thuộc") {
+      const isPerfect = (skill === 5 && ethics === 5);
+      const starTitle = 'Kỹ năng: ' + skill + '/5★ · Đạo đức: ' + ethics + '/5★';
+      const ratingHtml = '<span class="pill pill-rating' + (isPerfect ? ' pill-rating-perfect' : '') + '" title="' + starTitle + '">⭐ KN ' + skill + '★ · ĐĐ ' + ethics + '★</span>';
+      sub.push(ratingHtml);
+    }
+
     if(p.to) sub.push('<span class="pill">'+esc(p.to)+'</span>');
     if(p.phong_o) sub.push('<span class="pill">🏠 '+esc(p.phong_o)+'</span>');
     if(p.phan_cay) sub.push('<span class="pill">🌳 '+esc(p.phan_cay)+'</span>');
@@ -1348,6 +1510,15 @@ function openRoom(room){
     const ph = getPhone(p);
     const phoneBtn = ph ? phonePillHtml(p) : '<span style="font-size:11.5px;color:var(--muted)">Chưa có SĐT</span>';
 
+    const bld = getBloodType(p);
+    const sk = getSkillRating(p);
+    const et = getEthicsRating(p);
+    let extraBadges = "";
+    if (bld) extraBadges += ' <span class="pill pill-blood" style="font-size:11px;padding:1px 6px;">🩸 ' + esc(bld) + '</span>';
+    if (p.loai !== "Gia thuộc" && sk != null && et != null) {
+      extraBadges += ' <span class="pill pill-rating' + (sk === 5 && et === 5 ? ' pill-rating-perfect' : '') + '" style="font-size:11px;padding:1px 6px;">⭐ KN ' + sk + '★ · ĐĐ ' + et + '★</span>';
+    }
+
     rows += '<div class="occ" data-id="'+p.id+'">'+avHtml+
       '<div class="onm">'+esc(p.ten_that||"(chưa có tên)")+
       (p.chu_phong?' <span class="tag chu">👑 Chủ phòng</span>':'')+
@@ -1355,7 +1526,7 @@ function openRoom(room){
       '<div style="font-size:12px;color:var(--muted);font-weight:400;margin-top:3px">'+
       esc(p.loai)+(p.quan_he?' · '+esc(p.quan_he):'')+(p.to?' · '+esc(p.to):'')+(p.phan_cay?' · 🌳 '+esc(p.phan_cay):'')+(p.cmnd?' · CMND '+esc(p.cmnd):'')+
       '</div>'+
-      '<div style="margin-top:4px">'+phoneBtn+'</div>'+
+      '<div style="margin-top:4px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">'+phoneBtn+extraBadges+'</div>'+
       '</div>'+
       '<button class="mini-b" data-act="chu" title="Đặt làm chủ phòng">'+(p.chu_phong?'👑 Chủ':'☆ Đặt chủ')+'</button>'+
       '<button class="mini-b" data-act="edit">Sửa</button>'+
@@ -1448,6 +1619,9 @@ function blank(prefillRoom) {
     tuoi: "",
     noi_sinh: "",
     gioi_tinh: "",
+    nhom_mau: "",
+    danh_gia_ky_nang: 3,
+    danh_gia_dao_duc: 3,
     loai: "Lao động",
     to: "",
     khu_vuc: "",
@@ -2093,6 +2267,19 @@ function saveEdit(id) {
     removePhoneFromCache(rec);
   }
 
+  // Normalize blood type and ratings (default to 3 stars if not specified, KHÔNG xếp hạng cho Gia thuộc)
+  rec.nhom_mau = (rec.nhom_mau || "").trim().toUpperCase();
+  if (rec.loai === "Gia thuộc") {
+    rec.danh_gia_ky_nang = "";
+    rec.danh_gia_dao_duc = "";
+    delete rec.danh_gia_ky_nang;
+    delete rec.danh_gia_dao_duc;
+  } else {
+    rec.danh_gia_ky_nang = (rec.danh_gia_ky_nang != null && rec.danh_gia_ky_nang !== "") ? (parseInt(rec.danh_gia_ky_nang, 10) || 3) : 3;
+    rec.danh_gia_dao_duc = (rec.danh_gia_dao_duc != null && rec.danh_gia_dao_duc !== "") ? (parseInt(rec.danh_gia_dao_duc, 10) || 3) : 3;
+    rec._manuallyRated = true;
+  }
+
   const ckChu = sheet.querySelector("#ckChu");
   const isLeader = ckChu ? ckChu.checked : false;
   if (isLeader && rec.phong_o) {
@@ -2159,6 +2346,90 @@ function selField(k,lbl,opts,curVal,labels){
   return h;
 }
 
+function renderBloodTypeField(curVal) {
+  const cleanVal = (curVal || "").trim().toUpperCase();
+  const hasVal = Boolean(cleanVal);
+  let h = '<div class="fld" style="margin-bottom:8px;">';
+  h += '<div class="blood-picker-box">';
+  
+  // Header with title, current status badge, and clear button
+  h += '  <div class="blood-picker-top">';
+  h += '    <div class="blood-picker-title">';
+  h += '      <span>🩸 Nhóm máu</span>';
+  h += '      <span class="blood-cur-badge' + (hasVal ? '' : ' empty') + '" id="lblCurrentBlood">' + (hasVal ? ('Nhóm ' + esc(cleanVal)) : 'Chưa có') + '</span>';
+  h += '    </div>';
+  h += '    <button type="button" class="blood-clear-btn" id="bClearBlood" title="Bỏ chọn nhóm máu">✕ Xóa</button>';
+  h += '  </div>';
+
+  // 4 Main ABO Segment Buttons (Gom gọn 1 hàng duy nhất)
+  h += '  <div class="blood-segment-row">';
+  ["O", "A", "B", "AB"].forEach(bg => {
+    const isAct = cleanVal === bg;
+    h += '<button type="button" class="blood-seg-btn' + (isAct ? ' active' : '') + '" data-blood="' + bg + '"><b>' + bg + '</b></button>';
+  });
+  h += '  </div>';
+
+  // Detail sub-row: Rh+, rare Rh-, and custom quick input
+  h += '  <div class="blood-sub-pills">';
+  h += '    <span class="blood-sub-lbl">Chi tiết:</span>';
+  ["O+", "A+", "B+", "AB+", "Rh-"].forEach(subBg => {
+    const isAct = cleanVal === subBg;
+    h += '<button type="button" class="blood-mini-btn' + (isAct ? ' active' : '') + '" data-blood="' + subBg + '">' + subBg + '</button>';
+  });
+  h += '    <input type="text" data-k="nhom_mau" id="inpBloodType" value="' + esc(cleanVal) + '" placeholder="Khác..." class="blood-inp-compact" maxlength="8" title="Hoặc nhập nhóm máu khác">';
+  h += '  </div>';
+
+  h += '</div></div>';
+  return h;
+}
+
+function renderRatingSection(cur) {
+  const isGiaThuoc = cur && cur.loai === "Gia thuộc";
+  const skill = (cur && cur.danh_gia_ky_nang != null && cur.danh_gia_ky_nang !== "") ? (parseInt(cur.danh_gia_ky_nang, 10) || 3) : 3;
+  const ethics = (cur && cur.danh_gia_dao_duc != null && cur.danh_gia_dao_duc !== "") ? (parseInt(cur.danh_gia_dao_duc, 10) || 3) : 3;
+
+  let h = '<div id="ratingSectionWrap" style="' + (isGiaThuoc ? 'display:none;' : '') + '">';
+  h += '<div class="rating-box-card">';
+  h += '<div class="rating-box-header">';
+  h += '  <div>';
+  h += '    <div class="rating-box-title">⭐ Đánh giá tay nghề & Đạo đức</div>';
+  h += '    <div class="rating-box-sub">Thang điểm 1 - 5 sao &bull; Mặc định 3 sao (Đạt chuẩn) &bull; Không áp dụng Gia thuộc</div>';
+  h += '  </div>';
+  h += '  <button type="button" class="btn mini-b" id="bResetRatings" style="font-size:11.5px;padding:4px 8px;background:#fefce8;color:#854d0e;border-color:#fef08a;" title="Đặt lại 3 sao mặc định">↺ 3★ mặc định</button>';
+  h += '</div>';
+
+  // Skill row
+  h += '<div class="rating-row" data-rating-type="ky_nang">';
+  h += '  <div class="rating-row-info">';
+  h += '    <span class="rating-label">🛠️ Kỹ năng tay nghề:</span>';
+  h += '    <span class="rating-desc-badge" id="lblRatingSkill">' + esc(SKILL_LABELS[skill] || (skill + '★')) + '</span>';
+  h += '  </div>';
+  h += '  <input type="hidden" data-k="danh_gia_ky_nang" id="inpRatingSkill" value="' + skill + '">';
+  h += '  <div class="stars-bar" id="starsSkill">';
+  for (let s = 1; s <= 5; s++) {
+    h += '<button type="button" class="star-btn' + (s <= skill ? ' on' : '') + '" data-val="' + s + '" title="' + s + ' sao">★</button>';
+  }
+  h += '  </div>';
+  h += '</div>';
+
+  // Ethics row
+  h += '<div class="rating-row" data-rating-type="dao_duc" style="margin-top:10px;">';
+  h += '  <div class="rating-row-info">';
+  h += '    <span class="rating-label">🤝 Đạo đức & Kỷ luật:</span>';
+  h += '    <span class="rating-desc-badge" id="lblRatingEthics">' + esc(ETHICS_LABELS[ethics] || (ethics + '★')) + '</span>';
+  h += '  </div>';
+  h += '  <input type="hidden" data-k="danh_gia_dao_duc" id="inpRatingEthics" value="' + ethics + '">';
+  h += '  <div class="stars-bar" id="starsEthics">';
+  for (let s = 1; s <= 5; s++) {
+    h += '<button type="button" class="star-btn' + (s <= ethics ? ' on' : '') + '" data-val="' + s + '" title="' + s + ' sao">★</button>';
+  }
+  h += '  </div>';
+  h += '</div>';
+
+  h += '</div></div>';
+  return h;
+}
+
 function openEdit(id, prefillRoom, backRoom) {
   editingId = id;
   editBackRoom = backRoom || null;
@@ -2194,6 +2465,8 @@ function openEdit(id, prefillRoom, backRoom) {
   body += '<div class="row2">' + mkInput("phong_o", "Phòng ở", "input") + mkInput("phan_cay", "Phần cây hiện tại", "input") + '</div>';
   body += '<div class="fld"><label class="ckrow"><input type="checkbox" id="ckChu"' + (cur.chu_phong ? " checked" : "") + '> 👑 Là chủ phòng này</label></div>';
   body += mkInput("so_dt", "Số điện thoại (SĐT / Zalo)", "input");
+  body += renderBloodTypeField(cur.nhom_mau);
+  body += renderRatingSection(cur);
   body += '<div class="row2">' + mkInput("khu_vuc", "Khu vực", "input") + mkInput("quan_he", "Quan hệ", "input") + '</div>';
   body += mkInput("so_bao_hiem", "Số bảo hiểm", "input");
   body += mkInput("noi_sinh", "Nơi sinh", "addr");
@@ -2279,6 +2552,113 @@ function openEdit(id, prefillRoom, backRoom) {
     };
   });
 
+  // Wire compact blood type picker
+  function syncBloodUI(val) {
+    const clean = (val || "").trim().toUpperCase();
+    const lbl = sheet.querySelector("#lblCurrentBlood");
+    if (lbl) {
+      if (clean) {
+        lbl.textContent = "Nhóm " + clean;
+        lbl.classList.remove("empty");
+      } else {
+        lbl.textContent = "Chưa có";
+        lbl.classList.add("empty");
+      }
+    }
+    sheet.querySelectorAll(".blood-seg-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.blood === clean);
+    });
+    sheet.querySelectorAll(".blood-mini-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.blood === clean);
+    });
+  }
+
+  sheet.querySelectorAll(".blood-seg-btn, .blood-mini-btn").forEach(btn => {
+    btn.onclick = () => {
+      const bg = btn.dataset.blood;
+      const inp = sheet.querySelector("#inpBloodType");
+      if (!inp) return;
+      if (inp.value.trim().toUpperCase() === bg) {
+        inp.value = "";
+      } else {
+        inp.value = bg;
+      }
+      syncBloodUI(inp.value);
+    };
+  });
+
+  const bClearBlood = sheet.querySelector("#bClearBlood");
+  if (bClearBlood) {
+    bClearBlood.onclick = () => {
+      const inp = sheet.querySelector("#inpBloodType");
+      if (inp) inp.value = "";
+      syncBloodUI("");
+    };
+  }
+
+  const inpBlood = sheet.querySelector("#inpBloodType");
+  if (inpBlood) {
+    inpBlood.addEventListener("input", e => {
+      syncBloodUI(e.target.value);
+    });
+  }
+
+  // Wire star rating picker
+  function updateStars(containerId, inputId, labelId, labels, val) {
+    const inp = sheet.querySelector("#" + inputId);
+    if (inp) inp.value = val;
+    const lbl = sheet.querySelector("#" + labelId);
+    if (lbl && labels[val]) lbl.textContent = labels[val];
+    const container = sheet.querySelector("#" + containerId);
+    if (container) {
+      container.querySelectorAll(".star-btn").forEach(btn => {
+        const starVal = +btn.dataset.val;
+        btn.classList.toggle("on", starVal <= val);
+      });
+    }
+  }
+
+  sheet.querySelectorAll("#starsSkill .star-btn").forEach(b => {
+    b.onclick = () => updateStars("starsSkill", "inpRatingSkill", "lblRatingSkill", SKILL_LABELS, +b.dataset.val);
+  });
+  sheet.querySelectorAll("#starsEthics .star-btn").forEach(b => {
+    b.onclick = () => updateStars("starsEthics", "inpRatingEthics", "lblRatingEthics", ETHICS_LABELS, +b.dataset.val);
+  });
+
+  const bResetR = sheet.querySelector("#bResetRatings");
+  if (bResetR) {
+    bResetR.onclick = () => {
+      updateStars("starsSkill", "inpRatingSkill", "lblRatingSkill", SKILL_LABELS, 3);
+      updateStars("starsEthics", "inpRatingEthics", "lblRatingEthics", ETHICS_LABELS, 3);
+      toast("Đã đặt lại 3 sao mặc định (Đạt chuẩn)");
+    };
+  }
+
+  // Toggle rating section based on object type (Không xếp hạng cho Gia thuộc)
+  const loaiSelect = sheet.querySelector('select[data-k="loai"]');
+  const ratingWrap = sheet.querySelector('#ratingSectionWrap');
+  if (loaiSelect && ratingWrap) {
+    loaiSelect.addEventListener('change', e => {
+      if (e.target.value === "Gia thuộc") {
+        ratingWrap.style.display = "none";
+        const inpS = sheet.querySelector("#inpRatingSkill");
+        const inpE = sheet.querySelector("#inpRatingEthics");
+        if (inpS) inpS.value = "";
+        if (inpE) inpE.value = "";
+      } else {
+        ratingWrap.style.display = "";
+        const inpS = sheet.querySelector("#inpRatingSkill");
+        const inpE = sheet.querySelector("#inpRatingEthics");
+        if (inpS && !inpS.value) {
+          updateStars("starsSkill", "inpRatingSkill", "lblRatingSkill", SKILL_LABELS, 3);
+        }
+        if (inpE && !inpE.value) {
+          updateStars("starsEthics", "inpRatingEthics", "lblRatingEthics", ETHICS_LABELS, 3);
+        }
+      }
+    });
+  }
+
   wireImgEvents(id);
 }
 
@@ -2317,6 +2697,12 @@ function showStats(initTab){
   const roomsSet = new Set();
   let noRoomCount = 0;
 
+  const byBlood = { "O": 0, "A": 0, "B": 0, "AB": 0, "Chưa rõ": 0 };
+  let hasBloodCount = 0;
+  let countRatedWorkers = 0;
+  let sumSkill = 0, sumEthics = 0;
+  let perfect5Count = 0;
+
   DATA.forEach(p => {
     byTo[p.to || "(trống)"] = (byTo[p.to || "(trống)"] || 0) + 1;
     byLoai[p.loai] = (byLoai[p.loai] || 0) + 1;
@@ -2324,6 +2710,29 @@ function showStats(initTab){
     if(getPhone(p)) hasPhoneCount++;
     if(p.phong_o) roomsSet.add(p.phong_o);
     else noRoomCount++;
+
+    const b = getBloodType(p).trim().toUpperCase();
+    if(b){
+      hasBloodCount++;
+      if(b.startsWith("O")) byBlood["O"]++;
+      else if(b.startsWith("AB")) byBlood["AB"]++;
+      else if(b.startsWith("A")) byBlood["A"]++;
+      else if(b.startsWith("B")) byBlood["B"]++;
+      else byBlood["Chưa rõ"]++;
+    } else {
+      byBlood["Chưa rõ"]++;
+    }
+
+    if(p.loai !== "Gia thuộc"){
+      const sk = getSkillRating(p);
+      const et = getEthicsRating(p);
+      if(sk != null && et != null){
+        countRatedWorkers++;
+        sumSkill += sk;
+        sumEthics += et;
+        if(sk === 5 && et === 5) perfect5Count++;
+      }
+    }
 
     if(p.gioi_tinh === "M") countM++;
     else if(p.gioi_tinh === "F") countF++;
@@ -2335,6 +2744,9 @@ function showStats(initTab){
       else over40++;
     }
   });
+
+  const avgSkill = countRatedWorkers > 0 ? (sumSkill / countRatedWorkers).toFixed(1) : "—";
+  const avgEthics = countRatedWorkers > 0 ? (sumEthics / countRatedWorkers).toFixed(1) : "—";
 
   // Room analytics data
   const roomMap = {};
@@ -2397,11 +2809,21 @@ function showStats(initTab){
     '<div class="stat"><b>'+(byLoai["Lao động"]||0)+'</b><span>Lao động</span></div>'+
     '<div class="stat"><b>'+(byLoai["Gia thuộc"]||0)+'</b><span>Gia thuộc</span></div>'+
     '<div class="stat"><b>'+hasPhoneCount+'</b><span>Đã có Số ĐT 📞</span></div>'+
+    '<div class="stat"><b>'+avgSkill+'★ / '+avgEthics+'★</b><span>TB Kỹ năng / Đạo đức (LĐ) ⭐</span></div>'+
+    '<div class="stat"><b>'+perfect5Count+' / '+countRatedWorkers+'</b><span>5★ toàn diện (LĐ)</span></div>'+
+    '<div class="stat"><b>'+hasBloodCount+'</b><span>Đã có Nhóm máu 🩸</span></div>'+
     '<div class="stat"><b>'+muon+'</b><span>Có tên mượn ⚑</span></div>'+
     '<div class="stat"><b>'+countM+' Nam / '+countF+' Nữ</b><span>Giới tính</span></div>'+
     '<div class="stat'+(noRoomCount>0?" stat-warn":"")+'"><b>'+noRoomCount+'</b><span>Chưa có phòng ⚠️</span></div>'+
     '<div class="stat"><b>'+DATA.filter(p=>p._edited).length+'</b><span>Đã chỉnh sửa ✎</span></div>'+
     '</div>'+
+    '<table class="mini"><tr><td colspan="2"><b>🩸 Phân bổ Nhóm máu (Cấp cứu & An toàn LĐ)</b></td></tr>'+
+    '<tr><td>Nhóm máu O (O, O+)</td><td>'+byBlood["O"]+' người</td></tr>'+
+    '<tr><td>Nhóm máu A (A, A+)</td><td>'+byBlood["A"]+' người</td></tr>'+
+    '<tr><td>Nhóm máu B (B, B+)</td><td>'+byBlood["B"]+' người</td></tr>'+
+    '<tr><td>Nhóm máu AB (AB, AB+)</td><td>'+byBlood["AB"]+' người</td></tr>'+
+    '<tr><td>Chưa cập nhật nhóm máu</td><td>'+byBlood["Chưa rõ"]+' người</td></tr>'+
+    '</table>'+
     '<table class="mini"><tr><td colspan="2"><b>📊 Phân bổ theo Tổ sản xuất</b> (Bấm dòng để lọc)</td></tr>'+toTable+'</table>'+
     '<table class="mini"><tr><td colspan="2"><b>🎂 Phân bổ Độ tuổi</b></td></tr>'+
     '<tr><td>Dưới 25 tuổi</td><td>'+under25+' người</td></tr>'+
@@ -2536,6 +2958,9 @@ const EXPORT_COLS = [
   ["PHÒNG Ở", "phong_o"],
   ["Số bảo hiểm", "so_bao_hiem"],
   ["Số điện thoại", p => getPhone(p)],
+  ["Nhóm máu", p => getBloodType(p)],
+  ["Kỹ năng (1-5★)", p => (p.loai === "Gia thuộc" || getSkillRating(p) == null) ? "" : (getSkillRating(p) + " sao")],
+  ["Đạo đức (1-5★)", p => (p.loai === "Gia thuộc" || getEthicsRating(p) == null) ? "" : (getEthicsRating(p) + " sao")],
   ["Chi tiết nơi ở", "chi_tiet_noi_o"],
   ["Địa chỉ thường trú", "dia_chi"],
   ["Ghi chú", "ghi_chu"],
@@ -2598,6 +3023,9 @@ function importXlsx(file){
         chi_tiet_noi_o: find("chi tiet"),
         dia_chi: find("dia chi"),
         so_dt: find("so dien thoai", "dien thoai", "sdt", "so dt", "phone", "mobile", "zalo", "tel", "lien he"),
+        nhom_mau: find("nhom mau", "mau", "blood"),
+        danh_gia_ky_nang: find("ky nang", "tay nghe", "skill"),
+        danh_gia_dao_duc: find("dao duc", "ky luat", "ethics"),
         ghi_chu: find("ghi chu")
       };
 
@@ -2617,6 +3045,9 @@ function importXlsx(file){
         if(!rec.loai) rec.loai = rec.phan_cay ? "Lao động" : "Gia thuộc";
         rec.so_dt = getPhone(rec);
         rec.sdt = rec.so_dt;
+        rec.nhom_mau = (rec.nhom_mau || "").trim().toUpperCase();
+        rec.danh_gia_ky_nang = rec.loai === "Gia thuộc" ? "" : (parseInt(rec.danh_gia_ky_nang, 10) || 3);
+        rec.danh_gia_dao_duc = rec.loai === "Gia thuộc" ? "" : (parseInt(rec.danh_gia_dao_duc, 10) || 3);
         out.push(rec);
       }
       if(!out.length){ toast("Không đọc được dòng nào"); return; }
@@ -3023,6 +3454,7 @@ function normServerRec(o){
   r.chi_tiet_noi_o = findVal("chi_tiet_noi_o", "Chi tiết nơi ở", "chi tiet");
   r.dia_chi = findVal("dia_chi", "Địa chỉ thường trú", "Địa chỉ", "dia chi");
   r.ghi_chu = findVal("ghi_chu", "Ghi chú", "Ghi chu");
+  r.nhom_mau = findVal("nhom_mau", "Nhóm máu", "Nhom mau", "blood_type", "blood");
 
   r.chu_phong = (o.chu_phong === true || o.chu_phong === "true" || o.chu_phong === "x" || normKeyMap["chuphong"] === "x" || normKeyMap["chuphong"] === true);
   r.deleted = (o.deleted === true || o.deleted === "true" || o.deleted === "x");
@@ -3037,6 +3469,19 @@ function normServerRec(o){
     r.id = +o.id || o.id;
   } else {
     r.id = "srv_" + Math.random().toString(36).slice(2, 8);
+  }
+
+  if(!r.nhom_mau && existing && existing.nhom_mau) r.nhom_mau = existing.nhom_mau;
+
+  if (r.loai === "Gia thuộc") {
+    r.danh_gia_ky_nang = "";
+    r.danh_gia_dao_duc = "";
+  } else {
+    const rawKn = findVal("danh_gia_ky_nang", "ky_nang", "Kỹ năng", "Tay nghề", "tay_nghe", "skill");
+    r.danh_gia_ky_nang = rawKn ? (parseInt(rawKn, 10) || 3) : (existing && existing.danh_gia_ky_nang != null ? existing.danh_gia_ky_nang : 3);
+
+    const rawDd = findVal("danh_gia_dao_duc", "dao_duc", "Đạo đức", "Kỷ luật", "ky_luat", "ethics");
+    r.danh_gia_dao_duc = rawDd ? (parseInt(rawDd, 10) || 3) : (existing && existing.danh_gia_dao_duc != null ? existing.danh_gia_dao_duc : 3);
   }
 
   // Extract phone number from server record, with fallback to existing local record and cache
@@ -3463,6 +3908,10 @@ function openSettings(initTab){
         '<button class="btn" id="bRestoreJson">⬆️ Khôi phục từ file JSON</button>' +
         '<button class="btn" id="bExportExcel">📊 Xuất dữ liệu Excel (.xlsx)</button>' +
         '<button class="btn" id="bImportExcel">⬆️ Nhập dữ liệu từ Excel</button>' +
+      '</div>' +
+      '<div class="cfg-sec-title" style="margin-top:16px;">⭐ Tiêu chuẩn đánh giá nhân sự</div>' +
+      '<div class="cfg-btn-grid">' +
+        '<button class="btn" id="bApply3StarsStandard" style="background:#fefce8;color:#854d0e;border-color:#fef08a;">⭐ Áp dụng tiêu chuẩn 3★ cho tất cả Lao động (' + ldCount + ' người)</button>' +
       '</div>' +
       '<div class="cfg-sec-title" style="margin-top:16px;">🖼️ Bộ nhớ ảnh & Dữ liệu gốc</div>' +
       '<div class="cfg-btn-grid">' +
@@ -3963,6 +4412,12 @@ function doGet(e) {
     if(clrImg) clrImg.onclick = clearImgCache;
     const rstBase = s.querySelector("#bResetBase");
     if(rstBase) rstBase.onclick = () => document.getElementById("bReset").click();
+    const bApply3S = s.querySelector("#bApply3StarsStandard");
+    if(bApply3S) bApply3S.onclick = () => {
+      const c = applyStandard3Stars(false);
+      addLog("Áp dụng tiêu chuẩn 3 sao cho " + c + " lao động");
+      openSettings("data");
+    };
   }
 
   // Tab 3: Prefs bindings
@@ -4075,6 +4530,12 @@ if(fToEl) fToEl.addEventListener("change", e => { state.to = e.target.value; ren
 
 const fLoaiEl = document.getElementById("fLoai");
 if(fLoaiEl) fLoaiEl.addEventListener("change", e => { state.loai = e.target.value; render(); });
+
+const fBloodEl = document.getElementById("fBlood");
+if(fBloodEl) fBloodEl.addEventListener("change", e => { state.blood = e.target.value; render(); });
+
+const fRatingEl = document.getElementById("fRating");
+if(fRatingEl) fRatingEl.addEventListener("change", e => { state.rating = e.target.value; render(); });
 
 const cMuonEl = document.getElementById("cMuon");
 if(cMuonEl) cMuonEl.addEventListener("click", () => {

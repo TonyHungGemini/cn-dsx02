@@ -700,25 +700,44 @@ app.post('/api/sync-data', (req, res) => {
         const ph = (cRec.so_dt || cRec.sdt || cRec['Số điện thoại'] || cRec['Số ĐT'] || cRec.phone || '').toString().trim();
         if (ph) {
           if (registerRecordPhone(cRec, phones)) phonesChanged = true;
-          const idx = findRecordIdx(cRec);
-          if (idx >= 0) {
-            const curPh = records[idx].so_dt || records[idx].sdt || '';
-            if (curPh !== ph || cRec._edited) {
-              records[idx] = Object.assign({}, records[idx], cRec);
+        }
+        const idx = findRecordIdx(cRec);
+        if (idx >= 0) {
+          if (cRec._edited || ph) {
+            records[idx] = Object.assign({}, records[idx], cRec);
+            if (ph) {
               records[idx].so_dt = ph;
               records[idx].sdt = ph;
               records[idx]['Số điện thoại'] = ph;
               records[idx]['Số ĐT'] = ph;
               records[idx].phone = ph;
-              recordsChanged = true;
             }
+            recordsChanged = true;
           }
         }
       });
     }
 
-    // 2e. Cross-check: guarantee EVERY record has its phone populated from phone registry
+    // 2e. Cross-check: guarantee EVERY record has its phone populated and ratings standardized
     records.forEach(r => {
+      if (r.loai === "Gia thuộc") {
+        if (r.danh_gia_ky_nang != null || r.danh_gia_dao_duc != null) recordsChanged = true;
+        delete r.danh_gia_ky_nang;
+        delete r.danh_gia_dao_duc;
+        delete r._manuallyRated;
+      } else {
+        if (!r._manuallyRated || r.danh_gia_ky_nang == null || r.danh_gia_dao_duc == null) {
+          if (r.danh_gia_ky_nang !== 3) {
+            r.danh_gia_ky_nang = 3;
+            recordsChanged = true;
+          }
+          if (r.danh_gia_dao_duc !== 3) {
+            r.danh_gia_dao_duc = 3;
+            recordsChanged = true;
+          }
+        }
+      }
+
       const curPh = r.so_dt || r.sdt || r.phone || r['Số điện thoại'] || '';
       if (!curPh) {
         const ph = lookupPhoneForRecord(r, phones);
@@ -749,6 +768,28 @@ app.post('/api/sync-data', (req, res) => {
     });
   } catch (err) {
     console.error('sync-data error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 2f. Apply 3-star standard to all laborers
+app.post('/api/apply-standard-3stars', (req, res) => {
+  try {
+    const records = getStoredRecords();
+    let count = 0;
+    records.forEach(r => {
+      if (r.loai === "Gia thuộc") {
+        delete r.danh_gia_ky_nang;
+        delete r.danh_gia_dao_duc;
+      } else {
+        r.danh_gia_ky_nang = 3;
+        r.danh_gia_dao_duc = 3;
+        count++;
+      }
+    });
+    saveStoredRecords(records);
+    return res.json({ ok: true, count, total: records.length });
+  } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
 });

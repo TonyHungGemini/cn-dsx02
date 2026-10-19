@@ -446,3 +446,160 @@ table.mini td:last-child{text-align:right;font-weight:700;color:var(--green-d);}
   gap: 8px;
   background: #f8fafc;
 }
+
+/* ===== Blood Type & Rating Badge Styles ===== */
+.pill-blood {
+  background: #fff1f2 !important;
+  color: #e11d48 !important;
+  border: 1px solid #fecdd3 !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  border-radius: 6px !important;
+  padding: 1px 7px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+
+.pill-rating {
+  background: #fefce8 !important;
+  color: #a16207 !important;
+  border: 1px solid #fef08a !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+  border-radius: 6px !important;
+  padding: 1px 7px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+
+.pill-rating.pill-excellence {
+  background: #f0fdf4 !important;
+  color: #15803d !important;
+  border: 1px solid #bbf7d0 !important;
+  font-weight: 700 !important;
+}
+
+/* ===== Modal Blood Group Quick-Select ===== */
+.blood-group-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.blood-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.blood-btn:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+.blood-btn.on {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3) !important;
+}
+
+/* ===== Modal Star Rating Component ===== */
+.rating-section-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 10px 0 14px 0;
+}
+
+.rating-section-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--green-d);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rating-row {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-bottom: 8px;
+}
+
+.rating-row:last-child {
+  margin-bottom: 0;
+}
+
+.rating-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rating-name {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.rating-score {
+  color: #d97706;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+
+.rating-desc {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.star-rating-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.star-btn {
+  background: none;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  color: #cbd5e1;
+  transition: transform 0.12s ease, color 0.12s ease;
+  padding: 2px 4px;
+  user-select: none;
+}
+
+.star-btn:hover {
+  transform: scale(1.22);
+}
+
+.star-btn.active {
+  color: #eab308;
+  text-shadow: 0 1px 3px rgba(234, 179, 8, 0.35);
+}
+
