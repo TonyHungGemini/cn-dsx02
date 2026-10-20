@@ -76,11 +76,17 @@ function getDisciplineCount(){
 }
 
 function updateDisciplineBadge(){
-  const badge = document.getElementById("bDisciplineBadge");
-  if(!badge) return;
   const cnt = getDisciplineCount();
-  badge.textContent = cnt;
-  badge.style.display = cnt > 0 ? "inline-block" : "none";
+  const badge = document.getElementById("bDisciplineBadge");
+  if(badge){
+    badge.textContent = cnt;
+    badge.style.display = cnt > 0 ? "inline-block" : "none";
+  }
+  const bnavBadge = document.getElementById("bnavDisciplineBadge");
+  if(bnavBadge){
+    bnavBadge.textContent = cnt;
+    bnavBadge.style.display = cnt > 0 ? "inline-block" : "none";
+  }
 }
 
 /* ===== Helper Functions ===== */
@@ -372,10 +378,8 @@ function phonePillHtml(p, compact){
   if(!ph) return "";
   const cl = cleanPhone(ph);
   const disp = formatPhone(ph);
-  if(compact){
-    return '<a href="tel:'+esc(cl)+'" class="pill phone-pill" onclick="event.stopPropagation()" title="Gọi '+esc(ph)+'">📞 '+esc(disp)+'</a>';
-  }
-  return '<a href="tel:'+esc(cl)+'" class="pill phone-pill" onclick="event.stopPropagation()" title="Bấm để gọi '+esc(ph)+'">📞 '+esc(disp)+'</a>';
+  const iconSvg = '<svg class="phone-icon-svg" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.2 2.2z"/></svg>';
+  return '<a href="tel:'+esc(cl)+'" class="pill phone-pill" onclick="event.stopPropagation()" title="Bấm để gọi '+esc(disp)+'">' + iconSvg + '<span class="phone-number-text">' + esc(disp) + '</span></a>';
 }
 
 function getBaseData(){
@@ -1257,15 +1261,20 @@ function filtered(){
 
     if(state.rating){
       if(p.loai === "Gia thuộc") return false;
-      const sk = getSkillRating(p);
-      const et = getEthicsRating(p);
-      if(sk == null || et == null) return false;
-      if(state.rating === "5_all" && (sk !== 5 || et !== 5)) return false;
-      if(state.rating === "skill_5" && sk !== 5) return false;
-      if(state.rating === "skill_4plus" && sk < 4) return false;
-      if(state.rating === "ethics_5" && et !== 5) return false;
-      if(state.rating === "ethics_4plus" && et < 4) return false;
-      if(state.rating === "need_training" && (sk >= 4 && et >= 4)) return false;
+      if(state.rating === "discipline") {
+        if(!isDisciplineCase(p)) return false;
+      } else {
+        const sk = getSkillRating(p);
+        const et = getEthicsRating(p);
+        if(sk == null || et == null) return false;
+        if(state.rating === "5_all" && (sk !== 5 || et !== 5)) return false;
+        if(state.rating === "skill_5" && sk !== 5) return false;
+        if(state.rating === "skill_4plus" && sk < 4) return false;
+        if(state.rating === "ethics_5" && et !== 5) return false;
+        if(state.rating === "ethics_4plus" && et < 4) return false;
+        if(state.rating === "standard_3" && (sk !== 3 || et !== 3)) return false;
+        if(state.rating === "need_training" && (sk >= 3 && et >= 3)) return false;
+      }
     }
 
     if(q){
@@ -1371,6 +1380,8 @@ function hideSugg(){
 function renderPeople(){
   const rows = filtered();
   document.getElementById("count").textContent = rows.length + " / " + DATA.length;
+  const tbStatus = document.getElementById("tbStatusText");
+  if(tbStatus) tbStatus.textContent = rows.length + " / " + DATA.length + " hồ sơ";
   const list = document.getElementById("list");
   if(!rows.length){
     list.innerHTML = '<div class="empty">Không tìm thấy ai khớp với bộ lọc.</div>';
@@ -1396,6 +1407,16 @@ function renderPeople(){
       const starTitle = 'Kỹ năng: ' + skill + '/5★ · Đạo đức: ' + ethics + '/5★';
       const ratingHtml = '<span class="pill pill-rating' + (isPerfect ? ' pill-rating-perfect' : '') + '" title="' + starTitle + '">⭐ KN ' + skill + '★ · ĐĐ ' + ethics + '★</span>';
       sub.push(ratingHtml);
+    }
+
+    // Dedicated discipline note button for workers with 1-2 stars or discipline record
+    if (p.loai !== "Gia thuộc" && isDisciplineCase(p)) {
+      const discNote = (p.ghi_chu_ky_luat || "").trim();
+      const discTitle = discNote ? ('Ghi chú kỷ luật: ' + esc(discNote)) : 'Công nhân có Kỹ năng hoặc Đạo đức 1-2★ - Quản lý bằng Sổ Kỷ luật';
+      const discText = discNote 
+        ? ('📕 Sổ Kỷ luật: ' + esc(discNote.length > 22 ? (discNote.slice(0, 20) + '…') : discNote)) 
+        : '📕 Ghi chú Sổ Kỷ luật (1-2★)';
+      sub.push('<button type="button" class="pill pill-discipline" data-disc-id="' + p.id + '" title="' + discTitle + '">' + discText + '</button>');
     }
 
     if(p.to) sub.push('<span class="pill">'+esc(p.to)+'</span>');
@@ -1430,6 +1451,8 @@ function renderRooms(){
 
   const totalPpl = Object.values(groups).reduce((acc, ppl) => acc + ppl.length, 0);
   document.getElementById("count").textContent = keys.length + " phòng (" + totalPpl + " người)";
+  const tbStatus = document.getElementById("tbStatusText");
+  if(tbStatus) tbStatus.textContent = keys.length + " phòng (" + totalPpl + " người)";
   const list = document.getElementById("list");
 
   if(!keys.length){
@@ -1467,7 +1490,7 @@ function renderRooms(){
     // Members list preview chips
     const memberChips = ppl.map(p => {
       const ph = getPhone(p);
-      return '<span class="pill'+(p.chu_phong?' phone-pill':'')+'">'+(p.chu_phong?'👑 ':'')+esc(p.ten_that)+(ph?(' 📞'):'')+'</span>';
+      return '<span class="pill'+(p.chu_phong?' tag chu':'')+'">'+(p.chu_phong?'👑 ':'')+esc(p.ten_that)+(ph?(' 📞'):'')+'</span>';
     }).slice(0, 8).join(" ") + (ppl.length > 8 ? " …" : "");
 
     // Composition info
@@ -1492,6 +1515,7 @@ function renderRooms(){
 }
 
 function render(){
+  updateDisciplineBadge();
   if(state.view === "rooms") renderRooms();
   else renderPeople();
 }
@@ -1517,6 +1541,9 @@ function openRoom(room){
     if (bld) extraBadges += ' <span class="pill pill-blood" style="font-size:11px;padding:1px 6px;">🩸 ' + esc(bld) + '</span>';
     if (p.loai !== "Gia thuộc" && sk != null && et != null) {
       extraBadges += ' <span class="pill pill-rating' + (sk === 5 && et === 5 ? ' pill-rating-perfect' : '') + '" style="font-size:11px;padding:1px 6px;">⭐ KN ' + sk + '★ · ĐĐ ' + et + '★</span>';
+    }
+    if (p.loai !== "Gia thuộc" && isDisciplineCase(p)) {
+      extraBadges += ' <button type="button" class="pill pill-discipline" data-disc-id="' + p.id + '" style="font-size:10.5px;padding:1px 6px;cursor:pointer;" title="Xem/sửa ghi chú kỷ luật">📕 Sổ Kỷ luật (1-2★)</button>';
     }
 
     rows += '<div class="occ" data-id="'+p.id+'">'+avHtml+
@@ -1556,6 +1583,13 @@ function openRoom(room){
   document.getElementById("bAddP").onclick = () => openEdit("__new__", room, room);
 
   sheet.querySelector(".sheet-b").onclick = e => {
+    const discBtn = e.target.closest(".pill-discipline");
+    if(discBtn) {
+      e.stopPropagation();
+      const discId = discBtn.dataset.discId;
+      if(discId) openDisciplineQuickEdit(+discId || discId);
+      return;
+    }
     const b = e.target.closest("button[data-act]");
     if(!b) return;
     const occ = b.closest(".occ");
@@ -1633,6 +1667,11 @@ function blank(prefillRoom) {
     dia_chi: "",
     so_dt: "",
     ghi_chu: "",
+    ghi_chu_ky_luat: "",
+    ngay_ky_luat: "",
+    hinh_thuc_ky_luat: "",
+    trang_thai_ky_luat: "",
+    nguoi_lap_bien_ban: "",
     chu_phong: false,
     _new: true
   };
@@ -2274,10 +2313,20 @@ function saveEdit(id) {
     rec.danh_gia_dao_duc = "";
     delete rec.danh_gia_ky_nang;
     delete rec.danh_gia_dao_duc;
+    delete rec.ghi_chu_ky_luat;
+    delete rec.ngay_ky_luat;
+    delete rec.hinh_thuc_ky_luat;
+    delete rec.trang_thai_ky_luat;
+    delete rec.nguoi_lap_bien_ban;
   } else {
     rec.danh_gia_ky_nang = (rec.danh_gia_ky_nang != null && rec.danh_gia_ky_nang !== "") ? (parseInt(rec.danh_gia_ky_nang, 10) || 3) : 3;
     rec.danh_gia_dao_duc = (rec.danh_gia_dao_duc != null && rec.danh_gia_dao_duc !== "") ? (parseInt(rec.danh_gia_dao_duc, 10) || 3) : 3;
     rec._manuallyRated = true;
+    rec.ghi_chu_ky_luat = (rec.ghi_chu_ky_luat || "").trim();
+    rec.ngay_ky_luat = (rec.ngay_ky_luat || "").trim();
+    rec.hinh_thuc_ky_luat = (rec.hinh_thuc_ky_luat || "").trim();
+    rec.trang_thai_ky_luat = (rec.trang_thai_ky_luat || "").trim();
+    rec.nguoi_lap_bien_ban = (rec.nguoi_lap_bien_ban || "").trim();
   }
 
   const ckChu = sheet.querySelector("#ckChu");
@@ -2305,6 +2354,7 @@ function saveEdit(id) {
 
   queueChange(rec);
   save();
+  updateDisciplineBadge();
   render();
 
   // Instant server persistence for cross-device synchronization (Admin Phone <-> Computer)
@@ -2395,7 +2445,10 @@ function renderRatingSection(cur) {
   h += '    <div class="rating-box-title">⭐ Đánh giá tay nghề & Đạo đức</div>';
   h += '    <div class="rating-box-sub">Thang điểm 1 - 5 sao &bull; Mặc định 3 sao (Đạt chuẩn) &bull; Không áp dụng Gia thuộc</div>';
   h += '  </div>';
-  h += '  <button type="button" class="btn mini-b" id="bResetRatings" style="font-size:11.5px;padding:4px 8px;background:#fefce8;color:#854d0e;border-color:#fef08a;" title="Đặt lại 3 sao mặc định">↺ 3★ mặc định</button>';
+  h += '  <div style="display:flex;gap:6px;">';
+  h += '    <button type="button" class="btn mini-b" id="bToggleDisciplineBox" style="font-size:11px;padding:4px 8px;background:#fff1f2;color:#be123c;border-color:#fecdd3;" title="Bật/Tắt ghi chú Sổ Kỷ luật riêng">📕 Ghi chú Kỷ luật</button>';
+  h += '    <button type="button" class="btn mini-b" id="bResetRatings" style="font-size:11px;padding:4px 8px;background:#fefce8;color:#854d0e;border-color:#fef08a;" title="Đặt lại 3 sao mặc định">↺ 3★ mặc định</button>';
+  h += '  </div>';
   h += '</div>';
 
   // Skill row
@@ -2426,6 +2479,57 @@ function renderRatingSection(cur) {
   h += '  </div>';
   h += '</div>';
 
+  // Dedicated discipline note box for workers with 1-2 stars or disciplinary records
+  const hasLowStars = (skill <= 2 || ethics <= 2);
+  const hasDisciplineRecord = hasLowStars || Boolean((cur && cur.ghi_chu_ky_luat || "").trim());
+
+  h += '<div class="discipline-edit-box" id="disciplineBox" style="' + (hasDisciplineRecord ? '' : 'display:none;') + '">';
+  h += '  <div class="discipline-box-header">';
+  h += '    <div class="discipline-box-title">';
+  h += '      <span>📕 Sổ Kỷ luật & Ghi chú Chấn chỉnh (1-2★)</span>';
+  h += '      <span class="discipline-badge-alert" id="discAlertTag">' + (hasLowStars ? '⚠️ 1-2★ Cần theo dõi' : 'Đã ghi nhận') + '</span>';
+  h += '    </div>';
+  h += '    <button type="button" class="btn mini-b" id="bOpenDisciplineBookFromForm" style="font-size:11px;padding:3px 8px;background:#fff;border-color:#fca5a5;color:#991b1b;cursor:pointer;">📖 Mở Sổ Kỷ luật chung</button>';
+  h += '  </div>';
+  h += '  <div style="font-size:11.5px;color:#991b1b;margin-bottom:8px;line-height:1.4;">';
+  h += '    ⚠️ Quản lý kỷ luật và theo dõi đào tạo lại riêng cho công nhân có Kỹ năng hoặc Đạo đức từ 1 đến 2 sao.';
+  h += '  </div>';
+
+  const curDate = (cur && cur.ngay_ky_luat) ? cur.ngay_ky_luat : '';
+  const curHinhThuc = (cur && cur.hinh_thuc_ky_luat) ? cur.hinh_thuc_ky_luat : '';
+  const curTrangThai = (cur && cur.trang_thai_ky_luat) ? cur.trang_thai_ky_luat : (hasLowStars ? 'Cần chấn chỉnh' : 'Đang theo dõi');
+  const curNguoiLap = (cur && cur.nguoi_lap_bien_ban) ? cur.nguoi_lap_bien_ban : '';
+  const curGhiChu = (cur && cur.ghi_chu_ky_luat) ? cur.ghi_chu_ky_luat : '';
+
+  h += '  <div class="row2">';
+  h += '    <div class="fld"><label>Ngày ghi nhận kỷ luật</label><input type="date" data-k="ngay_ky_luat" id="inpNgayKyLuat" value="' + esc(curDate) + '"></div>';
+  h += '    <div class="fld"><label>Hình thức xử lý</label>';
+  h += '      <select data-k="hinh_thuc_ky_luat" id="selHinhThucKyLuat">';
+  h += '        <option value=""' + (!curHinhThuc ? ' selected' : '') + '>— Chưa chọn —</option>';
+  ["Nhắc nhở", "Khiển trách", "Cảnh cáo", "Đào tạo lại tay nghề", "Đình chỉ tạm thời", "Chuyển tổ kiểm điểm", "Khác"].forEach(opt => {
+    h += '      <option value="' + opt + '"' + (curHinhThuc === opt ? ' selected' : '') + '>' + opt + '</option>';
+  });
+  h += '      </select>';
+  h += '    </div>';
+  h += '  </div>';
+
+  h += '  <div class="row2">';
+  h += '    <div class="fld"><label>Trạng thái theo dõi</label>';
+  h += '      <select data-k="trang_thai_ky_luat" id="selTrangThaiKyLuat">';
+  ["Cần chấn chỉnh", "Đang theo dõi", "Đang đào tạo lại", "Đã có tiến bộ", "Đã khắc phục xong (Đạt chuẩn)"].forEach(opt => {
+    h += '      <option value="' + opt + '"' + (curTrangThai === opt ? ' selected' : '') + '>' + opt + '</option>';
+  });
+  h += '      </select>';
+  h += '    </div>';
+  h += '    <div class="fld"><label>Cán bộ / Quản lý phụ trách</label><input type="text" data-k="nguoi_lap_bien_ban" id="inpNguoiLapBienBan" placeholder="Tổ trưởng / Giám sát..." value="' + esc(curNguoiLap) + '"></div>';
+  h += '  </div>';
+
+  h += '  <div class="fld" style="margin-top:6px;">';
+  h += '    <label>Nội dung vi phạm / Ghi chú rèn luyện & kế hoạch đào tạo*</label>';
+  h += '    <textarea rows="3" data-k="ghi_chu_ky_luat" id="inpGhiChuKyLuat" placeholder="Ghi rõ hành vi vi phạm kỷ luật hoặc thiếu sót kỹ năng thao tác, kế hoạch đào tạo lại, các mốc kiểm tra...">' + esc(curGhiChu) + '</textarea>';
+  h += '  </div>';
+  h += '</div>';
+
   h += '</div></div>';
   return h;
 }
@@ -2448,7 +2552,8 @@ function openEdit(id, prefillRoom, backRoom) {
     if (k === "so_dt") {
       const ph = cur.so_dt;
       const cl = cleanPhone(ph);
-      return '<div class="fld"><label>' + lbl + '</label><div class="fld-phone-wrap"><input type="tel" data-k="' + k + '" value="' + v + '" placeholder="Ví dụ: 0912345678 hoặc +855..."><a href="' + (cl ? ("tel:" + cl) : "#") + '" class="btn primary mini-b" style="' + (cl ? "" : "display:none") + ';text-decoration:none" id="bCallNow" title="Bấm gọi ngay">📞 Gọi</a></div></div>';
+      const iconSvg = '<svg class="phone-icon-svg" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="color:#fff;"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.2 2.2z"/></svg>';
+      return '<div class="fld"><label>' + lbl + '</label><div class="fld-phone-wrap"><input type="tel" data-k="' + k + '" value="' + v + '" placeholder="Ví dụ: 0912345678 hoặc +855..."><a href="' + (cl ? ("tel:" + cl) : "#") + '" class="btn primary mini-b" style="' + (cl ? "" : "display:none") + '" id="bCallNow" title="Bấm gọi ngay">' + iconSvg + ' <span>Gọi ngay</span></a></div></div>';
     }
     if (t === "addr") {
       return '<div class="fld"><label>' + lbl + '</label><div class="fld-addr-wrap"><input data-k="' + k + '" value="' + v + '" placeholder="Nhập địa chỉ hoặc quét từ CMND"><button type="button" class="btn-trans" data-field="' + k + '" title="Dịch địa chỉ tiếng Khmer sang tiếng Việt chuẩn">🌐 Dịch TV</button></div></div>';
@@ -2603,7 +2708,22 @@ function openEdit(id, prefillRoom, backRoom) {
     });
   }
 
-  // Wire star rating picker
+  // Wire star rating picker and auto-open discipline box on 1-2 stars
+  function checkDisciplineBoxTrigger() {
+    const sVal = parseInt(sheet.querySelector("#inpRatingSkill")?.value, 10) || 3;
+    const eVal = parseInt(sheet.querySelector("#inpRatingEthics")?.value, 10) || 3;
+    const discBox = sheet.querySelector("#disciplineBox");
+    const alertTag = sheet.querySelector("#discAlertTag");
+    if (discBox) {
+      if (sVal <= 2 || eVal <= 2) {
+        discBox.style.display = "block";
+        if (alertTag) alertTag.textContent = "⚠️ 1-2★ Cần theo dõi";
+        const dDate = sheet.querySelector("#inpNgayKyLuat");
+        if (dDate && !dDate.value) dDate.value = new Date().toISOString().slice(0, 10);
+      }
+    }
+  }
+
   function updateStars(containerId, inputId, labelId, labels, val) {
     const inp = sheet.querySelector("#" + inputId);
     if (inp) inp.value = val;
@@ -2616,6 +2736,7 @@ function openEdit(id, prefillRoom, backRoom) {
         btn.classList.toggle("on", starVal <= val);
       });
     }
+    checkDisciplineBoxTrigger();
   }
 
   sheet.querySelectorAll("#starsSkill .star-btn").forEach(b => {
@@ -2625,11 +2746,38 @@ function openEdit(id, prefillRoom, backRoom) {
     b.onclick = () => updateStars("starsEthics", "inpRatingEthics", "lblRatingEthics", ETHICS_LABELS, +b.dataset.val);
   });
 
+  const bToggleDisc = sheet.querySelector("#bToggleDisciplineBox");
+  if (bToggleDisc) {
+    bToggleDisc.onclick = () => {
+      const box = sheet.querySelector("#disciplineBox");
+      if (box) {
+        const isHidden = box.style.display === "none";
+        box.style.display = isHidden ? "block" : "none";
+        if (isHidden) {
+          const inp = box.querySelector("#inpGhiChuKyLuat");
+          if (inp) inp.focus();
+        }
+      }
+    };
+  }
+
+  const bOpenDiscForm = sheet.querySelector("#bOpenDisciplineBookFromForm");
+  if (bOpenDiscForm) {
+    bOpenDiscForm.onclick = () => {
+      showDisciplineBook();
+    };
+  }
+
   const bResetR = sheet.querySelector("#bResetRatings");
   if (bResetR) {
     bResetR.onclick = () => {
       updateStars("starsSkill", "inpRatingSkill", "lblRatingSkill", SKILL_LABELS, 3);
       updateStars("starsEthics", "inpRatingEthics", "lblRatingEthics", ETHICS_LABELS, 3);
+      const noteInp = sheet.querySelector("#inpGhiChuKyLuat");
+      const box = sheet.querySelector("#disciplineBox");
+      if (box && (!noteInp || !noteInp.value.trim())) {
+        box.style.display = "none";
+      }
       toast("Đã đặt lại 3 sao mặc định (Đạt chuẩn)");
     };
   }
@@ -2645,6 +2793,8 @@ function openEdit(id, prefillRoom, backRoom) {
         const inpE = sheet.querySelector("#inpRatingEthics");
         if (inpS) inpS.value = "";
         if (inpE) inpE.value = "";
+        const box = sheet.querySelector("#disciplineBox");
+        if (box) box.style.display = "none";
       } else {
         ratingWrap.style.display = "";
         const inpS = sheet.querySelector("#inpRatingSkill");
@@ -2682,6 +2832,709 @@ function closeEdit(){
   document.getElementById("overlay").classList.remove("show");
   editingId = null;
   editBackRoom = null;
+}
+
+/* ==========================================================================
+   SỔ KỶ LUẬT & THEO DÕI CÔNG NHÂN 1 - 2 SAO (DISCIPLINE MANAGEMENT SYSTEM)
+   ========================================================================== */
+
+function openDisciplineQuickEdit(id) {
+  const p = DATA.find(x => x.id === id);
+  if (!p) {
+    toast("Không tìm thấy công nhân");
+    return;
+  }
+  const sheet = document.getElementById("sheet");
+  const sk = getSkillRating(p);
+  const et = getEthicsRating(p);
+  const av = avatar(p);
+  const avHtml = av ? '<img class="avatar" style="width:46px;height:46px;border-radius:10px;object-fit:cover;" src="' + av + '">' : '<div class="avatar" style="width:46px;height:46px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;font-size:22px;">🧑</div>';
+  const ph = getPhone(p);
+  const cleanP = cleanPhone(ph);
+
+  const curNote = p.ghi_chu_ky_luat || "";
+  const curDate = p.ngay_ky_luat || new Date().toISOString().slice(0, 10);
+  const curHinhThuc = p.hinh_thuc_ky_luat || "Nhắc nhở";
+  const curTrangThai = p.trang_thai_ky_luat || "Đang theo dõi";
+  const curNguoiLap = p.nguoi_lap_bien_ban || "";
+
+  let html = '';
+  html += '<div class="sheet-h" style="border-bottom:2px solid #fecdd3;background:#fff1f2;">';
+  html += '  <div style="display:flex;align-items:center;gap:8px;">';
+  html += '    <h2 style="color:#991b1b;margin:0;">📕 Ghi Chú Sổ Kỷ Luật & Chấn Chỉnh</h2>';
+  html += '    <span class="discipline-badge-alert">' + (sk <= 2 || et <= 2 ? '⚠️ 1-2★ Báo động' : 'Hồ sơ kỷ luật') + '</span>';
+  html += '  </div>';
+  html += '  <button class="x" id="bCloseDisc">×</button>';
+  html += '</div>';
+
+  html += '<div class="sheet-b" style="padding:14px 16px;">';
+  
+  // Worker profile summary
+  html += '<div style="display:flex;gap:12px;align-items:center;background:#fff;border:1px solid #fee2e2;border-radius:10px;padding:10px 12px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.03);">';
+  html += avHtml;
+  html += '  <div style="flex:1;">';
+  html += '    <div style="font-size:15px;font-weight:800;color:#0f172a;">' + esc(p.ten_that || "(Chưa có tên)") + (isMuon(p) ? ' <span class="tag muon" style="font-size:11px;">⚑ ' + esc(p.ten_ho_so) + '</span>' : '') + '</div>';
+  html += '    <div style="font-size:12px;color:#64748b;margin-top:2px;">';
+  html += '      <span>🏠 ' + esc(p.phong_o || "Chưa xếp phòng") + '</span> &bull; ';
+  html += '      <span>' + esc(p.to || "Chưa có tổ") + '</span> &bull; ';
+  html += '      <span>🌳 ' + esc(p.phan_cay || "Chưa phân") + '</span>';
+  if (p.cmnd) html += ' &bull; <span>CMND: ' + esc(p.cmnd) + '</span>';
+  html += '    </div>';
+  if (cleanP) {
+    const iconSvg = '<svg class="phone-icon-svg" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.2 2.2z"/></svg>';
+    html += '    <div style="margin-top:5px;"><a href="tel:' + esc(cleanP) + '" class="pill phone-pill" title="Bấm để gọi ' + esc(formatPhone(cleanP)) + '">' + iconSvg + '<span class="phone-number-text">' + esc(formatPhone(cleanP)) + '</span></a></div>';
+  }
+  html += '  </div>';
+  html += '</div>';
+
+  // Ratings adjuster block
+  html += '<div style="background:#fffbeb;border:1px solid #fef08a;border-radius:10px;padding:10px 12px;margin-bottom:14px;">';
+  html += '  <div style="font-size:12.5px;font-weight:800;color:#854d0e;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">';
+  html += '    <span>⭐ Mức Xếp Hạng Đánh Giá</span>';
+  html += '    <span style="font-size:11px;color:#a16207;font-weight:600;">(Chạm sao để thay đổi)</span>';
+  html += '  </div>';
+  html += '  <div class="row2">';
+  html += '    <div>';
+  html += '      <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:4px;">🛠️ Kỹ năng tay nghề: <span id="lblQuickSkill" style="color:#b45309;">' + (SKILL_LABELS[sk] || (sk + '★')) + '</span></div>';
+  html += '      <div class="stars-bar" id="starsQuickSkill">';
+  for (let s = 1; s <= 5; s++) {
+    html += '<button type="button" class="star-btn' + (s <= sk ? ' on' : '') + '" data-val="' + s + '" style="font-size:22px;">★</button>';
+  }
+  html += '      </div>';
+  html += '      <input type="hidden" id="quickInpSkill" value="' + sk + '">';
+  html += '    </div>';
+  html += '    <div>';
+  html += '      <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:4px;">🤝 Đạo đức & Kỷ luật: <span id="lblQuickEthics" style="color:#b45309;">' + (ETHICS_LABELS[et] || (et + '★')) + '</span></div>';
+  html += '      <div class="stars-bar" id="starsQuickEthics">';
+  for (let s = 1; s <= 5; s++) {
+    html += '<button type="button" class="star-btn' + (s <= et ? ' on' : '') + '" data-val="' + s + '" style="font-size:22px;">★</button>';
+  }
+  html += '      </div>';
+  html += '      <input type="hidden" id="quickInpEthics" value="' + et + '">';
+  html += '    </div>';
+  html += '  </div>';
+  html += '</div>';
+
+  // Discipline Note Form
+  html += '<div style="background:#fff;border:1.5px solid #fecdd3;border-radius:10px;padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.03);">';
+  html += '  <div style="font-size:13px;font-weight:800;color:#991b1b;margin-bottom:10px;">📋 Biên Bản Ghi Nhận Vi Phạm & Biện Pháp Chấn Chỉnh</div>';
+  html += '  <div class="row2">';
+  html += '    <div class="fld"><label>Ngày ghi nhận kỷ luật*</label><input type="date" id="quickNgayKyLuat" value="' + esc(curDate) + '"></div>';
+  html += '    <div class="fld"><label>Hình thức xử lý*</label>';
+  html += '      <select id="quickHinhThuc">';
+  const hinhThucs = ["Nhắc nhở", "Khiển trách", "Cảnh cáo", "Đào tạo lại tay nghề", "Đình chỉ tạm thời", "Chuyển tổ kiểm điểm", "Khác"];
+  hinhThucs.forEach(h => {
+    html += '<option value="' + h + '"' + (curHinhThuc === h ? ' selected' : '') + '>' + h + '</option>';
+  });
+  html += '      </select>';
+  html += '    </div>';
+  html += '  </div>';
+
+  html += '  <div class="row2">';
+  html += '    <div class="fld"><label>Trạng thái theo dõi rèn luyện*</label>';
+  html += '      <select id="quickTrangThai">';
+  const trangThais = ["Cần chấn chỉnh", "Đang theo dõi", "Đang đào tạo lại", "Đã có tiến bộ", "Đã khắc phục xong (Đạt chuẩn)"];
+  trangThais.forEach(t => {
+    html += '<option value="' + t + '"' + (curTrangThai === t ? ' selected' : '') + '>' + t + '</option>';
+  });
+  html += '      </select>';
+  html += '    </div>';
+  html += '    <div class="fld"><label>Cán bộ / Quản lý phụ trách</label><input type="text" id="quickNguoiLap" placeholder="Tổ trưởng / Giám sát..." value="' + esc(curNguoiLap) + '"></div>';
+  html += '  </div>';
+
+  html += '  <div class="fld" style="margin-top:6px;">';
+  html += '    <label>Nội dung ghi chú vi phạm / kế hoạch rèn luyện chi tiết*</label>';
+  html += '    <textarea id="quickGhiChu" rows="4" placeholder="Nhập chi tiết: ngày giờ, hành vi vi phạm kỷ luật hoặc thiếu sót kỹ năng thao tác, kế hoạch chấn chỉnh, thời hạn theo dõi...">' + esc(curNote) + '</textarea>';
+  html += '  </div>';
+  html += '</div>';
+
+  // Bottom action bar
+  html += '<div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+  html += '  <button type="button" class="btn" id="bUpgradeTo3Star" style="background:#ecfdf5;color:#047857;border-color:#a7f3d0;font-weight:700;" title="Nâng lên 3 sao khi công nhân đã khắc phục tiến bộ">⭐ Nâng 3★ Đạt chuẩn</button>';
+  html += '  <div style="display:flex;gap:8px;">';
+  html += '    <button type="button" class="btn" id="bCancelDisc">Đóng</button>';
+  html += '    <button type="button" class="btn primary" id="bSaveDisc" style="background:#be123c;border-color:#9f1239;font-weight:700;">💾 Lưu Sổ Kỷ Luật</button>';
+  html += '  </div>';
+  html += '</div>';
+
+  html += '</div>';
+
+  sheet.innerHTML = html;
+  document.getElementById("overlay").classList.add("show");
+
+  // Wire buttons and star clicks
+  const closeFn = () => {
+    document.getElementById("overlay").classList.remove("show");
+  };
+  document.getElementById("bCloseDisc").onclick = closeFn;
+  document.getElementById("bCancelDisc").onclick = closeFn;
+
+  const wireStarGroup = (containerId, inputId, labelId, labels) => {
+    sheet.querySelectorAll("#" + containerId + " .star-btn").forEach(btn => {
+      btn.onclick = () => {
+        const val = +btn.dataset.val;
+        sheet.querySelector("#" + inputId).value = val;
+        const lbl = sheet.querySelector("#" + labelId);
+        if (lbl && labels[val]) lbl.textContent = labels[val];
+        sheet.querySelectorAll("#" + containerId + " .star-btn").forEach(b => {
+          b.classList.toggle("on", +b.dataset.val <= val);
+        });
+      };
+    });
+  };
+
+  wireStarGroup("starsQuickSkill", "quickInpSkill", "lblQuickSkill", SKILL_LABELS);
+  wireStarGroup("starsQuickEthics", "quickInpEthics", "lblQuickEthics", ETHICS_LABELS);
+
+  // Upgrade to 3-star button
+  document.getElementById("bUpgradeTo3Star").onclick = () => {
+    sheet.querySelector("#quickInpSkill").value = 3;
+    sheet.querySelector("#quickInpEthics").value = 3;
+    sheet.querySelector("#lblQuickSkill").textContent = SKILL_LABELS[3];
+    sheet.querySelector("#lblQuickEthics").textContent = ETHICS_LABELS[3];
+    sheet.querySelectorAll("#starsQuickSkill .star-btn").forEach(b => b.classList.toggle("on", +b.dataset.val <= 3));
+    sheet.querySelectorAll("#starsQuickEthics .star-btn").forEach(b => b.classList.toggle("on", +b.dataset.val <= 3));
+    sheet.querySelector("#quickTrangThai").value = "Đã khắc phục xong (Đạt chuẩn)";
+    toast("Đã đặt lại 3★ Đạt chuẩn - Nhấn 'Lưu Sổ Kỷ Luật' để xác nhận");
+  };
+
+  // Save button
+  document.getElementById("bSaveDisc").onclick = () => {
+    const newSkill = parseInt(sheet.querySelector("#quickInpSkill").value, 10) || 3;
+    const newEthics = parseInt(sheet.querySelector("#quickInpEthics").value, 10) || 3;
+    const newDate = sheet.querySelector("#quickNgayKyLuat").value.trim();
+    const newHinhThuc = sheet.querySelector("#quickHinhThuc").value.trim();
+    const newTrangThai = sheet.querySelector("#quickTrangThai").value.trim();
+    const newNguoiLap = sheet.querySelector("#quickNguoiLap").value.trim();
+    const newNote = sheet.querySelector("#quickGhiChu").value.trim();
+
+    p.danh_gia_ky_nang = newSkill;
+    p.danh_gia_dao_duc = newEthics;
+    p.ngay_ky_luat = newDate;
+    p.hinh_thuc_ky_luat = newHinhThuc;
+    p.trang_thai_ky_luat = newTrangThai;
+    p.nguoi_lap_bien_ban = newNguoiLap;
+    p.ghi_chu_ky_luat = newNote;
+    p._edited = true;
+
+    queueChange(p);
+    save();
+    render();
+    updateDisciplineBadge();
+
+    // Sync to server
+    try {
+      fetch("/api/save-record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ record: p })
+      }).catch(e => console.warn("Save discipline error:", e));
+    } catch(e) {}
+
+    toast("Đã lưu ghi chú Sổ Kỷ luật cho " + (p.ten_that || "công nhân") + " ✓");
+    closeFn();
+  };
+}
+
+let currentDiscFilter = "all";
+let currentDiscSearch = "";
+
+function showDisciplineBook(initFilter, initSearch) {
+  if (initFilter) currentDiscFilter = initFilter;
+  if (initSearch != null) currentDiscSearch = initSearch;
+
+  const sheet = document.getElementById("sheet");
+  const allCases = DATA.filter(p => !p.deleted && isDisciplineCase(p));
+
+  // Compute KPI stats
+  const totalCases = allCases.length;
+  const count1Star = allCases.filter(p => getSkillRating(p) === 1 || getEthicsRating(p) === 1).length;
+  const count2Star = allCases.filter(p => (getSkillRating(p) === 2 || getEthicsRating(p) === 2) && getSkillRating(p) !== 1 && getEthicsRating(p) !== 1).length;
+  const countEthics = allCases.filter(p => getEthicsRating(p) <= 2).length;
+  const countSkill = allCases.filter(p => getSkillRating(p) <= 2).length;
+  const countHasNote = allCases.filter(p => Boolean((p.ghi_chu_ky_luat || "").trim())).length;
+  const countNoNote = totalCases - countHasNote;
+
+  // Filter based on active filter tab
+  let displayed = allCases;
+  if (currentDiscFilter === "1star") {
+    displayed = displayed.filter(p => getSkillRating(p) === 1 || getEthicsRating(p) === 1);
+  } else if (currentDiscFilter === "2star") {
+    displayed = displayed.filter(p => (getSkillRating(p) === 2 || getEthicsRating(p) === 2) && getSkillRating(p) !== 1 && getEthicsRating(p) !== 1);
+  } else if (currentDiscFilter === "ethics") {
+    displayed = displayed.filter(p => getEthicsRating(p) <= 2);
+  } else if (currentDiscFilter === "skill") {
+    displayed = displayed.filter(p => getSkillRating(p) <= 2);
+  } else if (currentDiscFilter === "has_note") {
+    displayed = displayed.filter(p => Boolean((p.ghi_chu_ky_luat || "").trim()));
+  } else if (currentDiscFilter === "no_note") {
+    displayed = displayed.filter(p => !Boolean((p.ghi_chu_ky_luat || "").trim()));
+  }
+
+  // Filter by search query
+  const q = noAccent(currentDiscSearch.trim());
+  if (q) {
+    displayed = displayed.filter(p => {
+      const hay = noAccent([p.ten_that, p.ten_ho_so, p.cmnd, p.phong_o, p.to, p.phan_cay, p.ghi_chu_ky_luat, p.hinh_thuc_ky_luat, p.trang_thai_ky_luat].join(" "));
+      return hay.includes(q);
+    });
+  }
+
+  let html = '';
+  // Header
+  html += '<div class="sheet-h" style="background:#fff1f2;border-bottom:2px solid #fecdd3;">';
+  html += '  <div>';
+  html += '    <h2 style="color:#991b1b;margin:0;display:flex;align-items:center;gap:6px;">📕 SỔ KỶ LUẬT & THEO DÕI RÈN LUYỆN (1-2★)</h2>';
+  html += '    <div style="font-size:12px;color:#9f1239;margin-top:2px;">Quản lý tập trung công nhân có Kỹ năng & Đạo đức 1-2★ hoặc có biên bản vi phạm</div>';
+  html += '  </div>';
+  html += '  <button class="x" id="bCloseDiscBook">×</button>';
+  html += '</div>';
+
+  html += '<div class="sheet-b" style="padding:14px 16px;">';
+
+  // KPI summary grid
+  html += '<div class="discipline-kpi-grid">';
+  html += '  <div class="disc-kpi-card"><b>' + totalCases + '</b><span>Tổng số trong Sổ</span></div>';
+  html += '  <div class="disc-kpi-card" style="border-color:#fca5a5;"><b style="color:#dc2626;">' + count1Star + '</b><span>🚨 Báo động đỏ 1★</span></div>';
+  html += '  <div class="disc-kpi-card" style="border-color:#fed7aa;"><b style="color:#ea580c;">' + count2Star + '</b><span>⚠️ Cần theo dõi 2★</span></div>';
+  html += '  <div class="disc-kpi-card"><b>' + countEthics + '</b><span>🤝 Đạo đức 1-2★</span></div>';
+  html += '  <div class="disc-kpi-card"><b>' + countSkill + '</b><span>🛠️ Kỹ năng 1-2★</span></div>';
+  html += '  <div class="disc-kpi-card"><b>' + countHasNote + '</b><span>📝 Đã có biên bản</span></div>';
+  html += '</div>';
+
+  // Toolbar
+  html += '<div class="disc-toolbar">';
+  html += '  <div style="position:relative;flex:1;min-width:180px;">';
+  html += '    <input type="search" id="discSearchInput" placeholder="Tìm tên, CMND, phòng, tổ, nội dung vi phạm..." value="' + esc(currentDiscSearch) + '" style="width:100%;padding:6px 10px;font-size:12.5px;border:1px solid #cbd5e1;border-radius:6px;">';
+  html += '  </div>';
+  html += '  <button type="button" class="btn mini-b" id="bAddWorkerToDisc" style="background:#be123c;color:#fff;border-color:#9f1239;font-weight:700;">➕ Thêm vào Sổ Kỷ luật</button>';
+  html += '  <button type="button" class="btn mini-b" id="bExportDiscXlsx" style="background:#ecfdf5;color:#047857;border-color:#a7f3d0;font-weight:700;">⬇️ Xuất Excel Sổ</button>';
+  html += '  <button type="button" class="btn mini-b" id="bPrintDisc" style="background:#f8fafc;color:#334155;border-color:#cbd5e1;">🖨️ In Danh Sách</button>';
+  html += '</div>';
+
+  // Filter tabs
+  const tabs = [
+    ["all", "Tất cả (" + totalCases + ")"],
+    ["1star", "🚨 Báo động 1★ (" + count1Star + ")"],
+    ["2star", "⚠️ Theo dõi 2★ (" + count2Star + ")"],
+    ["ethics", "🤝 Đạo đức 1-2★ (" + countEthics + ")"],
+    ["skill", "🛠️ Kỹ năng 1-2★ (" + countSkill + ")"],
+    ["has_note", "📝 Đã có ghi chú (" + countHasNote + ")"],
+    ["no_note", "⏳ Chưa ghi chú (" + countNoNote + ")"]
+  ];
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
+  tabs.forEach(t => {
+    const isAct = currentDiscFilter === t[0];
+    html += '<button type="button" class="disc-filter-tab' + (isAct ? ' on' : '') + '" data-filter="' + t[0] + '" style="font-size:11.5px;padding:4px 9px;border-radius:999px;border:1px solid ' + (isAct ? '#be123c' : '#cbd5e1') + ';background:' + (isAct ? '#be123c' : '#fff') + ';color:' + (isAct ? '#fff' : '#475569') + ';font-weight:700;cursor:pointer;">' + t[1] + '</button>';
+  });
+  html += '</div>';
+
+  // Workers List
+  if (displayed.length === 0) {
+    if (totalCases === 0) {
+      html += '<div style="text-align:center;padding:36px 16px;background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:12px;margin-top:8px;">';
+      html += '  <div style="font-size:42px;margin-bottom:8px;">🎉</div>';
+      html += '  <div style="font-size:16px;font-weight:800;color:#0f172a;margin-bottom:4px;">Hiện không có công nhân nào trong Sổ Kỷ luật!</div>';
+      html += '  <div style="font-size:13px;color:#64748b;max-width:440px;margin:0 auto 14px;">Tất cả lao động đang đạt tiêu chuẩn từ 3 sao trở lên (Đạt chuẩn quy định) và không có vi phạm kỷ luật.</div>';
+      html += '  <button type="button" class="btn primary" id="bEmptyAddDisc" style="background:#be123c;border-color:#9f1239;">➕ Ghi nhận trường hợp kỷ luật mới</button>';
+      html += '</div>';
+    } else {
+      html += '<div style="text-align:center;padding:24px 16px;background:#fff;border:1px dashed #cbd5e1;border-radius:10px;color:#64748b;font-size:13px;">Không tìm thấy công nhân nào khớp với bộ lọc hoặc từ khóa tìm kiếm.</div>';
+    }
+  } else {
+    html += '<div class="disc-list">';
+    displayed.forEach(p => {
+      const sk = getSkillRating(p);
+      const et = getEthicsRating(p);
+      const av = avatar(p);
+      const avHtml = av ? '<img class="avatar" style="width:40px;height:40px;border-radius:8px;object-fit:cover;" src="' + av + '">' : '<div class="avatar" style="width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;font-size:18px;">🧑</div>';
+      const ph = getPhone(p);
+      const cleanP = cleanPhone(ph);
+
+      html += '<div class="disc-card" data-disc-id="' + p.id + '">';
+      
+      // Top row: Avatar + Name + Badges
+      html += '  <div class="disc-card-top">';
+      html += '    <div style="display:flex;gap:10px;align-items:flex-start;">';
+      html += avHtml;
+      html += '      <div>';
+      html += '        <div class="disc-name-row">';
+      html += '          <span class="disc-worker-name">' + esc(p.ten_that || "(Chưa có tên)") + '</span>';
+      if (isMuon(p)) html += ' <span class="tag muon" style="font-size:10.5px;">⚑ ' + esc(p.ten_ho_so) + '</span>';
+      if (p.to) html += ' <span class="pill" style="font-size:10.5px;">' + esc(p.to) + '</span>';
+      if (p.phong_o) html += ' <span class="pill" style="font-size:10.5px;">🏠 ' + esc(p.phong_o) + '</span>';
+      if (p.phan_cay) html += ' <span class="pill" style="font-size:10.5px;">🌳 ' + esc(p.phan_cay) + '</span>';
+      html += '        </div>';
+      html += '        <div style="font-size:12px;color:#64748b;margin-top:2px;">';
+      if (p.cmnd) html += '<span>CMND: ' + esc(p.cmnd) + '</span> &bull; ';
+      if (cleanP) {
+        const iconSvg = '<svg class="phone-icon-svg" viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.2 2.2z"/></svg>';
+        html += '<a href="tel:' + esc(cleanP) + '" class="pill phone-pill" style="font-size:11.5px;padding:2px 7px;" title="Bấm để gọi ' + esc(formatPhone(cleanP)) + '">' + iconSvg + '<span class="phone-number-text">' + esc(formatPhone(cleanP)) + '</span></a>';
+      } else {
+        html += '<span style="color:#94a3b8;">Chưa có SĐT</span>';
+      }
+      html += '        </div>';
+      html += '      </div>';
+      html += '    </div>';
+
+      // Status badge
+      const curStatus = p.trang_thai_ky_luat || "Đang theo dõi";
+      const isResolved = curStatus.includes("Đã khắc phục");
+      html += '    <span class="discipline-badge-alert" style="' + (isResolved ? 'background:#ecfdf5;color:#047857;border-color:#a7f3d0;' : '') + '">' + esc(curStatus) + '</span>';
+      html += '  </div>';
+
+      // Star ratings display
+      html += '  <div class="disc-rating-pills">';
+      if (sk === 1) html += '<span class="disc-pill-tag disc-pill-1star">🛠️ Kỹ năng: 1★ Cần đào tạo lại</span>';
+      else if (sk === 2) html += '<span class="disc-pill-tag disc-pill-2star">🛠️ Kỹ năng: 2★ Trung bình yếu</span>';
+      else html += '<span class="disc-pill-tag" style="background:#f1f5f9;color:#475569;">🛠️ Kỹ năng: ' + sk + '★</span>';
+
+      if (et === 1) html += '<span class="disc-pill-tag disc-pill-1star">🤝 Đạo đức: 1★ Cần chấn chỉnh</span>';
+      else if (et === 2) html += '<span class="disc-pill-tag disc-pill-2star">🤝 Đạo đức: 2★ Nhắc nhở</span>';
+      else html += '<span class="disc-pill-tag" style="background:#f1f5f9;color:#475569;">🤝 Đạo đức: ' + et + '★</span>';
+
+      if (p.hinh_thuc_ky_luat) {
+        html += '<span class="disc-pill-tag" style="background:#f3e8ff;color:#7e22ce;border:1px solid #e9d5ff;">⚖️ ' + esc(p.hinh_thuc_ky_luat) + '</span>';
+      }
+      if (p.ngay_ky_luat) {
+        html += '<span class="disc-pill-tag" style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;">📅 ' + esc(p.ngay_ky_luat) + '</span>';
+      }
+      html += '  </div>';
+
+      // Disciplinary Note Content Box
+      html += '  <div class="disc-note-box">';
+      if ((p.ghi_chu_ky_luat || "").trim()) {
+        html += '<div style="font-weight:700;color:#991b1b;margin-bottom:2px;font-size:11.5px;">📝 Nội dung biên bản / ghi chú kỷ luật:</div>';
+        html += '<div style="white-space:pre-wrap;">' + esc(p.ghi_chu_ky_luat) + '</div>';
+        if (p.nguoi_lap_bien_ban) {
+          html += '<div style="font-size:11px;color:#94a3b8;margin-top:4px;text-align:right;">— Cán bộ phụ trách: ' + esc(p.nguoi_lap_bien_ban) + '</div>';
+        }
+      } else {
+        html += '<span class="disc-note-empty">⚠️ Chưa có nội dung ghi chú cụ thể. Nhấn nút "Ghi chú / Cập nhật" bên dưới để bổ sung biên bản.</span>';
+      }
+      html += '  </div>';
+
+      // Actions bottom bar
+      html += '  <div class="disc-card-actions">';
+      html += '    <button type="button" class="btn mini-b btn-quick-disc" data-id="' + p.id + '" style="background:#fff1f2;color:#be123c;border-color:#fecdd3;font-weight:700;">📝 Ghi chú / Cập nhật</button>';
+      html += '    <button type="button" class="btn mini-b btn-upgrade-3star" data-id="' + p.id + '" style="background:#ecfdf5;color:#047857;border-color:#a7f3d0;font-weight:700;" title="Nâng lên 3 sao khi công nhân đã khắc phục tiến bộ">⭐ Nâng 3★ (Đạt chuẩn)</button>';
+      html += '    <button type="button" class="btn mini-b btn-full-profile" data-id="' + p.id + '">👤 Xem hồ sơ đầy đủ</button>';
+      html += '  </div>';
+
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
+
+  sheet.innerHTML = html;
+  document.getElementById("overlay").classList.add("show");
+
+  // Wire close
+  const closeBookFn = () => {
+    document.getElementById("overlay").classList.remove("show");
+  };
+  document.getElementById("bCloseDiscBook").onclick = closeBookFn;
+
+  // Wire search input with live search
+  const sInp = sheet.querySelector("#discSearchInput");
+  if (sInp) {
+    sInp.addEventListener("input", e => {
+      currentDiscSearch = e.target.value;
+      showDisciplineBook(currentDiscFilter, currentDiscSearch);
+      const newInp = document.getElementById("discSearchInput");
+      if (newInp) {
+        newInp.focus();
+        newInp.setSelectionRange(newInp.value.length, newInp.value.length);
+      }
+    });
+  }
+
+  // Wire filter tabs
+  sheet.querySelectorAll(".disc-filter-tab").forEach(tab => {
+    tab.onclick = () => {
+      currentDiscFilter = tab.dataset.filter;
+      showDisciplineBook(currentDiscFilter, currentDiscSearch);
+    };
+  });
+
+  // Wire quick edit buttons on cards
+  sheet.querySelectorAll(".btn-quick-disc").forEach(btn => {
+    btn.onclick = () => {
+      openDisciplineQuickEdit(+btn.dataset.id || btn.dataset.id);
+    };
+  });
+
+  // Wire upgrade 3-star buttons
+  sheet.querySelectorAll(".btn-upgrade-3star").forEach(btn => {
+    btn.onclick = () => {
+      const pid = +btn.dataset.id || btn.dataset.id;
+      const worker = DATA.find(x => x.id === pid);
+      if (!worker) return;
+      if (confirm("Nâng công nhân '" + (worker.ten_that || "này") + "' lên 3★ Đạt chuẩn và đánh dấu Đã khắc phục?")) {
+        worker.danh_gia_ky_nang = 3;
+        worker.danh_gia_dao_duc = 3;
+        worker.trang_thai_ky_luat = "Đã khắc phục xong (Đạt chuẩn)";
+        worker._edited = true;
+        queueChange(worker);
+        save();
+        render();
+        updateDisciplineBadge();
+        try {
+          fetch("/api/save-record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ record: worker })
+          }).catch(() => {});
+        } catch(e) {}
+        toast("Đã nâng 3★ Đạt chuẩn cho " + (worker.ten_that || "công nhân"));
+        showDisciplineBook(currentDiscFilter, currentDiscSearch);
+      }
+    };
+  });
+
+  // Wire full profile buttons
+  sheet.querySelectorAll(".btn-full-profile").forEach(btn => {
+    btn.onclick = () => {
+      const pid = +btn.dataset.id || btn.dataset.id;
+      openEdit(pid);
+    };
+  });
+
+  // Wire add worker to discipline
+  const bAdd = sheet.querySelector("#bAddWorkerToDisc");
+  const bEmptyAdd = sheet.querySelector("#bEmptyAddDisc");
+  const addFn = () => openAddDisciplineWorker();
+  if (bAdd) bAdd.onclick = addFn;
+  if (bEmptyAdd) bEmptyAdd.onclick = addFn;
+
+  // Wire export and print
+  const bExport = sheet.querySelector("#bExportDiscXlsx");
+  if (bExport) bExport.onclick = exportDisciplineXlsx;
+  const bPrint = sheet.querySelector("#bPrintDisc");
+  if (bPrint) bPrint.onclick = printDisciplineReport;
+}
+
+function openAddDisciplineWorker() {
+  const sheet = document.getElementById("sheet");
+  const nonGiaThuoc = DATA.filter(p => !p.deleted && p.loai !== "Gia thuộc").sort((a,b) => (a.ten_that || "").localeCompare(b.ten_that || "", "vi"));
+
+  let html = '';
+  html += '<div class="sheet-h" style="background:#fff1f2;border-bottom:2px solid #fecdd3;">';
+  html += '  <h2 style="color:#991b1b;margin:0;">➕ Chọn Công Nhân Để Ghi Sổ Kỷ Luật</h2>';
+  html += '  <button class="x" id="bCloseAddDisc">×</button>';
+  html += '</div>';
+
+  html += '<div class="sheet-b" style="padding:14px 16px;">';
+  html += '  <div style="font-size:12.5px;color:#64748b;margin-bottom:10px;">Tìm kiếm và chọn công nhân cần ghi nhận kỷ luật hoặc chấn chỉnh tay nghề:</div>';
+  html += '  <input type="search" id="inpSearchPickWorker" placeholder="Gõ tên, CMND, phòng ở để tìm nhanh..." style="width:100%;padding:8px 12px;font-size:13px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px;">';
+  html += '  <div id="pickWorkerList" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
+  
+  nonGiaThuoc.forEach(p => {
+    const isAlready = isDisciplineCase(p);
+    html += '<div class="clickable-worker-row" data-id="' + p.id + '" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;background:' + (isAlready ? '#fff1f2' : '#fff') + '">';
+    html += '  <div>';
+    html += '    <b style="font-size:13.5px;color:#0f172a;">' + esc(p.ten_that || "(Chưa có tên)") + '</b>';
+    if (isMuon(p)) html += ' <span class="tag muon" style="font-size:10px;">⚑ ' + esc(p.ten_ho_so) + '</span>';
+    html += '    <div style="font-size:11.5px;color:#64748b;">';
+    html += '      <span>🏠 ' + esc(p.phong_o || "—") + '</span> &bull; <span>' + esc(p.to || "—") + '</span> &bull; <span>CMND: ' + esc(p.cmnd || "—") + '</span>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '  <div style="display:flex;align-items:center;gap:6px;">';
+    if (isAlready) {
+      html += '    <span class="discipline-badge-alert" style="font-size:10.5px;">Đang trong Sổ</span>';
+    }
+    html += '    <button type="button" class="btn mini-b" style="background:#be123c;color:#fff;border-color:#9f1239;font-size:11px;padding:3px 8px;">Chọn ➔</button>';
+    html += '  </div>';
+    html += '</div>';
+  });
+
+  html += '  </div>';
+  html += '  <div style="margin-top:12px;display:flex;justify-content:flex-end;">';
+  html += '    <button type="button" class="btn" id="bBackToDiscBook">Quay lại Sổ Kỷ luật</button>';
+  html += '  </div>';
+  html += '</div>';
+
+  sheet.innerHTML = html;
+
+  document.getElementById("bCloseAddDisc").onclick = () => showDisciplineBook();
+  document.getElementById("bBackToDiscBook").onclick = () => showDisciplineBook();
+
+  // Search filter
+  const sInp = sheet.querySelector("#inpSearchPickWorker");
+  if (sInp) {
+    sInp.addEventListener("input", e => {
+      const q = noAccent(e.target.value.trim());
+      sheet.querySelectorAll(".clickable-worker-row").forEach(row => {
+        const txt = noAccent(row.textContent);
+        row.style.display = txt.includes(q) ? "" : "none";
+      });
+    });
+  }
+
+  // Click row to pick worker
+  sheet.querySelectorAll(".clickable-worker-row").forEach(row => {
+    row.onclick = () => {
+      const pid = +row.dataset.id || row.dataset.id;
+      const worker = DATA.find(x => x.id === pid);
+      if (worker) {
+        if (getSkillRating(worker) >= 3 && getEthicsRating(worker) >= 3) {
+          worker.danh_gia_dao_duc = 2; // Default to 2 stars (vi phạm nhắc nhở)
+        }
+        if (!worker.ngay_ky_luat) {
+          worker.ngay_ky_luat = new Date().toISOString().slice(0, 10);
+        }
+        openDisciplineQuickEdit(pid);
+      }
+    };
+  });
+}
+
+function exportDisciplineXlsx() {
+  const cases = DATA.filter(p => !p.deleted && isDisciplineCase(p));
+  if (cases.length === 0) {
+    toast("Hiện không có công nhân nào trong Sổ Kỷ luật để xuất");
+    return;
+  }
+
+  const head = [
+    "STT",
+    "Họ và tên (Tên thật)",
+    "Tên trong hồ sơ",
+    "Tên mượn?",
+    "CMND / CCCD",
+    "Số điện thoại",
+    "Phòng ở",
+    "Tổ",
+    "Phân cây",
+    "Kỹ năng (1-5★)",
+    "Đạo đức (1-5★)",
+    "Mức độ xếp loại",
+    "Ngày ghi nhận kỷ luật",
+    "Hình thức xử lý",
+    "Trạng thái theo dõi",
+    "Cán bộ phụ trách",
+    "Nội dung vi phạm & Ghi chú kỷ luật chi tiết"
+  ];
+
+  const aoa = [head];
+  cases.forEach((p, i) => {
+    const sk = getSkillRating(p);
+    const et = getEthicsRating(p);
+    let mucDo = "";
+    if (sk === 1 || et === 1) mucDo = "🚨 1★ Báo động đỏ";
+    else if (sk === 2 || et === 2) mucDo = "⚠️ 2★ Cần theo dõi";
+    else mucDo = "Đã khắc phục / Theo dõi";
+
+    aoa.push([
+      i + 1,
+      p.ten_that || "",
+      p.ten_ho_so || "",
+      isMuon(p) ? "x" : "",
+      p.cmnd || "",
+      getPhone(p) || "",
+      p.phong_o || "",
+      p.to || "",
+      p.phan_cay || "",
+      sk != null ? (sk + " sao") : "",
+      et != null ? (et + " sao") : "",
+      mucDo,
+      p.ngay_ky_luat || "",
+      p.hinh_thuc_ky_luat || "",
+      p.trang_thai_ky_luat || "",
+      p.nguoi_lap_bien_ban || "",
+      p.ghi_chu_ky_luat || ""
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [
+    { wch: 6 },
+    { wch: 24 },
+    { wch: 22 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 16 },
+    { wch: 18 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 40 }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Sổ Kỷ Luật");
+  const d = new Date();
+  const fn = "So_Ky_Luat_Cong_Nhan_DSX02_" + d.getFullYear() + ("0" + (d.getMonth() + 1)).slice(-2) + ("0" + d.getDate()).slice(-2) + ".xlsx";
+  XLSX.writeFile(wb, fn);
+  toast("Đã xuất " + cases.length + " trường hợp Sổ Kỷ luật ra Excel ✓");
+}
+
+function printDisciplineReport() {
+  const cases = DATA.filter(p => !p.deleted && isDisciplineCase(p));
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+  const d = new Date();
+  const dateStr = ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear();
+
+  let h = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sổ Kỷ Luật & Theo Dõi Rèn Luyện</title>';
+  h += '<style>';
+  h += 'body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:20px;}';
+  h += 'h1{font-size:18px;text-align:center;margin-bottom:4px;color:#991b1b;}';
+  h += '.sub{text-align:center;font-size:12px;color:#555;margin-bottom:16px;}';
+  h += 'table{width:100%;border-collapse:collapse;margin-top:10px;}';
+  h += 'th,td{border:1px solid #333;padding:6px 8px;font-size:11.5px;text-align:left;}';
+  h += 'th{background:#f1f5f9;font-weight:bold;}';
+  h += '.alert1{color:#dc2626;font-weight:bold;}';
+  h += '.alert2{color:#ea580c;font-weight:bold;}';
+  h += '@media print{button{display:none;}}';
+  h += '</style></head><body>';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+  h += '  <div><b>ĐỘI SẢN XUẤT 02</b><br>BỘ PHẬN NHÂN SỰ & QUẢN LÝ LAO ĐỘNG</div>';
+  h += '  <button onclick="window.print()" style="padding:6px 12px;font-weight:bold;cursor:pointer;">🖨️ In trang này</button>';
+  h += '</div>';
+  h += '<h1>SỔ KỶ LUẬT & THEO DÕI RÈN LUYỆN LAO ĐỘNG (1-2★)</h1>';
+  h += '<div class="sub">Ngày kết xuất báo cáo: ' + dateStr + ' &bull; Tổng số trường hợp: <b>' + cases.length + '</b></div>';
+  h += '<table>';
+  h += '<thead><tr><th>STT</th><th>Họ và tên</th><th>CMND</th><th>SĐT</th><th>Phòng / Tổ</th><th>Kỹ năng</th><th>Đạo đức</th><th>Ngày</th><th>Hình thức</th><th>Trạng thái</th><th>Nội dung vi phạm / Ghi chú</th></tr></thead>';
+  h += '<tbody>';
+  cases.forEach((p, i) => {
+    const sk = getSkillRating(p);
+    const et = getEthicsRating(p);
+    h += '<tr>';
+    h += '<td>' + (i + 1) + '</td>';
+    h += '<td><b>' + esc(p.ten_that || "") + '</b>' + (isMuon(p) ? '<br><small>(Tên HS: ' + esc(p.ten_ho_so) + ')</small>' : '') + '</td>';
+    h += '<td>' + esc(p.cmnd || "") + '</td>';
+    h += '<td>' + esc(getPhone(p) || "") + '</td>';
+    h += '<td>' + esc(p.phong_o || "") + ' (' + esc(p.to || "") + ')</td>';
+    h += '<td class="' + (sk === 1 ? 'alert1' : (sk === 2 ? 'alert2' : '')) + '">' + sk + '★</td>';
+    h += '<td class="' + (et === 1 ? 'alert1' : (et === 2 ? 'alert2' : '')) + '">' + et + '★</td>';
+    h += '<td>' + esc(p.ngay_ky_luat || "") + '</td>';
+    h += '<td>' + esc(p.hinh_thuc_ky_luat || "") + '</td>';
+    h += '<td>' + esc(p.trang_thai_ky_luat || "") + '</td>';
+    h += '<td>' + esc(p.ghi_chu_ky_luat || "") + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  h += '<div style="margin-top:30px;display:flex;justify-content:space-around;text-align:center;">';
+  h += '  <div><b>NGƯỜI LẬP BIỂU</b><br><br><br><br>(Ký, họ tên)</div>';
+  h += '  <div><b>TỔ TRƯỞNG / QUẢN LÝ</b><br><br><br><br>(Ký, họ tên)</div>';
+  h += '  <div><b>CHỈ HUY ĐỘI SX02</b><br><br><br><br>(Ký, đóng dấu)</div>';
+  h += '</div>';
+  h += '</body></html>';
+
+  printWindow.document.write(h);
+  printWindow.document.close();
 }
 
 /* ---------- Modal Thống Kê & Phân Tích Toàn Diện (Analytics Modal) ---------- */
@@ -2911,9 +3764,18 @@ function showStats(initTab){
 function setView(v){
   state.view = v;
   hideSugg();
-  document.getElementById("tabPeople").classList.toggle("on", v === "people");
-  document.getElementById("tabRooms").classList.toggle("on", v === "rooms");
-  document.getElementById("bAdd").style.display = v === "people" ? "" : "none";
+  const tabPeople = document.getElementById("tabPeople");
+  const tabRooms = document.getElementById("tabRooms");
+  if(tabPeople) tabPeople.classList.toggle("on", v === "people");
+  if(tabRooms) tabRooms.classList.toggle("on", v === "rooms");
+
+  const bnavPeople = document.getElementById("bnavPeople");
+  const bnavRooms = document.getElementById("bnavRooms");
+  if(bnavPeople) bnavPeople.classList.toggle("on", v === "people");
+  if(bnavRooms) bnavRooms.classList.toggle("on", v === "rooms");
+
+  const bAdd = document.getElementById("bAdd");
+  if(bAdd) bAdd.style.display = v === "people" ? "" : "none";
 
   const pplFilters = document.getElementById("peopleFilters");
   const roomFilters = document.getElementById("roomFilters");
@@ -3482,6 +4344,12 @@ function normServerRec(o){
 
     const rawDd = findVal("danh_gia_dao_duc", "dao_duc", "Đạo đức", "Kỷ luật", "ky_luat", "ethics");
     r.danh_gia_dao_duc = rawDd ? (parseInt(rawDd, 10) || 3) : (existing && existing.danh_gia_dao_duc != null ? existing.danh_gia_dao_duc : 3);
+
+    r.ghi_chu_ky_luat = findVal("ghi_chu_ky_luat", "ky_luat_ghi_chu", "Ghi chú kỷ luật") || (existing && existing.ghi_chu_ky_luat ? existing.ghi_chu_ky_luat : "");
+    r.ngay_ky_luat = findVal("ngay_ky_luat", "Ngày kỷ luật") || (existing && existing.ngay_ky_luat ? existing.ngay_ky_luat : "");
+    r.hinh_thuc_ky_luat = findVal("hinh_thuc_ky_luat", "Hình thức kỷ luật") || (existing && existing.hinh_thuc_ky_luat ? existing.hinh_thuc_ky_luat : "");
+    r.trang_thai_ky_luat = findVal("trang_thai_ky_luat", "Trạng thái kỷ luật") || (existing && existing.trang_thai_ky_luat ? existing.trang_thai_ky_luat : "");
+    r.nguoi_lap_bien_ban = findVal("nguoi_lap_bien_ban", "Người lập", "Người lập biên bản") || (existing && existing.nguoi_lap_bien_ban ? existing.nguoi_lap_bien_ban : "");
   }
 
   // Extract phone number from server record, with fallback to existing local record and cache
@@ -4568,6 +5436,13 @@ if(fRoomTypeEl) fRoomTypeEl.addEventListener("change", e => { state.roomType = e
 const listEl = document.getElementById("list");
 if(listEl){
   listEl.addEventListener("click", e => {
+    const discBtn = e.target.closest(".pill-discipline");
+    if(discBtn) {
+      e.stopPropagation();
+      const discId = discBtn.dataset.discId;
+      if(discId) openDisciplineQuickEdit(+discId || discId);
+      return;
+    }
     const c = e.target.closest(".card");
     if(!c) return;
     if(state.view === "rooms"){
@@ -4579,12 +5454,123 @@ if(listEl){
   });
 }
 
-// Toolbar buttons
-document.getElementById("tabPeople").onclick = () => setView("people");
-document.getElementById("tabRooms").onclick = () => setView("rooms");
+// Toolbar & Bottom Navigation buttons
+const tabPeopleBtn = document.getElementById("tabPeople");
+if(tabPeopleBtn) tabPeopleBtn.onclick = () => setView("people");
+
+const tabRoomsBtn = document.getElementById("tabRooms");
+if(tabRoomsBtn) tabRoomsBtn.onclick = () => setView("rooms");
+
 document.getElementById("bAdd").onclick = () => openEdit("__new__");
 document.getElementById("bExport").onclick = exportXlsx;
 document.getElementById("bStat").onclick = () => showStats(state.view === "rooms" ? "room" : "person");
+
+const bDisciplineBtn = document.getElementById("bDiscipline");
+if(bDisciplineBtn) bDisciplineBtn.onclick = () => showDisciplineBook();
+
+const bMoreTopBtn = document.getElementById("bMoreTop");
+if(bMoreTopBtn) bMoreTopBtn.onclick = () => openMoreMenu();
+
+// Bottom Navigation items (Fixed dock at foot of app)
+const bnavPeopleBtn = document.getElementById("bnavPeople");
+if(bnavPeopleBtn) bnavPeopleBtn.onclick = () => { setView("people"); window.scrollTo({top: 0, behavior: "smooth"}); };
+
+const bnavRoomsBtn = document.getElementById("bnavRooms");
+if(bnavRoomsBtn) bnavRoomsBtn.onclick = () => { setView("rooms"); window.scrollTo({top: 0, behavior: "smooth"}); };
+
+const bnavAddBtn = document.getElementById("bnavAdd");
+if(bnavAddBtn) bnavAddBtn.onclick = () => openEdit("__new__");
+
+const bnavDisciplineBtn = document.getElementById("bnavDiscipline");
+if(bnavDisciplineBtn) bnavDisciplineBtn.onclick = () => showDisciplineBook();
+
+const bnavStatsBtn = document.getElementById("bnavStats");
+if(bnavStatsBtn) bnavStatsBtn.onclick = () => showStats(state.view === "rooms" ? "room" : "person");
+
+const bnavMoreBtn = document.getElementById("bnavMore");
+if(bnavMoreBtn) bnavMoreBtn.onclick = () => openMoreMenu();
+
+function openMoreMenu(){
+  const s = document.getElementById("sheet");
+  if(!s) return;
+  const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+  const discCount = getDisciplineCount();
+  s.innerHTML = 
+    '<div class="sheet-h">' +
+      '<span style="font-size:20px;">⚡</span>' +
+      '<h2>Menu Tiện ích & Quản lý</h2>' +
+      '<button class="x" onclick="document.getElementById(\'overlay\').classList.remove(\'show\')">×</button>' +
+    '</div>' +
+    '<div class="sheet-b" style="padding:14px;">' +
+      '<div class="more-menu-grid">' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); exportXlsx();">' +
+          '<div class="more-menu-icon" style="background:#ecfdf5;color:#047857;">⬇️</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Xuất dữ liệu Excel (.xlsx)</div>' +
+            '<div class="more-menu-desc">Tải về danh sách 340 công nhân, số ĐT, nhóm máu, phòng ở, đánh giá</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); document.getElementById(\'fileImport\').click();">' +
+          '<div class="more-menu-icon" style="background:#eff6ff;color:#1d4ed8;">⬆️</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Nhập dữ liệu Excel</div>' +
+            '<div class="more-menu-desc">Cập nhật hoặc thêm hàng loạt hồ sơ từ file bảng tính Excel</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); syncNow(false);">' +
+          '<div class="more-menu-icon" style="background:#f0fdfa;color:#0f766e;">☁️</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Đồng bộ Google Drive & Sheets</div>' +
+            '<div class="more-menu-desc">' + (ROLE ? "Đang kết nối đám mây · Bấm để đồng bộ ngay" : "Chế độ ngoại tuyến · Bấm để kết nối hoặc cập nhật") + (q.length > 0 ? (" (⏳ " + q.length + " thay đổi chờ gửi)") : "") + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); showDisciplineBook();">' +
+          '<div class="more-menu-icon" style="background:#fff1f2;color:#be123c;">📕</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Sổ Kỷ luật & Rèn luyện ' + (discCount > 0 ? ('<span style="background:#e11d48;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px;font-weight:800;margin-left:4px;">' + discCount + '</span>') : '') + '</div>' +
+            '<div class="more-menu-desc">Theo dõi công nhân cần rèn luyện (1-2★) và quản lý biên bản vi phạm</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); showStats(state.view === \'rooms\' ? \'room\' : \'person\');">' +
+          '<div class="more-menu-icon" style="background:#fef3c7;color:#b45309;">📊</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Báo cáo & Thống kê nhân sự</div>' +
+            '<div class="more-menu-desc">Phân tích cơ cấu lao động, giới tính, nhóm máu, phòng ở và tay nghề</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); openSettings(\'logs\');">' +
+          '<div class="more-menu-icon" style="background:#f5f3ff;color:#6d28d9;">🔔</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Nhật ký thay đổi hồ sơ</div>' +
+            '<div class="more-menu-desc">Xem lịch sử các thao tác thêm mới, chỉnh sửa và điều chuyển phòng</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); openSettings(\'about\');">' +
+          '<div class="more-menu-icon" style="background:#f1f5f9;color:#334155;">📖</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Giới thiệu & Tiêu chuẩn xưởng</div>' +
+            '<div class="more-menu-desc">Chuẩn 3★ mặc định quy định, tiêu chuẩn rèn luyện và sinh hoạt ĐSX 02</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); openSettings(\'sync\');">' +
+          '<div class="more-menu-icon" style="background:#e0f2fe;color:#0284c7;">⚙️</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Cài đặt kết nối & Sao lưu</div>' +
+            '<div class="more-menu-desc">URL Apps Script, mã bảo mật Key, sao lưu file JSON và phân quyền</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); document.getElementById(\'bReset\').click();">' +
+          '<div class="more-menu-icon" style="background:#fef2f2;color:#dc2626;">↺</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Đặt lại dữ liệu ban đầu</div>' +
+            '<div class="more-menu-desc">Khôi phục 340 hồ sơ công nhân về trạng thái xuất xưởng ban đầu</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.getElementById("overlay").classList.add("show");
+}
+
 const bAboutBtn = document.getElementById("bAbout");
 if(bAboutBtn) bAboutBtn.onclick = () => openSettings("about");
 document.getElementById("bImport").onclick = () => document.getElementById("fileImport").click();
@@ -4607,6 +5593,7 @@ document.getElementById("bReset").onclick = () => {
     save();
     initFilterOptions();
     render();
+    updateDisciplineBadge();
     toast("Đã đặt lại dữ liệu gốc");
   }
 };
@@ -4614,3 +5601,4 @@ document.getElementById("bReset").onclick = () => {
 // Initial sync call
 initFilterOptions();
 render();
+updateDisciplineBadge();

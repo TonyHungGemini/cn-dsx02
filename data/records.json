@@ -26,8 +26,13 @@
     "Số điện thoại": "0975102105",
     "Số ĐT": "0975102105",
     "nhom_mau": "",
-    "danh_gia_ky_nang": 5,
-    "danh_gia_dao_duc": 5
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3,
+    "ghi_chu_ky_luat": "",
+    "ngay_ky_luat": "",
+    "hinh_thuc_ky_luat": "",
+    "trang_thai_ky_luat": "",
+    "nguoi_lap_bien_ban": ""
   },
   {
     "cmnd": "150599313",
@@ -80,8 +85,14 @@
     "Số ĐT": "0988776655",
     "phone": "0988776655",
     "nhom_mau": "",
-    "danh_gia_ky_nang": 5,
-    "danh_gia_dao_duc": 5
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3,
+    "ghi_chu_ky_luat": "Đua xe, bỏ cạo",
+    "ngay_ky_luat": "2026-10-20",
+    "hinh_thuc_ky_luat": "Cảnh cáo",
+    "trang_thai_ky_luat": "Đang theo dõi",
+    "nguoi_lap_bien_ban": "Mr Thanh",
+    "_edited": true
   },
   {
     "cmnd": "151006923",
@@ -133,7 +144,14 @@
     "so_dt": "",
     "sdt": "",
     "danh_gia_ky_nang": 3,
-    "danh_gia_dao_duc": 3
+    "danh_gia_dao_duc": 3,
+    "nhom_mau": "",
+    "ghi_chu_ky_luat": "",
+    "ngay_ky_luat": "",
+    "hinh_thuc_ky_luat": "",
+    "trang_thai_ky_luat": "",
+    "nguoi_lap_bien_ban": "",
+    "_edited": true
   },
   {
     "cmnd": "150533141",
@@ -295,7 +313,12 @@
     "Chi tiết nơi ở": "CHAMNAKROM-STOUNG-KAMPONGTHOM",
     "Địa chỉ thường trú": "Làng Samr, Xã Chamnakrap, Huyện Stoung, Kampong Thom",
     "Ghi chú": "LV",
-    "Chủ phòng": ""
+    "Chủ phòng": "",
+    "ghi_chu_ky_luat": "",
+    "ngay_ky_luat": "",
+    "hinh_thuc_ky_luat": "",
+    "trang_thai_ky_luat": "",
+    "nguoi_lap_bien_ban": ""
   },
   {
     "cmnd": "",
@@ -4404,8 +4427,13 @@
     "Số điện thoại": "0976348797",
     "Số ĐT": "0976348797",
     "nhom_mau": "",
-    "danh_gia_ky_nang": 5,
-    "danh_gia_dao_duc": 5
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3,
+    "ghi_chu_ky_luat": "",
+    "ngay_ky_luat": "",
+    "hinh_thuc_ky_luat": "",
+    "trang_thai_ky_luat": "",
+    "nguoi_lap_bien_ban": ""
   },
   {
     "cmnd": "10828787",
@@ -4434,8 +4462,13 @@
     "Số điện thoại": "0976348797",
     "Số ĐT": "0976348797",
     "nhom_mau": "",
-    "danh_gia_ky_nang": 5,
-    "danh_gia_dao_duc": 5
+    "danh_gia_ky_nang": 3,
+    "danh_gia_dao_duc": 3,
+    "ghi_chu_ky_luat": "",
+    "ngay_ky_luat": "",
+    "hinh_thuc_ky_luat": "",
+    "trang_thai_ky_luat": "",
+    "nguoi_lap_bien_ban": ""
   },
   {
     "cmnd": "80116759",
