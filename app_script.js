@@ -3540,9 +3540,77 @@ function printDisciplineReport() {
 /* ---------- Modal Thống Kê & Phân Tích Toàn Diện (Analytics Modal) ---------- */
 let currentStatTab = "person"; // "person" | "room"
 
+function animateStatCounters(container){
+  if(!container) return;
+  const els = container.querySelectorAll(".stat-num");
+  const duration = 850; // ms
+  const startTime = performance.now();
+  const items = [];
+
+  els.forEach(el => {
+    const raw = el.getAttribute("data-val") || el.textContent.trim();
+    const type = el.getAttribute("data-type") || "int";
+    const v1 = parseFloat(el.getAttribute("data-v1") || raw) || 0;
+    const v2 = parseFloat(el.getAttribute("data-v2") || "0") || 0;
+    const format = el.getAttribute("data-format") || "{v1}";
+    const suffix = el.getAttribute("data-suffix") || "";
+    items.push({ el, type, v1, v2, format, suffix });
+  });
+
+  function tick(now){
+    const elapsed = now - startTime;
+    const progress = Math.min(1, elapsed / duration);
+    const ease = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+
+    items.forEach(item => {
+      let text = "";
+      if(item.type === "int"){
+        const cur = Math.round(item.v1 * ease);
+        text = cur.toLocaleString("vi-VN") + item.suffix;
+      } else if(item.type === "decimal"){
+        const cur = (item.v1 * ease).toFixed(1);
+        text = cur + item.suffix;
+      } else if(item.type === "dual-int"){
+        const c1 = Math.round(item.v1 * ease);
+        const c2 = Math.round(item.v2 * ease);
+        text = item.format.replace("{v1}", c1).replace("{v2}", c2);
+      } else if(item.type === "dual-star"){
+        const c1 = (item.v1 * ease).toFixed(1);
+        const c2 = (item.v2 * ease).toFixed(1);
+        text = item.format.replace("{v1}", c1).replace("{v2}", c2);
+      } else if(item.type === "ratio"){
+        const c1 = Math.round(item.v1 * ease);
+        const c2 = Math.round(item.v2 * ease);
+        text = item.format.replace("{v1}", c1).replace("{v2}", c2);
+      } else if(item.type === "with-pct"){
+        const c1 = Math.round(item.v1 * ease);
+        const c2 = Math.round(item.v2 * ease);
+        text = item.format.replace("{v1}", c1).replace("{v2}", c2);
+      }
+      item.el.textContent = text;
+    });
+
+    if(progress < 1){
+      requestAnimationFrame(tick);
+    }
+  }
+
+  requestAnimationFrame(tick);
+
+  // Animate progress bar widths smoothly
+  container.querySelectorAll(".stat-bar-fill").forEach(bar => {
+    const targetWidth = bar.getAttribute("data-pct") || "0%";
+    bar.style.width = "0%";
+    setTimeout(() => {
+      bar.style.width = targetWidth;
+    }, 40);
+  });
+}
+
 function showStats(initTab){
   if(initTab) currentStatTab = initTab;
   const sheet = document.getElementById("sheet");
+  if(!sheet) return;
 
   // Nhân sự data
   const byTo = {}, byLoai = { "Lao động": 0, "Gia thuộc": 0, "Khác": 0 };
@@ -3598,8 +3666,9 @@ function showStats(initTab){
     }
   });
 
-  const avgSkill = countRatedWorkers > 0 ? (sumSkill / countRatedWorkers).toFixed(1) : "—";
-  const avgEthics = countRatedWorkers > 0 ? (sumEthics / countRatedWorkers).toFixed(1) : "—";
+  const avgSkill = countRatedWorkers > 0 ? (sumSkill / countRatedWorkers).toFixed(1) : "3.0";
+  const avgEthics = countRatedWorkers > 0 ? (sumEthics / countRatedWorkers).toFixed(1) : "3.0";
+  const editedCount = DATA.filter(p => p._edited).length;
 
   // Room analytics data
   const roomMap = {};
@@ -3645,89 +3714,323 @@ function showStats(initTab){
     else capDist["6+"]++;
   });
 
-  const avgDensity = allInUseRooms.length > 0 ? ((DATA.length - noRoomCount) / allInUseRooms.length).toFixed(1) : 0;
+  const avgDensity = allInUseRooms.length > 0 ? ((DATA.length - noRoomCount) / allInUseRooms.length).toFixed(1) : "0.0";
   const leaderCoverage = allInUseRooms.length > 0 ? Math.round((totalRoomsWithChu / allInUseRooms.length) * 100) : 0;
 
   // TAB 1 HTML: Nhân sự
   let toTable = "";
-  Object.keys(byTo).sort().forEach(k => {
+  const sortedTo = Object.keys(byTo).sort((a,b) => (byTo[b] || 0) - (byTo[a] || 0));
+  sortedTo.forEach((k, idx) => {
     const cnt = byTo[k];
-    const pct = Math.round((cnt / DATA.length) * 100);
-    toTable += '<tr class="clickable-row" data-filter-to="'+esc(k)+'"><td><b>'+esc(k)+'</b></td><td>'+cnt+' người ('+pct+'%)</td></tr>';
+    const pct = Math.round((cnt / (DATA.length || 1)) * 100);
+    const rankClass = idx === 0 ? "top-1" : (idx === 1 ? "top-2" : (idx === 2 ? "top-3" : ""));
+    toTable += '<tr class="clickable-row" data-filter-to="'+esc(k)+'" title="Bấm để lọc danh sách theo '+esc(k)+'">'+
+      '<td><span class="stat-rank '+rankClass+'">'+(idx+1)+'</span><b>'+esc(k)+'</b></td>'+
+      '<td style="text-align:right;font-weight:700;color:#0f766e;">'+cnt+' <span style="font-size:11px;color:#64748b;font-weight:500;">('+pct+'%)</span></td>'+
+      '<td style="width:28%;min-width:75px;padding-right:12px;">'+
+        '<div class="stat-bar-track">'+
+          '<div class="stat-bar-fill" data-pct="'+pct+'%" style="background:#0f766e;"></div>'+
+        '</div>'+
+      '</td>'+
+      '</tr>';
   });
 
+  const bloodGroups = [
+    { label: "Nhóm máu O (O, O+)", key: "O", color: "#e11d48" },
+    { label: "Nhóm máu A (A, A+)", key: "A", color: "#0284c7" },
+    { label: "Nhóm máu B (B, B+)", key: "B", color: "#7c3aed" },
+    { label: "Nhóm máu AB (AB, AB+)", key: "AB", color: "#059669" },
+    { label: "Chưa cập nhật nhóm máu", key: "Chưa rõ", color: "#94a3b8" }
+  ];
+  let bloodBarsHtml = "";
+  bloodGroups.forEach(bg => {
+    const cnt = byBlood[bg.key] || 0;
+    const pct = Math.round((cnt / (DATA.length || 1)) * 100);
+    bloodBarsHtml += 
+      '<div class="stat-bar-item">'+
+        '<div class="stat-bar-label-row">'+
+          '<span>'+bg.label+'</span>'+
+          '<span style="font-weight:700;color:'+bg.color+';">'+cnt+' người <span style="color:#94a3b8;font-size:11px;font-weight:500;">('+pct+'%)</span></span>'+
+        '</div>'+
+        '<div class="stat-bar-track">'+
+          '<div class="stat-bar-fill" data-pct="'+pct+'%" style="background:'+bg.color+';"></div>'+
+        '</div>'+
+      '</div>';
+  });
+
+  const ageGroups = [
+    { label: "Dưới 25 tuổi (Thanh niên trẻ)", cnt: under25, color: "#06b6d4" },
+    { label: "25 đến 40 tuổi (Độ tuổi vàng lao động)", cnt: mid2540, color: "#0f766e" },
+    { label: "Trên 40 tuổi (Kinh nghiệm thâm niên)", cnt: over40, color: "#f59e0b" }
+  ];
+  let ageBarsHtml = "";
+  const totalWithAge = under25 + mid2540 + over40 || 1;
+  ageGroups.forEach(ag => {
+    const pct = Math.round((ag.cnt / totalWithAge) * 100);
+    ageBarsHtml += 
+      '<div class="stat-bar-item">'+
+        '<div class="stat-bar-label-row">'+
+          '<span>'+ag.label+'</span>'+
+          '<span style="font-weight:700;color:'+ag.color+';">'+ag.cnt+' người <span style="color:#94a3b8;font-size:11px;font-weight:500;">('+pct+'%)</span></span>'+
+        '</div>'+
+        '<div class="stat-bar-track">'+
+          '<div class="stat-bar-fill" data-pct="'+pct+'%" style="background:'+ag.color+';"></div>'+
+        '</div>'+
+      '</div>';
+  });
+
+  const ldPercent = Math.round(((byLoai["Lao động"] || 0) / (DATA.length || 1)) * 100);
+  const gtPercent = Math.round(((byLoai["Gia thuộc"] || 0) / (DATA.length || 1)) * 100);
+
   const tabPersonHtml =
-    '<div class="statgrid">'+
-    '<div class="stat"><b>'+DATA.length+'</b><span>Tổng số người</span></div>'+
-    '<div class="stat"><b>'+(byLoai["Lao động"]||0)+'</b><span>Lao động</span></div>'+
-    '<div class="stat"><b>'+(byLoai["Gia thuộc"]||0)+'</b><span>Gia thuộc</span></div>'+
-    '<div class="stat"><b>'+hasPhoneCount+'</b><span>Đã có Số ĐT 📞</span></div>'+
-    '<div class="stat"><b>'+avgSkill+'★ / '+avgEthics+'★</b><span>TB Kỹ năng / Đạo đức (LĐ) ⭐</span></div>'+
-    '<div class="stat"><b>'+perfect5Count+' / '+countRatedWorkers+'</b><span>5★ toàn diện (LĐ)</span></div>'+
-    '<div class="stat"><b>'+hasBloodCount+'</b><span>Đã có Nhóm máu 🩸</span></div>'+
-    '<div class="stat"><b>'+muon+'</b><span>Có tên mượn ⚑</span></div>'+
-    '<div class="stat"><b>'+countM+' Nam / '+countF+' Nữ</b><span>Giới tính</span></div>'+
-    '<div class="stat'+(noRoomCount>0?" stat-warn":"")+'"><b>'+noRoomCount+'</b><span>Chưa có phòng ⚠️</span></div>'+
-    '<div class="stat"><b>'+DATA.filter(p=>p._edited).length+'</b><span>Đã chỉnh sửa ✎</span></div>'+
+    '<div class="stat-hero-card">'+
+      '<div class="stat-hero-title"><span>🏭</span> TỔNG QUY MÔ NHÂN SỰ ĐỘI SẢN XUẤT 02</div>'+
+      '<div class="stat-hero-val">'+
+        '<span class="stat-num" data-val="'+DATA.length+'" data-type="int">0</span>'+
+        '<span style="font-size:18px;font-weight:600;opacity:0.9;">người</span>'+
+      '</div>'+
+      '<div class="stat-hero-chips">'+
+        '<span class="stat-hero-chip">👷 Lao động: '+(byLoai["Lao động"]||0)+' ('+ldPercent+'%)</span>'+
+        '<span class="stat-hero-chip">👨‍👩‍👧 Gia thuộc: '+(byLoai["Gia thuộc"]||0)+' ('+gtPercent+'%)</span>'+
+        '<span class="stat-hero-chip">⚥ '+countM+' Nam · '+countF+' Nữ</span>'+
+      '</div>'+
     '</div>'+
-    '<table class="mini"><tr><td colspan="2"><b>🩸 Phân bổ Nhóm máu (Cấp cứu & An toàn LĐ)</b></td></tr>'+
-    '<tr><td>Nhóm máu O (O, O+)</td><td>'+byBlood["O"]+' người</td></tr>'+
-    '<tr><td>Nhóm máu A (A, A+)</td><td>'+byBlood["A"]+' người</td></tr>'+
-    '<tr><td>Nhóm máu B (B, B+)</td><td>'+byBlood["B"]+' người</td></tr>'+
-    '<tr><td>Nhóm máu AB (AB, AB+)</td><td>'+byBlood["AB"]+' người</td></tr>'+
-    '<tr><td>Chưa cập nhật nhóm máu</td><td>'+byBlood["Chưa rõ"]+' người</td></tr>'+
-    '</table>'+
-    '<table class="mini"><tr><td colspan="2"><b>📊 Phân bổ theo Tổ sản xuất</b> (Bấm dòng để lọc)</td></tr>'+toTable+'</table>'+
-    '<table class="mini"><tr><td colspan="2"><b>🎂 Phân bổ Độ tuổi</b></td></tr>'+
-    '<tr><td>Dưới 25 tuổi</td><td>'+under25+' người</td></tr>'+
-    '<tr><td>25 đến 40 tuổi</td><td>'+mid2540+' người</td></tr>'+
-    '<tr><td>Trên 40 tuổi</td><td>'+over40+' người</td></tr>'+
-    '</table>';
+
+    '<div class="statgrid">'+
+      '<div class="stat-card stat-theme-teal">'+
+        '<div class="stat-card-icon">👷</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+(byLoai["Lao động"]||0)+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Lao động trực tiếp</div>'+
+        '<div class="stat-card-sub">Chiếm '+ldPercent+'% tổng nhân sự</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-purple">'+
+        '<div class="stat-card-icon">👨‍👩‍👧</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+(byLoai["Gia thuộc"]||0)+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Gia thuộc đi cùng</div>'+
+        '<div class="stat-card-sub">Chiếm '+gtPercent+'% tổng số người</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-blue">'+
+        '<div class="stat-card-icon">⚥</div>'+
+        '<div class="stat-card-num" style="font-size:17px;"><span class="stat-num" data-type="dual-int" data-v1="'+countM+'" data-v2="'+countF+'" data-format="{v1} Nam / {v2} Nữ">0 Nam / 0 Nữ</span></div>'+
+        '<div class="stat-card-label">Cơ cấu Giới tính</div>'+
+        '<div class="stat-card-sub">'+Math.round(countM/(DATA.length||1)*100)+'% Nam · '+Math.round(countF/(DATA.length||1)*100)+'% Nữ</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-amber">'+
+        '<div class="stat-card-icon">⭐</div>'+
+        '<div class="stat-card-num" style="font-size:18px;"><span class="stat-num" data-type="dual-star" data-v1="'+avgSkill+'" data-v2="'+avgEthics+'" data-format="{v1}★ / {v2}★">0.0★ / 0.0★</span></div>'+
+        '<div class="stat-card-label">TB Kỹ năng / Đạo đức</div>'+
+        '<div class="stat-card-sub">Thang 5★ (Chuẩn mặc định 3★)</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-emerald">'+
+        '<div class="stat-card-icon">🏆</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-type="ratio" data-v1="'+perfect5Count+'" data-v2="'+countRatedWorkers+'" data-format="{v1} / {v2}">0 / 0</span></div>'+
+        '<div class="stat-card-label">5★ Toàn diện (LĐ)</div>'+
+        '<div class="stat-card-sub">Đạt tối đa kỹ năng & đạo đức</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-rose">'+
+        '<div class="stat-card-icon">🩸</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+hasBloodCount+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Đã có Nhóm máu 🩸</div>'+
+        '<div class="stat-card-sub">Cần cho y tế & cấp cứu an toàn</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-blue">'+
+        '<div class="stat-card-icon">📞</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+hasPhoneCount+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Đã có Số điện thoại 📞</div>'+
+        '<div class="stat-card-sub">Liên lạc công việc & gia đình</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-amber">'+
+        '<div class="stat-card-icon">⚑</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+muon+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Có tên mượn ⚑</div>'+
+        '<div class="stat-card-sub">Cần rà soát hồ sơ định danh</div>'+
+      '</div>'+
+
+      '<div class="stat-card '+(noRoomCount > 0 ? 'stat-theme-warn' : 'stat-theme-emerald')+'">'+
+        '<div class="stat-card-icon">'+(noRoomCount > 0 ? '⚠️' : '🏡')+'</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+noRoomCount+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">'+(noRoomCount > 0 ? 'Chưa có phòng ở ⚠️' : '100% Đã có phòng')+'</div>'+
+        '<div class="stat-card-sub">'+(noRoomCount > 0 ? 'Cần bố trí nơi cư trú sớm' : 'Chỗ ở ổn định hoàn toàn')+'</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-slate">'+
+        '<div class="stat-card-icon">✎</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+editedCount+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Đã chỉnh sửa thông tin</div>'+
+        '<div class="stat-card-sub">Được lưu vết tự động</div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="stat-section">'+
+      '<div class="stat-section-title">'+
+        '<span>🩸 Phân bổ Nhóm máu</span>'+
+        '<span class="stat-section-subtitle">Y tế & Cấp cứu lao động</span>'+
+      '</div>'+
+      bloodBarsHtml+
+    '</div>'+
+
+    '<div class="stat-section">'+
+      '<div class="stat-section-title">'+
+        '<span>🏭 Phân bổ theo Tổ sản xuất</span>'+
+        '<span class="stat-section-subtitle">Bấm dòng để lọc danh sách</span>'+
+      '</div>'+
+      '<div style="overflow-x:auto;">'+
+        '<table class="stat-table">'+
+          '<thead>'+
+            '<tr>'+
+              '<th>Tổ sản xuất</th>'+
+              '<th style="text-align:right;">Số lượng</th>'+
+              '<th style="padding-right:12px;">Tỷ trọng</th>'+
+            '</tr>'+
+          '</thead>'+
+          '<tbody>'+toTable+'</tbody>'+
+        '</table>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="stat-section">'+
+      '<div class="stat-section-title">'+
+        '<span>🎂 Phân bổ Độ tuổi nhân sự</span>'+
+        '<span class="stat-section-subtitle">Cơ cấu độ tuổi lao động</span>'+
+      '</div>'+
+      ageBarsHtml+
+    '</div>';
 
   // TAB 2 HTML: Phòng ở & Phân loại
   let blockTable = "";
   const sortedBlocks = Object.values(blockStats).sort((a,b) => a.name.localeCompare(b.name, "vi", {numeric:true}));
   sortedBlocks.forEach(b => {
-    const dens = b.rooms > 0 ? (b.totalPpl / b.rooms).toFixed(1) : 0;
-    blockTable += '<tr class="clickable-row" data-filter-block="'+esc(b.name)+'">'+
+    const dens = b.rooms > 0 ? (b.totalPpl / b.rooms).toFixed(1) : "0.0";
+    blockTable += '<tr class="clickable-row" data-filter-block="'+esc(b.name)+'" title="Bấm để xem các phòng dãy '+esc(b.name)+'">'+
       '<td><b>'+esc(b.name)+'</b></td>'+
-      '<td>'+b.rooms+'</td>'+
-      '<td>'+b.totalPpl+'</td>'+
-      '<td>'+b.ld+' LĐ / '+b.gt+' GT</td>'+
-      '<td>'+(b.hasChu>0?('👑 '+b.hasChu):"0")+'</td>'+
-      '<td>'+dens+'</td>'+
+      '<td><span class="stat-badge" style="background:#f1f5f9;color:#334155;">'+b.rooms+'</span></td>'+
+      '<td><b style="color:#0f766e;">'+b.totalPpl+'</b></td>'+
+      '<td><span style="font-size:11.5px;color:#475569;">'+b.ld+' LĐ / '+b.gt+' GT</span></td>'+
+      '<td>'+(b.hasChu > 0 ? ('<span class="stat-badge" style="background:#fef3c7;color:#b45309;">👑 '+b.hasChu+'</span>') : '<span style="color:#cbd5e1;">—</span>')+'</td>'+
+      '<td><span class="stat-badge" style="background:#e0f2fe;color:#0369a1;">'+dens+' ng/p</span></td>'+
       '</tr>';
   });
 
   const tabRoomHtml =
-    '<div class="statgrid">'+
-    '<div class="stat"><b>'+allInUseRooms.length+'</b><span>Tổng số phòng đang ở</span></div>'+
-    '<div class="stat"><b>'+avgDensity+'</b><span>TB người / phòng</span></div>'+
-    '<div class="stat"><b>'+totalRoomsWithChu+' ('+leaderCoverage+'%)</b><span>Đã có Chủ phòng 👑</span></div>'+
-    '<div class="stat'+(totalRoomsNoChu>0?" stat-warn":"")+'"><b>'+totalRoomsNoChu+'</b><span>Chưa có Chủ phòng ⚠️</span></div>'+
-    '<div class="stat"><b>'+(capDist["4-5"]+capDist["6+"])+'</b><span>Phòng đông (≥4 người)</span></div>'+
-    '<div class="stat"><b>'+capDist["1"]+'</b><span>Phòng 1 người (đơn)</span></div>'+
+    '<div class="stat-hero-card" style="background:linear-gradient(135deg, #0369a1 0%, #0f766e 100%);">'+
+      '<div class="stat-hero-title"><span>🏠</span> HỆ THỐNG PHÒNG Ở VÀ CƯ TRÚ ĐSX 02</div>'+
+      '<div class="stat-hero-val">'+
+        '<span class="stat-num" data-val="'+allInUseRooms.length+'" data-type="int">0</span>'+
+        '<span style="font-size:18px;font-weight:600;opacity:0.9;">phòng đang ở</span>'+
+      '</div>'+
+      '<div class="stat-hero-chips">'+
+        '<span class="stat-hero-chip">👥 Mật độ TB: '+avgDensity+' người/phòng</span>'+
+        '<span class="stat-hero-chip">👑 Đã có chủ: '+totalRoomsWithChu+' phòng ('+leaderCoverage+'%)</span>'+
+        '<span class="stat-hero-chip">'+(totalRoomsNoChu > 0 ? ('⚠️ Chưa có chủ: ' + totalRoomsNoChu) : '✅ 100% có chủ phòng')+'</span>'+
+      '</div>'+
     '</div>'+
-    '<table class="mini"><tr><td colspan="2"><b>👥 Phân loại sức chứa phòng</b></td></tr>'+
-    '<tr class="clickable-row" data-filter-cap="1"><td>Phòng 1 người (ở riêng)</td><td>'+capDist["1"]+' phòng</td></tr>'+
-    '<tr class="clickable-row" data-filter-cap="2-3"><td>Phòng 2 - 3 người (vừa)</td><td>'+capDist["2-3"]+' phòng</td></tr>'+
-    '<tr class="clickable-row" data-filter-cap="4+"><td>Phòng đông (4 người trở lên)</td><td>'+(capDist["4-5"]+capDist["6+"])+' phòng</td></tr>'+
-    '</table>'+
-    '<div style="font-size:12.5px;font-weight:700;margin:12px 0 6px;color:var(--green-d)">🏢 Thống kê chi tiết theo Dãy phòng (Bấm để xem phòng)</div>'+
-    '<div class="stat-table-wrap">'+
-    '<table class="mini" style="font-size:12px">'+
-    '<thead><tr style="background:#eef2ef"><th style="text-align:left;padding:6px 4px">Dãy</th><th style="padding:6px 4px">Số phòng</th><th style="padding:6px 4px">Tổng người</th><th style="padding:6px 4px">Thành phần</th><th style="padding:6px 4px">Có Chủ 👑</th><th style="padding:6px 4px">Mật độ TB</th></tr></thead>'+
-    '<tbody>'+blockTable+'</tbody>'+
-    '</table></div>';
+
+    '<div class="statgrid">'+
+      '<div class="stat-card stat-theme-blue">'+
+        '<div class="stat-card-icon">👥</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+avgDensity+'" data-type="decimal">0.0</span></div>'+
+        '<div class="stat-card-label">Mật độ trung bình</div>'+
+        '<div class="stat-card-sub">Người trên mỗi phòng</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-amber">'+
+        '<div class="stat-card-icon">👑</div>'+
+        '<div class="stat-card-num" style="font-size:17px;"><span class="stat-num" data-type="with-pct" data-v1="'+totalRoomsWithChu+'" data-v2="'+leaderCoverage+'" data-format="{v1} phòng ({v2}%)">0 (0%)</span></div>'+
+        '<div class="stat-card-label">Đã có Chủ phòng 👑</div>'+
+        '<div class="stat-card-sub">Tỷ lệ bao phủ quản lý phòng</div>'+
+      '</div>'+
+
+      '<div class="stat-card '+(totalRoomsNoChu > 0 ? 'stat-theme-warn' : 'stat-theme-emerald')+'">'+
+        '<div class="stat-card-icon">'+(totalRoomsNoChu > 0 ? '⚠️' : '✅')+'</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+totalRoomsNoChu+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">'+(totalRoomsNoChu > 0 ? 'Chưa có Chủ phòng ⚠️' : 'Đầy đủ Chủ phòng')+'</div>'+
+        '<div class="stat-card-sub">'+(totalRoomsNoChu > 0 ? 'Cần bầu chủ quản lý phòng' : 'Tất cả phòng đều có chủ')+'</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-teal">'+
+        '<div class="stat-card-icon">🚪</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+capDist["1"]+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Phòng 1 người (ở riêng)</div>'+
+        '<div class="stat-card-sub">Phòng đơn độc lập</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-purple">'+
+        '<div class="stat-card-icon">🏠</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+capDist["2-3"]+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Phòng vừa (2 – 3 người)</div>'+
+        '<div class="stat-card-sub">Quy mô phổ biến nhất</div>'+
+      '</div>'+
+
+      '<div class="stat-card stat-theme-slate">'+
+        '<div class="stat-card-icon">🏢</div>'+
+        '<div class="stat-card-num"><span class="stat-num" data-val="'+(capDist["4-5"]+capDist["6+"])+'" data-type="int">0</span></div>'+
+        '<div class="stat-card-label">Phòng đông (≥4 người)</div>'+
+        '<div class="stat-card-sub">Gia đình hoặc tổ ghép</div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="stat-section">'+
+      '<div class="stat-section-title">'+
+        '<span>👥 Phân loại quy mô sức chứa</span>'+
+        '<span class="stat-section-subtitle">Bấm dòng để lọc phòng</span>'+
+      '</div>'+
+      '<div style="overflow-x:auto;">'+
+        '<table class="stat-table">'+
+          '<tbody>'+
+            '<tr class="clickable-row" data-filter-cap="1" title="Xem phòng 1 người">'+
+              '<td>🚪 <b>Phòng 1 người (ở riêng)</b></td>'+
+              '<td style="text-align:right;font-weight:700;color:#0f766e;">'+capDist["1"]+' phòng</td>'+
+            '</tr>'+
+            '<tr class="clickable-row" data-filter-cap="2-3" title="Xem phòng 2 - 3 người">'+
+              '<td>🏠 <b>Phòng 2 – 3 người (vừa)</b></td>'+
+              '<td style="text-align:right;font-weight:700;color:#0f766e;">'+capDist["2-3"]+' phòng</td>'+
+            '</tr>'+
+            '<tr class="clickable-row" data-filter-cap="4+" title="Xem phòng đông 4 người trở lên">'+
+              '<td>🏢 <b>Phòng đông (4 người trở lên)</b></td>'+
+              '<td style="text-align:right;font-weight:700;color:#0f766e;">'+(capDist["4-5"]+capDist["6+"])+' phòng</td>'+
+            '</tr>'+
+          '</tbody>'+
+        '</table>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="stat-section">'+
+      '<div class="stat-section-title">'+
+        '<span>🏢 Chi tiết theo từng Dãy phòng</span>'+
+        '<span class="stat-section-subtitle">Bấm dòng để mở dãy phòng</span>'+
+      '</div>'+
+      '<div style="overflow-x:auto;">'+
+        '<table class="stat-table">'+
+          '<thead>'+
+            '<tr>'+
+              '<th>Dãy</th>'+
+              '<th>Số phòng</th>'+
+              '<th>Tổng người</th>'+
+              '<th>Thành phần</th>'+
+              '<th>Có Chủ 👑</th>'+
+              '<th>Mật độ TB</th>'+
+            '</tr>'+
+          '</thead>'+
+          '<tbody>'+blockTable+'</tbody>'+
+        '</table>'+
+      '</div>'+
+    '</div>';
 
   sheet.innerHTML =
     '<div class="sheet-h">'+
-    '<h2>📊 Thống kê & Phân tích hệ thống</h2>'+
-    '<button class="x" id="bClose">×</button>'+
+      '<h2>📊 Thống kê & Phân tích hệ thống</h2>'+
+      '<button class="x" id="bClose">×</button>'+
     '</div>'+
     '<div class="stat-tabs-bar">'+
-    '<button class="stat-tab-btn'+(currentStatTab==="person"?" on":"")+'" id="sTabPerson">👥 Thống kê Nhân sự</button>'+
-    '<button class="stat-tab-btn'+(currentStatTab==="room"?" on":"")+'" id="sTabRoom">🏠 Thống kê & Dãy phòng</button>'+
+      '<button class="stat-tab-btn'+(currentStatTab==="person"?" on":"")+'" id="sTabPerson">👥 Thống kê Nhân sự</button>'+
+      '<button class="stat-tab-btn'+(currentStatTab==="room"?" on":"")+'" id="sTabRoom">🏠 Thống kê & Dãy phòng</button>'+
     '</div>'+
     '<div class="statbox">'+(currentStatTab==="person" ? tabPersonHtml : tabRoomHtml)+'</div>';
 
@@ -3758,6 +4061,9 @@ function showStats(initTab){
       }
     };
   });
+
+  // Run dynamic number counter and progress bar animations
+  animateStatCounters(sheet);
 }
 
 /* ---------- Switch View (People vs Rooms) ---------- */
@@ -3775,7 +4081,7 @@ function setView(v){
   if(bnavRooms) bnavRooms.classList.toggle("on", v === "rooms");
 
   const bAdd = document.getElementById("bAdd");
-  if(bAdd) bAdd.style.display = v === "people" ? "" : "none";
+  if(bAdd) bAdd.style.display = "none";
 
   const pplFilters = document.getElementById("peopleFilters");
   const roomFilters = document.getElementById("roomFilters");
@@ -4703,7 +5009,8 @@ function applyRole(){
   }
   const lb = document.getElementById("bLog");
   if(lb) lb.style.display = "";
-  document.getElementById("bAdd").style.display = (state.view === "people") ? "" : "none";
+  const bAddEl = document.getElementById("bAdd");
+  if(bAddEl) bAddEl.style.display = "none";
 }
 
 let curSettingsTab = "sync"; // "sync" | "data" | "prefs" | "logs" | "about"
@@ -5461,9 +5768,17 @@ if(tabPeopleBtn) tabPeopleBtn.onclick = () => setView("people");
 const tabRoomsBtn = document.getElementById("tabRooms");
 if(tabRoomsBtn) tabRoomsBtn.onclick = () => setView("rooms");
 
-document.getElementById("bAdd").onclick = () => openEdit("__new__");
-document.getElementById("bExport").onclick = exportXlsx;
-document.getElementById("bStat").onclick = () => showStats(state.view === "rooms" ? "room" : "person");
+const bAddBtn = document.getElementById("bAdd");
+if(bAddBtn) bAddBtn.onclick = () => openEdit("__new__");
+
+const bExportBtn = document.getElementById("bExport");
+if(bExportBtn) bExportBtn.onclick = exportXlsx;
+
+const bStatBtn = document.getElementById("bStat");
+if(bStatBtn) bStatBtn.onclick = () => showStats(state.view === "rooms" ? "room" : "person");
+
+const bTopSyncBtn = document.getElementById("bTopSync");
+if(bTopSyncBtn) bTopSyncBtn.onclick = () => syncNow(false);
 
 const bDisciplineBtn = document.getElementById("bDiscipline");
 if(bDisciplineBtn) bDisciplineBtn.onclick = () => showDisciplineBook();
@@ -5503,11 +5818,21 @@ function openMoreMenu(){
     '</div>' +
     '<div class="sheet-b" style="padding:14px;">' +
       '<div class="more-menu-grid">' +
-        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); exportXlsx();">' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); showStats(state.view === \'rooms\' ? \'room\' : \'person\');">' +
+          '<div class="more-menu-icon" style="background:#fef3c7;color:#b45309;">📊</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title">Báo cáo & Thống kê nhân sự</div>' +
+            '<div class="more-menu-desc">Phân tích cơ cấu lao động, giới tính, nhóm máu, phòng ở và tay nghề</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card more-menu-card-highlight" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); exportXlsx();" title="Tải xuống file bảng tính Excel toàn bộ danh sách">' +
           '<div class="more-menu-icon" style="background:#ecfdf5;color:#047857;">⬇️</div>' +
           '<div class="more-menu-text">' +
-            '<div class="more-menu-title">Xuất dữ liệu Excel (.xlsx)</div>' +
-            '<div class="more-menu-desc">Tải về danh sách 340 công nhân, số ĐT, nhóm máu, phòng ở, đánh giá</div>' +
+            '<div class="more-menu-title" style="display:flex;align-items:center;gap:6px;">' +
+              '<span>Xuất dữ liệu Excel (.xlsx)</span>' +
+              '<span style="background:#059669;color:#fff;font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;">Tải về máy</span>' +
+            '</div>' +
+            '<div class="more-menu-desc">Tải về toàn bộ ' + DATA.length + ' hồ sơ công nhân, số ĐT, nhóm máu, phòng ở, đánh giá</div>' +
           '</div>' +
         '</div>' +
         '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); document.getElementById(\'fileImport\').click();">' +
@@ -5529,13 +5854,6 @@ function openMoreMenu(){
           '<div class="more-menu-text">' +
             '<div class="more-menu-title">Sổ Kỷ luật & Rèn luyện ' + (discCount > 0 ? ('<span style="background:#e11d48;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px;font-weight:800;margin-left:4px;">' + discCount + '</span>') : '') + '</div>' +
             '<div class="more-menu-desc">Theo dõi công nhân cần rèn luyện (1-2★) và quản lý biên bản vi phạm</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); showStats(state.view === \'rooms\' ? \'room\' : \'person\');">' +
-          '<div class="more-menu-icon" style="background:#fef3c7;color:#b45309;">📊</div>' +
-          '<div class="more-menu-text">' +
-            '<div class="more-menu-title">Báo cáo & Thống kê nhân sự</div>' +
-            '<div class="more-menu-desc">Phân tích cơ cấu lao động, giới tính, nhóm máu, phòng ở và tay nghề</div>' +
           '</div>' +
         '</div>' +
         '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); openSettings(\'logs\');">' +
