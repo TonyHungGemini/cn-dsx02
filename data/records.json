@@ -87,12 +87,14 @@
     "nhom_mau": "",
     "danh_gia_ky_nang": 3,
     "danh_gia_dao_duc": 3,
-    "ghi_chu_ky_luat": "Đua xe, bỏ cạo",
-    "ngay_ky_luat": "2026-10-20",
+    "ghi_chu_ky_luat": "Vi phạm an toàn lao động ngày 22/10/2026 - nhắc nhở lần 1",
+    "ngay_ky_luat": "2026-10-22",
     "hinh_thuc_ky_luat": "Cảnh cáo",
-    "trang_thai_ky_luat": "Đang theo dõi",
-    "nguoi_lap_bien_ban": "Mr Thanh",
-    "_edited": true
+    "trang_thai_ky_luat": "Đã khắc phục xong (Đạt chuẩn)",
+    "nguoi_lap_bien_ban": "Tổ trưởng Ca 1",
+    "_edited": true,
+    "_manuallyRated": true,
+    "_editedAt": 1792718037452
   },
   {
     "cmnd": "151006923",

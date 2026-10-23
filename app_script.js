@@ -3162,18 +3162,22 @@ function openDisciplineQuickEdit(id) {
     p.nguoi_lap_bien_ban = newNguoiLap;
     p.ghi_chu_ky_luat = newNote;
     p._edited = true;
+    p._manuallyRated = true;
+    p._editedAt = Date.now();
 
     queueChange(p);
     save();
     render();
     updateDisciplineBadge();
 
-    // Sync to server
+    // Instant server persistence for cross-device synchronization (Admin Phone <-> Computer)
     try {
       fetch("/api/save-record", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ record: p })
+      }).then(() => {
+        if (typeof syncNow === "function") syncNow(true);
       }).catch(e => console.warn("Save discipline error:", e));
     } catch(e) {}
 
@@ -3438,7 +3442,9 @@ function showDisciplineBook(initFilter, initSearch) {
         worker.danh_gia_ky_nang = 3;
         worker.danh_gia_dao_duc = 3;
         worker.trang_thai_ky_luat = "Đã khắc phục xong (Đạt chuẩn)";
+        worker._manuallyRated = true;
         worker._edited = true;
+        worker._editedAt = Date.now();
         queueChange(worker);
         save();
         render();
@@ -3448,6 +3454,8 @@ function showDisciplineBook(initFilter, initSearch) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ record: worker })
+          }).then(() => {
+            if (typeof syncNow === "function") syncNow(true);
           }).catch(() => {});
         } catch(e) {}
         toast("Đã nâng 3★ Đạt chuẩn cho " + (worker.ten_that || "công nhân"));
@@ -3549,6 +3557,9 @@ function openAddDisciplineWorker() {
         if (getSkillRating(worker) >= 3 && getEthicsRating(worker) >= 3) {
           worker.danh_gia_dao_duc = 2; // Default to 2 stars (vi phạm nhắc nhở)
         }
+        worker._manuallyRated = true;
+        worker._edited = true;
+        worker._editedAt = Date.now();
         if (!worker.ngay_ky_luat) {
           worker.ngay_ky_luat = new Date().toISOString().slice(0, 10);
         }
@@ -4725,6 +4736,27 @@ function enrichRecordForServer(r){
   if(o.dia_chi != null) o["Địa chỉ thường trú"] = o.dia_chi;
   if(o.ghi_chu != null) o["Ghi chú"] = o.ghi_chu;
   o["Chủ phòng"] = o.chu_phong ? "x" : "";
+
+  // Preserve rating and discipline fields for full server & cloud synchronization
+  if(o.danh_gia_ky_nang != null) {
+    o["danh_gia_ky_nang"] = o.danh_gia_ky_nang;
+    o["Kỹ năng"] = o.danh_gia_ky_nang;
+  }
+  if(o.danh_gia_dao_duc != null) {
+    o["danh_gia_dao_duc"] = o.danh_gia_dao_duc;
+    o["Đạo đức"] = o.danh_gia_dao_duc;
+  }
+  if(o.ghi_chu_ky_luat != null) {
+    o["ghi_chu_ky_luat"] = o.ghi_chu_ky_luat;
+    o["Ghi chú kỷ luật"] = o.ghi_chu_ky_luat;
+  }
+  if(o.ngay_ky_luat != null) o["Ngày kỷ luật"] = o.ngay_ky_luat;
+  if(o.hinh_thuc_ky_luat != null) o["Hình thức kỷ luật"] = o.hinh_thuc_ky_luat;
+  if(o.trang_thai_ky_luat != null) o["Trạng thái kỷ luật"] = o.trang_thai_ky_luat;
+  if(o.nguoi_lap_bien_ban != null) o["Người lập biên bản"] = o.nguoi_lap_bien_ban;
+  if(o._manuallyRated != null) o._manuallyRated = o._manuallyRated;
+  if(o._editedAt != null) o._editedAt = o._editedAt;
+
   return o;
 }
 
@@ -4824,16 +4856,22 @@ function normServerRec(o){
     r.danh_gia_dao_duc = "";
   } else {
     const rawKn = findVal("danh_gia_ky_nang", "ky_nang", "Kỹ năng", "Tay nghề", "tay_nghe", "skill");
-    r.danh_gia_ky_nang = rawKn ? (parseInt(rawKn, 10) || 3) : (existing && existing.danh_gia_ky_nang != null ? existing.danh_gia_ky_nang : 3);
+    r.danh_gia_ky_nang = rawKn ? (parseInt(rawKn, 10) || 3) : (o.danh_gia_ky_nang != null ? (parseInt(o.danh_gia_ky_nang, 10) || 3) : (existing && existing.danh_gia_ky_nang != null ? existing.danh_gia_ky_nang : 3));
 
     const rawDd = findVal("danh_gia_dao_duc", "dao_duc", "Đạo đức", "Kỷ luật", "ky_luat", "ethics");
-    r.danh_gia_dao_duc = rawDd ? (parseInt(rawDd, 10) || 3) : (existing && existing.danh_gia_dao_duc != null ? existing.danh_gia_dao_duc : 3);
+    r.danh_gia_dao_duc = rawDd ? (parseInt(rawDd, 10) || 3) : (o.danh_gia_dao_duc != null ? (parseInt(o.danh_gia_dao_duc, 10) || 3) : (existing && existing.danh_gia_dao_duc != null ? existing.danh_gia_dao_duc : 3));
 
-    r.ghi_chu_ky_luat = findVal("ghi_chu_ky_luat", "ky_luat_ghi_chu", "Ghi chú kỷ luật") || (existing && existing.ghi_chu_ky_luat ? existing.ghi_chu_ky_luat : "");
-    r.ngay_ky_luat = findVal("ngay_ky_luat", "Ngày kỷ luật") || (existing && existing.ngay_ky_luat ? existing.ngay_ky_luat : "");
-    r.hinh_thuc_ky_luat = findVal("hinh_thuc_ky_luat", "Hình thức kỷ luật") || (existing && existing.hinh_thuc_ky_luat ? existing.hinh_thuc_ky_luat : "");
-    r.trang_thai_ky_luat = findVal("trang_thai_ky_luat", "Trạng thái kỷ luật") || (existing && existing.trang_thai_ky_luat ? existing.trang_thai_ky_luat : "");
-    r.nguoi_lap_bien_ban = findVal("nguoi_lap_bien_ban", "Người lập", "Người lập biên bản") || (existing && existing.nguoi_lap_bien_ban ? existing.nguoi_lap_bien_ban : "");
+    r.ghi_chu_ky_luat = findVal("ghi_chu_ky_luat", "ky_luat_ghi_chu", "Ghi chú kỷ luật") || (o.ghi_chu_ky_luat != null ? String(o.ghi_chu_ky_luat).trim() : (existing && existing.ghi_chu_ky_luat ? existing.ghi_chu_ky_luat : ""));
+    r.ngay_ky_luat = findVal("ngay_ky_luat", "Ngày kỷ luật") || (o.ngay_ky_luat != null ? String(o.ngay_ky_luat).trim() : (existing && existing.ngay_ky_luat ? existing.ngay_ky_luat : ""));
+    r.hinh_thuc_ky_luat = findVal("hinh_thuc_ky_luat", "Hình thức kỷ luật") || (o.hinh_thuc_ky_luat != null ? String(o.hinh_thuc_ky_luat).trim() : (existing && existing.hinh_thuc_ky_luat ? existing.hinh_thuc_ky_luat : ""));
+    r.trang_thai_ky_luat = findVal("trang_thai_ky_luat", "Trạng thái kỷ luật") || (o.trang_thai_ky_luat != null ? String(o.trang_thai_ky_luat).trim() : (existing && existing.trang_thai_ky_luat ? existing.trang_thai_ky_luat : ""));
+    r.nguoi_lap_bien_ban = findVal("nguoi_lap_bien_ban", "Người lập", "Người lập biên bản") || (o.nguoi_lap_bien_ban != null ? String(o.nguoi_lap_bien_ban).trim() : (existing && existing.nguoi_lap_bien_ban ? existing.nguoi_lap_bien_ban : ""));
+
+    if (o._manuallyRated != null) r._manuallyRated = Boolean(o._manuallyRated);
+    else if (existing && existing._manuallyRated) r._manuallyRated = true;
+
+    if (o._editedAt != null) r._editedAt = o._editedAt;
+    else if (existing && existing._editedAt) r._editedAt = existing._editedAt;
   }
 
   // Extract phone number from server record, with fallback to existing local record and cache
@@ -4904,8 +4942,33 @@ function mergeServerData(serverList, queuedList){
       srec.sdt = "";
     }
 
-    // Preserve edited badge if record was edited locally
-    if((existing && existing._edited) || queued){
+    // Discipline & rating precedence:
+    // If queued edit exists locally, preserve queued ratings & discipline
+    // Else take server's incoming values directly!
+    if (queued) {
+      if (queued.ghi_chu_ky_luat != null) srec.ghi_chu_ky_luat = queued.ghi_chu_ky_luat;
+      if (queued.danh_gia_ky_nang != null) srec.danh_gia_ky_nang = queued.danh_gia_ky_nang;
+      if (queued.danh_gia_dao_duc != null) srec.danh_gia_dao_duc = queued.danh_gia_dao_duc;
+      if (queued.ngay_ky_luat != null) srec.ngay_ky_luat = queued.ngay_ky_luat;
+      if (queued.hinh_thuc_ky_luat != null) srec.hinh_thuc_ky_luat = queued.hinh_thuc_ky_luat;
+      if (queued.trang_thai_ky_luat != null) srec.trang_thai_ky_luat = queued.trang_thai_ky_luat;
+      if (queued.nguoi_lap_bien_ban != null) srec.nguoi_lap_bien_ban = queued.nguoi_lap_bien_ban;
+      srec._edited = true;
+      srec._manuallyRated = true;
+    } else {
+      // Not in local queue: server's values are authoritative for discipline & ratings
+      if (rawRec.ghi_chu_ky_luat != null) srec.ghi_chu_ky_luat = String(rawRec.ghi_chu_ky_luat).trim();
+      if (rawRec.danh_gia_ky_nang != null) srec.danh_gia_ky_nang = parseInt(rawRec.danh_gia_ky_nang, 10) || 3;
+      if (rawRec.danh_gia_dao_duc != null) srec.danh_gia_dao_duc = parseInt(rawRec.danh_gia_dao_duc, 10) || 3;
+      if (rawRec.ngay_ky_luat != null) srec.ngay_ky_luat = String(rawRec.ngay_ky_luat).trim();
+      if (rawRec.hinh_thuc_ky_luat != null) srec.hinh_thuc_ky_luat = String(rawRec.hinh_thuc_ky_luat).trim();
+      if (rawRec.trang_thai_ky_luat != null) srec.trang_thai_ky_luat = String(rawRec.trang_thai_ky_luat).trim();
+      if (rawRec.nguoi_lap_bien_ban != null) srec.nguoi_lap_bien_ban = String(rawRec.nguoi_lap_bien_ban).trim();
+      if (rawRec._manuallyRated) srec._manuallyRated = true;
+    }
+
+    // Preserve edited badge if record was edited locally in queue
+    if(queued){
       srec._edited = true;
     }
 
@@ -5015,6 +5078,13 @@ async function syncNow(silent){
           save();
           initFilterOptions();
           render();
+          updateDisciplineBadge();
+
+          // If discipline book is currently open on computer screen, live-refresh it
+          const isDiscBookOpen = document.getElementById("bCloseDiscBook");
+          if(isDiscBookOpen && typeof showDisciplineBook === "function"){
+            showDisciplineBook(currentDiscFilter, currentDiscSearch);
+          }
         }
       }
     }
@@ -5127,6 +5197,12 @@ async function syncNow(silent){
       save();
       initFilterOptions();
       render();
+      updateDisciplineBadge();
+
+      const isDiscBookOpen = document.getElementById("bCloseDiscBook");
+      if(isDiscBookOpen && typeof showDisciplineBook === "function"){
+        showDisciplineBook(currentDiscFilter, currentDiscSearch);
+      }
 
       // Broadcast merged dataset back to server.js
       try {
@@ -5891,12 +5967,12 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("focus", () => {
   syncNow(true);
 });
-// Periodic silent background sync every 10 seconds to keep devices in lockstep
+// Periodic silent background sync every 4 seconds to keep devices (phone <-> computer) in lockstep
 setInterval(() => {
   if(!document.hidden){
     syncNow(true);
   }
-}, 10000);
+}, 4000);
 
 // Search input
 const qEl = document.getElementById("q");
@@ -6033,45 +6109,161 @@ if(bnavStatsBtn) bnavStatsBtn.onclick = () => showStats(state.view === "rooms" ?
 const bnavMoreBtn = document.getElementById("bnavMore");
 if(bnavMoreBtn) bnavMoreBtn.onclick = () => openMoreMenu();
 
-let deferredInstallPrompt = null;
+let deferredInstallPrompt = window.__deferredInstallPrompt || null;
+
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
-});
-window.addEventListener("appinstalled", () => {
-  deferredInstallPrompt = null;
-  toast("Đã cài đặt ứng dụng thành công! 🎉");
+  window.__deferredInstallPrompt = e;
+  updateInstallButtonState();
 });
 
-function triggerPWAInstall(){
+window.addEventListener("pwa-prompt-ready", (e) => {
+  deferredInstallPrompt = e.detail || window.__deferredInstallPrompt;
+  updateInstallButtonState();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  window.__deferredInstallPrompt = null;
+  toast("Đã cài đặt ứng dụng thành công! 🎉");
+  updateInstallButtonState();
+});
+
+window.addEventListener("pwa-installed-success", () => {
+  deferredInstallPrompt = null;
+  window.__deferredInstallPrompt = null;
+  toast("Đã cài đặt ứng dụng thành công! 🎉");
+  updateInstallButtonState();
+});
+
+function updateInstallButtonState(){
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator && window.navigator.standalone === true);
+  const bTopInstallBtn = document.getElementById("bTopInstall");
+  if(bTopInstallBtn){
+    if(isStandalone){
+      bTopInstallBtn.innerHTML = "✓ Đã cài";
+      bTopInstallBtn.style.opacity = "0.85";
+      bTopInstallBtn.title = "Ứng dụng đang chạy ở chế độ App độc lập";
+    } else {
+      bTopInstallBtn.innerHTML = "📲 Cài App";
+      bTopInstallBtn.style.opacity = "1";
+      bTopInstallBtn.title = "Cài đặt ứng dụng trực tiếp vào màn hình chính";
+    }
+  }
+}
+updateInstallButtonState();
+
+async function triggerPWAInstall(){
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator && window.navigator.standalone === true);
   if(isStandalone){
     toast("✓ Bạn đang mở ứng dụng ở chế độ PWA độc lập.");
     return;
   }
 
-  // 1. Native prompt on Android / Chromium Desktop
-  if(deferredInstallPrompt){
-    deferredInstallPrompt.prompt();
-    deferredInstallPrompt.userChoice.then((choice) => {
+  // 1. Direct 1-click Native prompt if already captured
+  let promptEvent = deferredInstallPrompt || window.__deferredInstallPrompt;
+  if(promptEvent){
+    try {
+      promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
       if(choice && choice.outcome === "accepted"){
         toast("Đang cài đặt ứng dụng vào thiết bị… 🎉");
         deferredInstallPrompt = null;
+        window.__deferredInstallPrompt = null;
+        updateInstallButtonState();
       }
-    });
+    } catch(err){
+      console.warn("PWA prompt error:", err);
+    }
     return;
   }
 
-  // 2. Custom visual guide for iPhone (Chrome iOS & Safari) and desktop
   const ua = (navigator.userAgent || "").toLowerCase();
   const isIOS = /iphone|ipad|ipod/.test(ua);
-  const isChromeIOS = isIOS && (ua.includes("crios") || ua.includes("chrome"));
+  const isInApp = /zalo|fbav|fban|messenger|bytedance|micromessenger|instagram|threads/i.test(ua);
+  const isChromium = /chrome|chromium|edg|samsungbrowser|opera|brave/i.test(ua) && !isIOS;
 
+  // 2. If opened in Chromium on a fresh mobile phone or PC, wait up to 1.5s for beforeinstallprompt
+  if(isChromium && !isInApp){
+    toast("⚡ Đang kết nối trình cài đặt tự động…");
+    const gotPrompt = await new Promise((resolve) => {
+      let resolved = false;
+      const cleanup = () => {
+        resolved = true;
+        window.removeEventListener("pwa-prompt-ready", onReady);
+        window.removeEventListener("beforeinstallprompt", onBip);
+      };
+      const onReady = (e) => {
+        if(!resolved){
+          cleanup();
+          resolve(e.detail || window.__deferredInstallPrompt);
+        }
+      };
+      const onBip = (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        window.__deferredInstallPrompt = e;
+        if(!resolved){
+          cleanup();
+          resolve(e);
+        }
+      };
+      window.addEventListener("pwa-prompt-ready", onReady, { once: true });
+      window.addEventListener("beforeinstallprompt", onBip, { once: true });
+
+      // Fast check if it already appeared
+      if(window.__deferredInstallPrompt){
+        cleanup();
+        resolve(window.__deferredInstallPrompt);
+        return;
+      }
+
+      setTimeout(() => {
+        if(!resolved){
+          cleanup();
+          resolve(deferredInstallPrompt || window.__deferredInstallPrompt);
+        }
+      }, 1400);
+    });
+
+    if(gotPrompt){
+      try {
+        gotPrompt.prompt();
+        const choice = await gotPrompt.userChoice;
+        if(choice && choice.outcome === "accepted"){
+          toast("Đang cài đặt ứng dụng vào thiết bị… 🎉");
+          deferredInstallPrompt = null;
+          window.__deferredInstallPrompt = null;
+          updateInstallButtonState();
+        }
+      } catch(err){
+        console.warn("PWA prompt error:", err);
+      }
+      return;
+    }
+  }
+
+  // 3. Fallback guide if native prompt is unavailable (iOS Safari, In-App Webview, or manual desktop install)
+  const isChromeIOS = isIOS && (ua.includes("crios") || ua.includes("chrome"));
   const sheet = document.getElementById("sheet");
   if(!sheet) return;
 
   let guideHtml = "";
-  if(isChromeIOS){
+  if(isInApp){
+    guideHtml =
+      '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:12px;">' +
+        '<div style="font-weight:800;color:#1e40af;font-size:14.5px;margin-bottom:8px;">⚠️ Bạn đang mở trong ứng dụng ' + (ua.includes("zalo") ? "Zalo" : "Facebook") + ':</div>' +
+        '<ol style="margin:0;padding-left:18px;color:#1e3a8a;font-size:13px;line-height:1.65;">' +
+          '<li>Nhấn vào biểu tượng <b>ba chấm (⋮)</b> hoặc <b>Chia sẻ</b> ở góc màn hình.</li>' +
+          '<li>Chọn mục <b>"Mở bằng trình duyệt"</b> (hoặc Mở bằng Chrome / Safari).</li>' +
+          '<li>Tại đó, bấm nút <b>📲 Cài App</b> sẽ tự động cài ngay lập tức mà không cần thao tác thêm.</li>' +
+        '</ol>' +
+      '</div>' +
+      '<div style="text-align:center;margin-bottom:12px;">' +
+        '<button type="button" class="btn" style="background:#0f766e;color:#fff;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;" onclick="navigator.clipboard && navigator.clipboard.writeText(location.href); toast(\'Đã sao chép link! Hãy dán vào Chrome/Safari\');">📋 Sao chép link để mở trên Chrome</button>' +
+      '</div>';
+  } else if(isChromeIOS){
     guideHtml =
       '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:12px;">' +
         '<div style="font-weight:800;color:#1e40af;font-size:14.5px;margin-bottom:8px;">📲 Hướng dẫn cài trên Chrome (iPhone / iPad):</div>' +
@@ -6084,9 +6276,9 @@ function triggerPWAInstall(){
   } else if(isIOS){
     guideHtml =
       '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:12px;">' +
-        '<div style="font-weight:800;color:#1e40af;font-size:14.5px;margin-bottom:8px;">📲 Hướng dẫn cài trên Safari (iPhone / iPad):</div>' +
+        '<div style="font-weight:800;color:#1e40af;font-size:14.5px;margin-bottom:8px;">📲 Cài đặt nhanh trên Safari (iPhone / iPad):</div>' +
         '<ol style="margin:0;padding-left:18px;color:#1e3a8a;font-size:13px;line-height:1.65;">' +
-          '<li>Nhấn nút <b>Chia sẻ</b> (biểu tượng hình vuông có mũi tên hướng lên ⬆️) ở thanh công cụ phía dưới Safari.</li>' +
+          '<li>Nhấn nút <b>Chia sẻ</b> (biểu tượng hình vuông có mũi tên hướng lên ⬆️) ở thanh dưới cùng Safari.</li>' +
           '<li>Cuộn tìm và chọn mục <b>"Thêm vào MH chính" (Add to Home Screen)</b>.</li>' +
           '<li>Nhấn nút <b>"Thêm" (Add)</b> góc trên bên phải để hoàn tất.</li>' +
         '</ol>' +
@@ -6094,11 +6286,14 @@ function triggerPWAInstall(){
   } else {
     guideHtml =
       '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:12px;">' +
-        '<div style="font-weight:800;color:#1e40af;font-size:14.5px;margin-bottom:8px;">📲 Hướng dẫn cài đặt vào màn hình:</div>' +
+        '<div style="font-weight:800;color:#1e40af;font-size:14.5px;margin-bottom:8px;">📲 Kích hoạt Cài đặt 1-Click:</div>' +
         '<ul style="margin:0;padding-left:18px;color:#1e3a8a;font-size:13px;line-height:1.65;">' +
-          '<li><b>Điện thoại Android:</b> Mở menu <b>(⋮)</b> của trình duyệt → Chọn <b>"Cài đặt ứng dụng"</b> hoặc <b>"Thêm vào Màn hình chính"</b>.</li>' +
-          '<li><b>Máy tính:</b> Bấm biểu tượng <b>Cài đặt (Install)</b> nằm trên thanh địa chỉ URL của Chrome / Edge.</li>' +
+          '<li><b>Trên Máy tính:</b> Bấm biểu tượng <b>Cài đặt (Install / ⊕)</b> nằm ngay trên thanh địa chỉ URL của Chrome / Edge.</li>' +
+          '<li><b>Điện thoại Android:</b> Mở menu <b>(⋮)</b> của Chrome → Chọn <b>"Cài đặt ứng dụng"</b>.</li>' +
         '</ul>' +
+      '</div>' +
+      '<div style="text-align:center;margin-bottom:12px;">' +
+        '<button type="button" class="btn" style="background:#0f766e;color:#fff;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;" onclick="triggerPWAInstall();">⚡ Thử lại kích hoạt tự động</button>' +
       '</div>';
   }
 

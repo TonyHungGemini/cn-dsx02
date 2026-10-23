@@ -747,7 +747,11 @@ app.post('/api/sync-data', (req, res) => {
         }
         const idx = findRecordIdx(cRec);
         if (idx >= 0) {
-          if (cRec._edited || ph) {
+          // If client explicitly edited this record, merge it and preserve discipline/ratings
+          if (cRec._edited) {
+            const isDisc = Boolean((cRec.ghi_chu_ky_luat || '').trim()) || (cRec.danh_gia_ky_nang != null && cRec.danh_gia_ky_nang <= 2) || (cRec.danh_gia_dao_duc != null && cRec.danh_gia_dao_duc <= 2);
+            if (isDisc) cRec._manuallyRated = true;
+
             records[idx] = Object.assign({}, records[idx], cRec);
             if (ph) {
               records[idx].so_dt = ph;
@@ -757,6 +761,19 @@ app.post('/api/sync-data', (req, res) => {
               records[idx].phone = ph;
             }
             recordsChanged = true;
+          } else if (ph) {
+            // Client record was NOT edited! Routine phone/dataset sync from a device.
+            // ONLY update phone number if server record currently has no phone.
+            // NEVER overwrite discipline notes, ratings, or existing fields with stale unedited client data!
+            const curPh = records[idx].so_dt || records[idx].sdt || records[idx].phone || records[idx]['Số điện thoại'] || '';
+            if (!curPh) {
+              records[idx].so_dt = ph;
+              records[idx].sdt = ph;
+              records[idx]['Số điện thoại'] = ph;
+              records[idx]['Số ĐT'] = ph;
+              records[idx].phone = ph;
+              recordsChanged = true;
+            }
           }
         }
       });
@@ -769,8 +786,21 @@ app.post('/api/sync-data', (req, res) => {
         delete r.danh_gia_ky_nang;
         delete r.danh_gia_dao_duc;
         delete r._manuallyRated;
+        delete r.ghi_chu_ky_luat;
+        delete r.ngay_ky_luat;
+        delete r.hinh_thuc_ky_luat;
+        delete r.trang_thai_ky_luat;
+        delete r.nguoi_lap_bien_ban;
       } else {
-        if (!r._manuallyRated || r.danh_gia_ky_nang == null || r.danh_gia_dao_duc == null) {
+        const isDisc = Boolean((r.ghi_chu_ky_luat || '').trim()) || (r.danh_gia_ky_nang != null && r.danh_gia_ky_nang <= 2) || (r.danh_gia_dao_duc != null && r.danh_gia_dao_duc <= 2);
+        if (isDisc || r._manuallyRated) {
+          // Discipline or manually rated worker: PRESERVE ratings and disciplinary notes!
+          if (isDisc && !r._manuallyRated) {
+            r._manuallyRated = true;
+            recordsChanged = true;
+          }
+        } else {
+          // Standard laborer with no discipline issues: default to 3 stars
           if (r.danh_gia_ky_nang !== 3) {
             r.danh_gia_ky_nang = 3;
             recordsChanged = true;
@@ -874,12 +904,19 @@ app.post('/api/save-record', (req, res) => {
       saveStoredPhones(phones);
     }
 
+    const isDisc = Boolean((record.ghi_chu_ky_luat || '').trim()) || (record.danh_gia_ky_nang != null && record.danh_gia_ky_nang <= 2) || (record.danh_gia_dao_duc != null && record.danh_gia_dao_duc <= 2);
+    if (isDisc) record._manuallyRated = true;
+    record._edited = true;
+    record._editedAt = record._editedAt || Date.now();
+
     if (matchIdx >= 0) {
       records[matchIdx] = Object.assign({}, records[matchIdx], record);
       if (phoneVal) {
         records[matchIdx].so_dt = phoneVal;
         records[matchIdx].sdt = phoneVal;
         records[matchIdx]['Số điện thoại'] = phoneVal;
+        records[matchIdx]['Số ĐT'] = phoneVal;
+        records[matchIdx].phone = phoneVal;
       }
     } else {
       records.unshift(record);
