@@ -13,12 +13,56 @@ const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
 const PHONES_FILE = path.join(DATA_DIR, 'phones.json');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
+const IMG_CACHE_DIR = path.join(DATA_DIR, 'img_cache');
+
 try {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
+  if (!fs.existsSync(IMG_CACHE_DIR)) {
+    fs.mkdirSync(IMG_CACHE_DIR, { recursive: true });
+  }
 } catch (e) {
-  console.error('Error creating data directory:', e);
+  console.error('Error creating data/img_cache directory:', e);
+}
+
+// Load bundled preloaded images for instant offline/proxy fallback
+let serverPreloadImgs = {};
+try {
+  for (let i = 1; i <= 4; i++) {
+    const fPath = path.join(__dirname, `images-${i}.js`);
+    if (fs.existsSync(fPath)) {
+      const code = fs.readFileSync(fPath, 'utf8');
+      const box = { PRELOAD_IMG: {} };
+      const fn = new Function('window', code);
+      fn(box);
+      Object.assign(serverPreloadImgs, box.PRELOAD_IMG || {});
+    }
+  }
+  console.log(`Loaded ${Object.keys(serverPreloadImgs).length} bundled worker profiles into server image index.`);
+} catch (e) {
+  console.warn('Could not parse image bundles into server index:', e.message);
+}
+
+// Master image catalog (photos and cmnds synced from Google Apps Script)
+const IMAGES_FILE = path.join(DATA_DIR, 'images.json');
+let serverImagesCatalog = {};
+try {
+  if (fs.existsSync(IMAGES_FILE)) {
+    serverImagesCatalog = JSON.parse(fs.readFileSync(IMAGES_FILE, 'utf8'));
+    console.log(`Loaded ${Object.keys(serverImagesCatalog).length} worker image mappings from data/images.json.`);
+  }
+} catch (e) {
+  console.warn('Could not parse data/images.json:', e.message);
+}
+
+function saveStoredImagesCatalog(map) {
+  try {
+    fs.writeFileSync(IMAGES_FILE, JSON.stringify(map, null, 2), 'utf8');
+    serverImagesCatalog = map;
+  } catch (e) {
+    console.error('Error saving data/images.json:', e.message);
+  }
 }
 
 function initDataIfMissing() {
@@ -609,7 +653,7 @@ app.get('/api/records', (req, res) => {
       saveStoredPhones(phones);
     }
 
-    return res.json({ ok: true, data: records, phones: phones, config: config, count: records.length });
+    return res.json({ ok: true, data: records, phones: phones, images: serverImagesCatalog, config: config, count: records.length });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -761,6 +805,7 @@ app.post('/api/sync-data', (req, res) => {
       ok: true,
       data: records,
       phones: phones,
+      images: serverImagesCatalog,
       config: config,
       count: records.length,
       phonesCount: Object.keys(phones).length,
@@ -885,6 +930,139 @@ app.post('/api/config', (req, res) => {
     return res.json({ ok: true, config: cur });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 5b. Get master image catalog (Drive file IDs for portraits & CMNDs)
+app.get('/api/images', (req, res) => {
+  return res.json({ ok: true, images: serverImagesCatalog });
+});
+
+// 6. Universal Google Drive image proxy & persistent cache (solves Chrome on iOS / Safari login requirement)
+const inFlightGasFetches = new Map();
+
+app.get('/api/drive-image', async (req, res) => {
+  try {
+    const { fid, id, t } = req.query;
+    if (!fid && !id) {
+      res.set('Content-Type', 'image/svg+xml');
+      return res.send('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" rx="16" fill="#f1f5f9"/><circle cx="60" cy="48" r="22" fill="#cbd5e1"/><path d="M26 100c0-18 15-32 34-32s34 14 34 32z" fill="#cbd5e1"/></svg>');
+    }
+    let cleanFid = fid ? String(fid).trim().replace(/[^a-zA-Z0-9_-]/g, '') : '';
+    // Resolve from server images catalog if fid was omitted
+    if (!cleanFid && id && serverImagesCatalog[id]) {
+      cleanFid = serverImagesCatalog[id][t || 'photo'] || (t === 'cmnd' ? serverImagesCatalog[id].cmnd : serverImagesCatalog[id].photo) || '';
+    }
+
+    // 1. Check disk cache for instant 0ms response
+    if (cleanFid) {
+      const fidPath = path.join(IMG_CACHE_DIR, `${cleanFid}.jpg`);
+      if (fs.existsSync(fidPath)) {
+        res.set('Content-Type', 'image/jpeg');
+        res.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+        res.set('Access-Control-Allow-Origin', '*');
+        return res.sendFile(fidPath);
+      }
+    }
+    const cacheKey = cleanFid || `${t || 'img'}_${id}`;
+    const cachePath = path.join(IMG_CACHE_DIR, `${cacheKey}.jpg`);
+    if (fs.existsSync(cachePath)) {
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+      res.set('Access-Control-Allow-Origin', '*');
+      return res.sendFile(cachePath);
+    }
+
+    // 2. Check bundled preloaded profile (instant fallback - strictly respect requested type)
+    if (id && serverPreloadImgs[id]) {
+      const targetType = t === 'photo' ? 'photo' : 'cmnd';
+      const preUri = serverPreloadImgs[id][targetType];
+      if (preUri && typeof preUri === 'string' && preUri.startsWith('data:image/')) {
+        const m = preUri.match(/^data:([^;]+);base64,(.+)$/);
+        if (m) {
+          const buf = Buffer.from(m[2], 'base64');
+          try { fs.writeFileSync(cachePath, buf); } catch (e) {}
+          res.set('Content-Type', m[1] || 'image/jpeg');
+          res.set('Cache-Control', 'public, max-age=604800');
+          res.set('Access-Control-Allow-Origin', '*');
+          return res.send(buf);
+        }
+      }
+    }
+
+    // 3. Fetch from Google Apps Script via getImage (authenticated with server key, no Gmail login required)
+    if (cleanFid) {
+      const cfg = getStoredConfig();
+      if (cfg.url && cfg.key) {
+        try {
+          let fetchPromise = inFlightGasFetches.get(cleanFid);
+          if (!fetchPromise) {
+            fetchPromise = (async () => {
+              try {
+                const gasRes = await fetch(cfg.url, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                  body: JSON.stringify({ action: 'getImage', key: cfg.key, fileId: cleanFid }),
+                  signal: AbortSignal.timeout ? AbortSignal.timeout(9000) : undefined
+                });
+                if (gasRes.ok) {
+                  const text = await gasRes.text();
+                  const data = JSON.parse(text);
+                  if (data && data.ok && data.dataUrl) {
+                    const m = data.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    const buf = Buffer.from(m ? m[2] : data.dataUrl, 'base64');
+                    try { fs.writeFileSync(cachePath, buf); } catch (e) {}
+                    return { buf, contentType: m ? m[1] : 'image/jpeg' };
+                  }
+                }
+              } catch (gasErr) {
+                // Silently handled: fall back to thumbnail / preloaded avatar
+              }
+              return null;
+            })();
+            inFlightGasFetches.set(cleanFid, fetchPromise);
+            fetchPromise.finally(() => {
+              inFlightGasFetches.delete(cleanFid);
+            });
+          }
+
+          const gasResult = await fetchPromise;
+          if (gasResult && gasResult.buf) {
+            res.set('Content-Type', gasResult.contentType);
+            res.set('Cache-Control', 'public, max-age=604800');
+            res.set('Access-Control-Allow-Origin', '*');
+            return res.send(gasResult.buf);
+          }
+        } catch (ignored) {}
+      }
+
+      // 4. Fallback to Google Drive thumbnail endpoint
+      try {
+        const thumbRes = await fetch(`https://drive.google.com/thumbnail?id=${cleanFid}&sz=w1000`, {
+          signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined
+        });
+        const cType = thumbRes.headers.get('content-type') || '';
+        if (thumbRes.ok && cType.startsWith('image/')) {
+          const arrayBuf = await thumbRes.arrayBuffer();
+          const buf = Buffer.from(arrayBuf);
+          try { fs.writeFileSync(cachePath, buf); } catch (e) {}
+          res.set('Content-Type', cType);
+          res.set('Cache-Control', 'public, max-age=604800');
+          res.set('Access-Control-Allow-Origin', '*');
+          return res.send(buf);
+        }
+      } catch (tErr) {}
+    }
+
+    // 5. Final fallback: Crisp SVG avatar with 200 OK
+    res.set('Content-Type', 'image/svg+xml');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('Access-Control-Allow-Origin', '*');
+    return res.send('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" rx="16" fill="#f1f5f9"/><circle cx="60" cy="48" r="22" fill="#cbd5e1"/><path d="M26 100c0-18 15-32 34-32s34 14 34 32z" fill="#cbd5e1"/></svg>');
+  } catch (err) {
+    res.set('Content-Type', 'image/svg+xml');
+    res.set('Access-Control-Allow-Origin', '*');
+    return res.send('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" rx="16" fill="#f1f5f9"/><circle cx="60" cy="48" r="22" fill="#cbd5e1"/><path d="M26 100c0-18 15-32 34-32s34 14 34 32z" fill="#cbd5e1"/></svg>');
   }
 });
 

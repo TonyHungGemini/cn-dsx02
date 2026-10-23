@@ -4395,10 +4395,19 @@
     "chu_phong": false,
     "deleted": false,
     "id": 173,
-    "so_dt": "",
-    "sdt": "",
+    "so_dt": "0976920608",
+    "sdt": "0976920608",
     "danh_gia_ky_nang": 3,
-    "danh_gia_dao_duc": 3
+    "danh_gia_dao_duc": 3,
+    "nhom_mau": "",
+    "ghi_chu_ky_luat": "",
+    "ngay_ky_luat": "",
+    "hinh_thuc_ky_luat": "",
+    "trang_thai_ky_luat": "",
+    "nguoi_lap_bien_ban": "",
+    "phone": "0976920608",
+    "Số điện thoại": "0976920608",
+    "Số ĐT": "0976920608"
   },
   {
     "cmnd": "150353140",

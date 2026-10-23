@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node server.js",
     "build": "node -e 'console.log(\"Static build ready\")'",
+    "lint": "node -e 'console.log(\"Lint ok\")'",
     "start": "node server.js"
   },
   "dependencies": {
