@@ -697,8 +697,8 @@ function imgFileId(id, t){
 }
 
 function driveImgUrl(fid, id, t){
-  if (!fid) return null;
-  return "/api/drive-image?fid=" + encodeURIComponent(fid) + (id ? "&id=" + encodeURIComponent(id) : "") + (t ? "&t=" + encodeURIComponent(t) : "");
+  if (!fid && !id) return null;
+  return "/api/drive-image?" + (fid ? ("fid=" + encodeURIComponent(fid) + "&") : "") + (id ? ("id=" + encodeURIComponent(id) + "&") : "") + (t ? ("t=" + encodeURIComponent(t)) : "");
 }
 
 let TEMP_NEW_IMGS = {};
@@ -715,6 +715,10 @@ function getImg(id, t) {
   // 3. Drive File ID synced from cloud -> proxy through server with zero login
   const fid = imgFileId(id, t);
   if (fid) return driveImgUrl(fid, id, t);
+  // 4. Server-cached or proxy image by worker id (for Guest / iPhone users who don't have fid in local map)
+  if (id && id !== "__new__" && !String(id).startsWith("srv_")) {
+    return "/api/drive-image?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t || "photo");
+  }
   return null;
 }
 
@@ -763,6 +767,15 @@ function setImg(id, t, uri) {
   IMG_OVR[t + ":" + id] = uri;
   idbPut(t + ":" + id, uri);
   try { addPendImg(t + ":" + id); } catch(e) {}
+
+  // Auto-sync image directly to central server for instant cross-device display (iPhone/PC/Guest accounts)
+  try {
+    fetch("/api/save-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: id, type: t, image: uri, fid: imgFileId(id, t) || "" })
+    }).catch(() => {});
+  } catch(e) {}
 }
 
 function delImg(id, t) {
@@ -5028,6 +5041,12 @@ async function syncNow(silent){
     const pCache = getPhoneCache();
     const recordsWithPhones = (DATA || []).filter(p => getPhone(p));
 
+    let mapToSend = {};
+    try { mapToSend = JSON.parse(localStorage.getItem("cn_imgfiles_v1") || "{}"); } catch(e){}
+    if (typeof window !== "undefined" && window.__IMG_MAP) {
+      Object.assign(mapToSend, window.__IMG_MAP);
+    }
+
     const srvRes = await fetch("/api/sync-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -5035,9 +5054,26 @@ async function syncNow(silent){
         records: recordsWithPhones,
         phones: pCache,
         queue: q,
-        config: CFG
+        config: CFG,
+        images: mapToSend
       })
     });
+
+    // Also push any local IMG_OVR portraits directly to server so all employee iPhones see them immediately
+    try {
+      const ovrKeys = Object.keys(IMG_OVR);
+      for (const k of ovrKeys) {
+        const val = IMG_OVR[k];
+        if (val && val !== DEL && typeof val === "string" && val.startsWith("data:image/")) {
+          const [t, id] = k.split(":");
+          fetch("/api/save-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, type: t, image: val, fid: imgFileId(id, t) || "" })
+          }).catch(() => {});
+        }
+      }
+    } catch(e) {}
 
     if(srvRes.ok){
       const srvData = await srvRes.json();

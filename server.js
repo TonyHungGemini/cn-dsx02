@@ -662,13 +662,31 @@ app.get('/api/records', (req, res) => {
 // 2. Comprehensive Bidirectional Sync Endpoint across Admin Phone <-> Computer <-> Any Device
 app.post('/api/sync-data', (req, res) => {
   try {
-    const { records: clientRecords, phones: clientPhones, queue, config: clientConfig } = req.body || {};
+    const { records: clientRecords, phones: clientPhones, queue, config: clientConfig, images: clientImages } = req.body || {};
     const records = getStoredRecords();
     const phones = getStoredPhones();
     const config = getStoredConfig();
     let recordsChanged = false;
     let phonesChanged = false;
     let configChanged = false;
+
+    // 2aa. Merge client image catalog into server master index
+    if (clientImages && typeof clientImages === 'object') {
+      let imgChanged = false;
+      for (const id in clientImages) {
+        if (!serverImagesCatalog[id]) serverImagesCatalog[id] = {};
+        for (const t in clientImages[id]) {
+          const fidVal = String(clientImages[id][t] || '').trim();
+          if (fidVal && serverImagesCatalog[id][t] !== fidVal) {
+            serverImagesCatalog[id][t] = fidVal;
+            imgChanged = true;
+          }
+        }
+      }
+      if (imgChanged) {
+        saveStoredImagesCatalog(serverImagesCatalog);
+      }
+    }
 
     // 2a. Sync configuration: save if client has valid config
     if (clientConfig && typeof clientConfig === 'object') {
@@ -975,6 +993,48 @@ app.get('/api/images', (req, res) => {
   return res.json({ ok: true, images: serverImagesCatalog });
 });
 
+// 5c. Direct worker image upload & disk cache persistence (instant cross-device sync)
+app.post('/api/save-image', (req, res) => {
+  try {
+    const { id, type, image, fid } = req.body || {};
+    if (!id || !type || !image) {
+      return res.status(400).json({ ok: false, error: 'missing_params' });
+    }
+    const cleanId = String(id).trim();
+    const cleanType = (type === 'cmnd' ? 'cmnd' : 'photo');
+    let base64Data = image;
+    let mimeType = 'image/jpeg';
+    const match = image.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      mimeType = match[1];
+      base64Data = match[2];
+    }
+    const buf = Buffer.from(base64Data, 'base64');
+
+    // 1. Save directly to disk cache by worker id & type (e.g. photo_2.jpg)
+    const idPath = path.join(IMG_CACHE_DIR, `${cleanType}_${cleanId}.jpg`);
+    fs.writeFileSync(idPath, buf);
+
+    // 2. If Google Drive fid provided, also save by fid
+    if (fid) {
+      const cleanFid = String(fid).trim().replace(/[^a-zA-Z0-9_-]/g, '');
+      if (cleanFid) {
+        fs.writeFileSync(path.join(IMG_CACHE_DIR, `${cleanFid}.jpg`), buf);
+      }
+    }
+
+    // 3. Update server image catalog and save to images.json
+    if (!serverImagesCatalog[cleanId]) serverImagesCatalog[cleanId] = {};
+    if (fid) serverImagesCatalog[cleanId][cleanType] = String(fid).trim();
+    saveStoredImagesCatalog(serverImagesCatalog);
+
+    return res.json({ ok: true, saved: true, file: `${cleanType}_${cleanId}.jpg` });
+  } catch (err) {
+    console.error('save-image error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // 6. Universal Google Drive image proxy & persistent cache (solves Chrome on iOS / Safari login requirement)
 const inFlightGasFetches = new Map();
 
@@ -983,6 +1043,7 @@ app.get('/api/drive-image', async (req, res) => {
     const { fid, id, t } = req.query;
     if (!fid && !id) {
       res.set('Content-Type', 'image/svg+xml');
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       return res.send('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" rx="16" fill="#f1f5f9"/><circle cx="60" cy="48" r="22" fill="#cbd5e1"/><path d="M26 100c0-18 15-32 34-32s34 14 34 32z" fill="#cbd5e1"/></svg>');
     }
     let cleanFid = fid ? String(fid).trim().replace(/[^a-zA-Z0-9_-]/g, '') : '';
@@ -1001,6 +1062,19 @@ app.get('/api/drive-image', async (req, res) => {
         return res.sendFile(fidPath);
       }
     }
+
+    // 1b. Check disk cache by worker id & type: e.g. photo_2.jpg or cmnd_2.jpg
+    if (id) {
+      const targetType = (t === 'cmnd' ? 'cmnd' : 'photo');
+      const idKeyPath = path.join(IMG_CACHE_DIR, `${targetType}_${id}.jpg`);
+      if (fs.existsSync(idKeyPath)) {
+        res.set('Content-Type', 'image/jpeg');
+        res.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+        res.set('Access-Control-Allow-Origin', '*');
+        return res.sendFile(idKeyPath);
+      }
+    }
+
     const cacheKey = cleanFid || `${t || 'img'}_${id}`;
     const cachePath = path.join(IMG_CACHE_DIR, `${cacheKey}.jpg`);
     if (fs.existsSync(cachePath)) {
@@ -1091,13 +1165,16 @@ app.get('/api/drive-image', async (req, res) => {
       } catch (tErr) {}
     }
 
-    // 5. Final fallback: Crisp SVG avatar with 200 OK
+    // 5. Final fallback: Crisp SVG avatar with NO-CACHE (prevents iOS Safari 24h stale avatar caching)
     res.set('Content-Type', 'image/svg+xml');
-    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     res.set('Access-Control-Allow-Origin', '*');
     return res.send('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" rx="16" fill="#f1f5f9"/><circle cx="60" cy="48" r="22" fill="#cbd5e1"/><path d="M26 100c0-18 15-32 34-32s34 14 34 32z" fill="#cbd5e1"/></svg>');
   } catch (err) {
     res.set('Content-Type', 'image/svg+xml');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.set('Access-Control-Allow-Origin', '*');
     return res.send('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" rx="16" fill="#f1f5f9"/><circle cx="60" cy="48" r="22" fill="#cbd5e1"/><path d="M26 100c0-18 15-32 34-32s34 14 34 32z" fill="#cbd5e1"/></svg>');
   }
