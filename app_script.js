@@ -128,6 +128,43 @@ function cleanPhone(raw){
   return cl;
 }
 
+function safeSetStorage(key, val) {
+  try {
+    localStorage.setItem(key, val);
+    return true;
+  } catch (err) {
+    console.warn("Storage write warning for key " + key + ":", err && err.message);
+    if (err && (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED" || err.code === 22 || err.code === 1014)) {
+      try { localStorage.removeItem("cn_audit_logs_v1"); } catch(e) {}
+      try { localStorage.removeItem("cn_pendimg_v1"); } catch(e) {}
+      if (key !== "cn_imgfiles_v1") {
+        try { localStorage.removeItem("cn_imgfiles_v1"); } catch(e) {}
+      }
+      try {
+        localStorage.setItem(key, val);
+        return true;
+      } catch (retryErr) {
+        console.warn("Storage still full after cleanup:", retryErr && retryErr.message);
+      }
+    }
+    return false;
+  }
+}
+
+// Storage auto-healing: clean up oversized items if localStorage is full or corrupted
+(function autoHealStorageQuota(){
+  try {
+    const testKey = "__quota_test__";
+    localStorage.setItem(testKey, "1");
+    localStorage.removeItem(testKey);
+  } catch(e) {
+    console.warn("Storage full on startup! Auto-healing by purging disposable caches...");
+    try { localStorage.removeItem("cn_audit_logs_v1"); } catch(ex) {}
+    try { localStorage.removeItem("cn_imgfiles_v1"); } catch(ex) {}
+    try { localStorage.removeItem("cn_penddel_v1"); } catch(ex) {}
+  }
+})();
+
 /* Persistent local phone registry with auto-healing and collision protection */
 const PHONES_KEY = "cn_phones_v1";
 
@@ -145,13 +182,13 @@ function getPhoneCache(){
       }
       cleaned[k] = val;
     }
-    if(changed) localStorage.setItem(PHONES_KEY, JSON.stringify(cleaned));
+    if(changed) safeSetStorage(PHONES_KEY, JSON.stringify(cleaned));
     return cleaned;
   } catch(e){ return {}; }
 }
 
 function setPhoneCache(c){
-  try { localStorage.setItem(PHONES_KEY, JSON.stringify(c)); } catch(e){}
+  try { safeSetStorage(PHONES_KEY, JSON.stringify(c)); } catch(e){}
 }
 
 let _phoneSyncTimer = null;
@@ -493,7 +530,7 @@ function load(){
 
 function save(){
   try{
-    localStorage.setItem(LS_KEY, JSON.stringify(DATA));
+    safeSetStorage(LS_KEY, JSON.stringify(DATA));
   }catch(e){
     console.warn("Lỗi lưu localStorage:", e);
   }
@@ -741,7 +778,7 @@ function initServerImagesCatalog() {
                 }
               }
             }
-            if (changed) localStorage.setItem("cn_imgfiles_v1", JSON.stringify(m));
+            if (changed) safeSetStorage("cn_imgfiles_v1", JSON.stringify(m));
           } catch(e) {}
           if (typeof render === "function") render();
         }
@@ -4458,7 +4495,7 @@ try {
 
 function savePrefs(p){
   PREFS = Object.assign({}, PREFS, p);
-  localStorage.setItem("cn_prefs_v1", JSON.stringify(PREFS));
+  safeSetStorage("cn_prefs_v1", JSON.stringify(PREFS));
 }
 
 /* ---------- Audit Logs ---------- */
@@ -4471,8 +4508,8 @@ function addLog(action, detail){
       action: action,
       detail: detail || ""
     });
-    if(logs.length > 50) logs.length = 50;
-    localStorage.setItem("cn_audit_logs_v1", JSON.stringify(logs));
+    if(logs.length > 25) logs.length = 25;
+    safeSetStorage("cn_audit_logs_v1", JSON.stringify(logs));
   }catch(e){}
 }
 
@@ -4779,7 +4816,7 @@ function queueChange(p){
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
     const i = q.findIndex(x => String(x.id) === String(enriched.id));
     if(i >= 0) q[i] = enriched; else q.push(enriched);
-    localStorage.setItem("cn_queue_v1", JSON.stringify(q));
+    safeSetStorage("cn_queue_v1", JSON.stringify(q));
     updateSyncBadge();
   }catch(e){}
 }
@@ -4800,10 +4837,10 @@ function updateSyncBadge(){
 }
 
 function getPendImg(){ try{ return JSON.parse(localStorage.getItem("cn_pendimg_v1")||"[]"); }catch(e){ return []; } }
-function setPendImg(a){ localStorage.setItem("cn_pendimg_v1", JSON.stringify(a)); }
+function setPendImg(a){ try{ safeSetStorage("cn_pendimg_v1", JSON.stringify(a)); }catch(e){} }
 function addPendImg(k){ const a=getPendImg(); if(!a.includes(k)){ a.push(k); setPendImg(a); } }
 function getPendDel(){ try{ return JSON.parse(localStorage.getItem("cn_penddel_v1")||"[]"); }catch(e){ return []; } }
-function setPendDel(a){ localStorage.setItem("cn_penddel_v1", JSON.stringify(a)); }
+function setPendDel(a){ try{ safeSetStorage("cn_penddel_v1", JSON.stringify(a)); }catch(e){} }
 function addPendDel(k){ const a=getPendDel(); if(!a.includes(k)){ a.push(k); setPendDel(a); } }
 
 function normServerRec(o){
@@ -5001,6 +5038,10 @@ function mergeServerData(serverList, queuedList){
 }
 
 async function fetchServerImages(imgs, deleted){
+  if (!window.__IMG_MAP) window.__IMG_MAP = {};
+  if (imgs && typeof imgs === "object") {
+    Object.assign(window.__IMG_MAP, imgs);
+  }
   let map = {};
   try{ map = JSON.parse(localStorage.getItem("cn_imgfiles_v1") || "{}"); }catch(e){}
   let mapChanged = false;
@@ -5025,7 +5066,11 @@ async function fetchServerImages(imgs, deleted){
     }
   }
   if(mapChanged){
-    localStorage.setItem("cn_imgfiles_v1", JSON.stringify(map));
+    try {
+      safeSetStorage("cn_imgfiles_v1", JSON.stringify(map));
+    } catch(storageErr) {
+      console.warn("Storage warning for cn_imgfiles_v1:", storageErr);
+    }
   }
 }
 
@@ -5086,7 +5131,7 @@ async function syncNow(silent){
           if(!CFG.url && srvData.config.url){ CFG.url = srvData.config.url; cfgUpdated = true; }
           if(!CFG.key && srvData.config.key){ CFG.key = srvData.config.key; cfgUpdated = true; }
           if(!CFG.user && srvData.config.user){ CFG.user = srvData.config.user; cfgUpdated = true; }
-          if(cfgUpdated) localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
+          if(cfgUpdated) safeSetStorage("cn_cfg_v1", JSON.stringify(CFG));
         }
 
         // Merge server phone registry into local cache
@@ -5595,7 +5640,7 @@ function openSettings(initTab){
         const k = s.querySelector("#cKey").value.trim();
         const usr = s.querySelector("#cUser").value.trim();
         CFG = { url: u, key: k, user: usr };
-        localStorage.setItem("cn_cfg_v1", JSON.stringify(CFG));
+        safeSetStorage("cn_cfg_v1", JSON.stringify(CFG));
 
         // Always grant and persist admin role if key matches or admin password is typed
         if (isKeyAdmin(k, usr) || k.length >= 4) {
