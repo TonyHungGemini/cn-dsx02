@@ -4233,7 +4233,7 @@ function printMissingCmndReport() {
     h += '<td style="text-align:center;">' + esc(p.phong_o || "") + '</td>';
     h += '<td style="text-align:center;">' + esc(p.phan_cay || "") + '</td>';
     h += '<td>' + esc(formatPhone(cleanPhone(getPhone(p)))) + '</td>';
-    h += '<td class="alert-status">⚠️ ' + statusText + '</td>';
+    h += '<td class="alert-status">' + statusText + '</td>';
     h += '<td></td>';
     h += '</tr>';
   });
