@@ -87,6 +87,30 @@ function updateDisciplineBadge(){
     bnavBadge.textContent = cnt;
     bnavBadge.style.display = cnt > 0 ? "inline-block" : "none";
   }
+  updateMissingCmndBadge();
+}
+
+function getMissingCmndCount(){
+  if(!Array.isArray(DATA)) return 0;
+  return DATA.filter(p => !p.deleted && !isValidCmnd(p.cmnd)).length;
+}
+
+function updateMissingCmndBadge(){
+  const cnt = getMissingCmndCount();
+  const chipBadge = document.getElementById("badgeMissingCmnd");
+  if(chipBadge){
+    chipBadge.textContent = cnt;
+    chipBadge.style.display = cnt > 0 ? "inline-block" : "none";
+  }
+  const topBadge = document.getElementById("bMissingCmndBadge");
+  if(topBadge){
+    topBadge.textContent = cnt;
+    topBadge.style.display = cnt > 0 ? "inline-block" : "none";
+  }
+  const moreMenuBadge = document.getElementById("moreMenuMissingCmndBadge");
+  if(moreMenuBadge){
+    moreMenuBadge.textContent = cnt;
+  }
 }
 
 /* ===== Helper Functions ===== */
@@ -101,8 +125,18 @@ function cleanStr(s){
 function isValidCmnd(c){
   if(c == null) return false;
   const s = String(c).trim().toLowerCase();
-  if(!s || s === "không có" || s === "khong co" || s === "chưa có" || s === "chua co" || s === "k" || s === "k co" || s === "-" || s === "0" || s === "none" || s === "null") return false;
+  if(!s || s === "không có" || s === "khong co" || s === "chưa có" || s === "chua co" || s === "k" || s === "k co" || s === "-" || s === "0" || s === "none" || s === "null" || s.includes("yêu cầu bổ sung") || s.includes("yeu cau bo sung") || s.includes("đang yêu cầu") || s.includes("dang yeu cau")) return false;
   return s.length >= 5;
+}
+
+function isMissingCmnd(p){
+  if(!p || typeof p !== "object") return false;
+  return !isValidCmnd(p.cmnd);
+}
+
+function verifiedBadgeHtml(p){
+  if(!p || !isValidCmnd(p.cmnd)) return "";
+  return '<span class="fb-verified" title="Hồ sơ đã đầy đủ CMND/CCCD hợp lệ" style="display:inline-flex;align-items:center;margin-left:4px;vertical-align:middle;"><svg viewBox="0 0 24 24" width="15" height="15"><circle cx="12" cy="12" r="10" fill="#14b8a6" class="verified-circle"/><path d="M7.2 12.4l3.1 3.2 6.5-6.8" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
 }
 
 function clone(o){
@@ -621,6 +655,7 @@ let state = {
   rating: "",
   muon: false,
   hasPhone: false,
+  missingCmnd: false,
   view: "people", // "people" | "rooms"
   // Room specific filters
   roomBlock: "",
@@ -753,8 +788,8 @@ function getImg(id, t) {
   const fid = imgFileId(id, t);
   if (fid) return driveImgUrl(fid, id, t);
   // 4. Server-cached or proxy image by worker id (for Guest / iPhone users who don't have fid in local map)
-  if (id && id !== "__new__" && !String(id).startsWith("srv_")) {
-    return "/api/drive-image?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t || "photo");
+  if (t === "photo" && id && id !== "__new__" && !String(id).startsWith("srv_")) {
+    return "/api/drive-image?id=" + encodeURIComponent(id) + "&t=photo";
   }
   return null;
 }
@@ -1437,6 +1472,7 @@ function filtered(){
     if(state.loai && p.loai !== state.loai) return false;
     if(state.muon && !isMuon(p)) return false;
     if(state.hasPhone && !getPhone(p)) return false;
+    if(state.missingCmnd && isValidCmnd(p.cmnd)) return false;
 
     if(state.blood){
       const b = getBloodType(p).trim().toUpperCase();
@@ -1557,7 +1593,7 @@ function renderSugg(){
     const ph = getPhone(p);
     const meta = [p.to, p.phong_o?("🏠 "+p.phong_o):"", p.phan_cay?("🌳 "+p.phan_cay):"", ph?("📞 "+ph):""].filter(Boolean).join(" · ");
     return '<div class="sgrow" data-id="'+p.id+'">'+avh+
-      '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">'+highlightName(p.ten_that||"(chưa có tên)", q)+
+      '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">'+highlightName(p.ten_that||"(chưa có tên)", q)+verifiedBadgeHtml(p)+
       (p.chu_phong?' <span class="tag chu">👑 Chủ phòng</span>':'')+'</div><div style="font-size:11.5px;color:var(--muted)">'+esc(meta)+'</div></div>'+
       '<span class="sgchev">›</span></div>';
   }).join("");
@@ -1590,7 +1626,9 @@ function renderPeople(){
     const skill = getSkillRating(p);
     const ethics = getEthicsRating(p);
 
-    if(p.cmnd) sub.push('<span class="pill">CMND: '+esc(p.cmnd)+'</span>');
+    if(isValidCmnd(p.cmnd)){
+      sub.push('<span class="pill">CMND: '+esc(p.cmnd)+'</span>');
+    }
     if(phone) sub.push(phonePillHtml(p));
     if(blood) sub.push('<span class="pill pill-blood" title="Nhóm máu: '+esc(blood)+'">🩸 Nhóm '+esc(blood)+'</span>');
     
@@ -1621,7 +1659,7 @@ function renderPeople(){
     const avHtml = av ? '<img class="avatar" src="'+av+'" onerror="handleAvatarError(this, \''+esc(p.ten_that||p.ten_ho_so||'')+'\')">' : '<div class="avatar" style="display:flex;align-items:center;justify-content:center;color:#9bb0a5;font-size:18px;">🧑</div>';
 
     html += '<div class="card" data-id="'+p.id+'"><div class="cardrow">'+avHtml+'<div class="cbody">'+
-      '<div class="nm">'+esc(p.ten_that||"(chưa có tên)")+
+      '<div class="nm">'+esc(p.ten_that||"(chưa có tên)")+verifiedBadgeHtml(p)+
       (p.loai==="Lao động"?' <span class="tag">Lao động</span>':(p.loai==="Gia thuộc"?' <span class="tag gt">Gia thuộc</span>':' <span class="tag kh">Khác</span>'))+
       (p.chu_phong?' <span class="tag chu">👑 Chủ phòng</span>':'')+
       (muon?' <span class="tag muon">⚑ Mượn tên: '+esc(p.ten_ho_so)+'</span>':'')+
@@ -1740,11 +1778,11 @@ function openRoom(room){
     }
 
     rows += '<div class="occ" data-id="'+p.id+'">'+avHtml+
-      '<div class="onm">'+esc(p.ten_that||"(chưa có tên)")+
+      '<div class="onm">'+esc(p.ten_that||"(chưa có tên)")+verifiedBadgeHtml(p)+
       (p.chu_phong?' <span class="tag chu">👑 Chủ phòng</span>':'')+
       (isMuon(p)?' <span class="tag muon">⚑</span>':'')+
       '<div style="font-size:12px;color:var(--muted);font-weight:400;margin-top:3px">'+
-      esc(p.loai)+(p.quan_he?' · '+esc(p.quan_he):'')+(p.to?' · '+esc(p.to):'')+(p.phan_cay?' · 🌳 '+esc(p.phan_cay):'')+(p.cmnd?' · CMND '+esc(p.cmnd):'')+
+      esc(p.loai)+(p.quan_he?' · '+esc(p.quan_he):'')+(p.to?' · '+esc(p.to):'')+(p.phan_cay?' · 🌳 '+esc(p.phan_cay):'')+(isValidCmnd(p.cmnd) ? (' · CMND ' + esc(p.cmnd)) : '')+
       '</div>'+
       '<div style="margin-top:4px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">'+phoneBtn+extraBadges+'</div>'+
       '</div>'+
@@ -1776,6 +1814,13 @@ function openRoom(room){
   document.getElementById("bAddP").onclick = () => openEdit("__new__", room, room);
 
   sheet.querySelector(".sheet-b").onclick = e => {
+    const missBtn = e.target.closest(".pill-missing-cmnd");
+    if(missBtn) {
+      e.stopPropagation();
+      const mid = missBtn.dataset.missingCmndId;
+      if(mid) openEdit(+mid || mid, null, room);
+      return;
+    }
     const discBtn = e.target.closest(".pill-discipline");
     if(discBtn) {
       e.stopPropagation();
@@ -2257,6 +2302,34 @@ function renderDriveBadge(driveUrl) {
   '</a>';
 }
 
+function handleImgSlotError(img, type) {
+  if (!img) return;
+  img.onerror = null;
+  const wrap = img.closest(".islot");
+  if (!wrap) return;
+  const thumbWrap = wrap.querySelector(".thumbwrap");
+  if (thumbWrap) thumbWrap.style.display = "none";
+  const ibtns = wrap.querySelector(".ibtns");
+  if (ibtns) ibtns.style.display = "none";
+  if (!wrap.querySelector(".noimg-cmnd-notice") && !wrap.querySelector(".noimg")) {
+    const errNotice = document.createElement("div");
+    if (type === "cmnd") {
+      errNotice.className = "noimg-cmnd-notice";
+      errNotice.style.cssText = "border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 10px; padding: 16px 14px; text-align: center; margin-bottom: 8px;";
+      errNotice.innerHTML = '<div style="font-size: 24px; line-height: 1; margin-bottom: 5px;">🪪</div>' +
+        '<div style="font-weight: 700; color: #334155; font-size: 13px; margin-bottom: 3px;">Đang yêu cầu bổ sung ảnh CMND / Thẻ căn cước</div>' +
+        '<div style="font-size: 12px; color: #64748b; max-width: 340px; margin: 0 auto 12px; line-height: 1.4;">Chưa có ảnh chụp trên hệ thống. Bấm nút bên dưới để tải ảnh CMND lên hồ sơ.</div>' +
+        '<div class="ibtns" style="justify-content:center;margin-top:0;">' +
+        '  <button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="cmnd" style="font-weight:600;padding:7px 16px;">📷 Tải ảnh CMND lên</button>' +
+        '</div>';
+    } else {
+      errNotice.className = "noimg";
+      errNotice.textContent = "Chưa có ảnh chân dung";
+    }
+    wrap.appendChild(errNotice);
+  }
+}
+
 function renderImgSlot(id, type, label) {
   const uri = getImg(id, type);
   const fid = imgFileId(id, type);
@@ -2272,7 +2345,7 @@ function renderImgSlot(id, type, label) {
 
   if (uri) {
     h += '<div class="thumbwrap" style="position:relative;cursor:pointer;border-radius:10px;overflow:hidden;background:#f7f9f8;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;min-height:140px;" title="Bấm để xem ảnh gốc / phóng to" data-img-act="preview" data-img-type="' + type + '">';
-    h += '<img class="thumbimg" src="' + uri + '" alt="' + esc(label) + '" style="max-height:240px;width:100%;object-fit:contain;border:none;background:transparent;">';
+    h += '<img class="thumbimg" src="' + uri + '" alt="' + esc(label) + '" onerror="handleImgSlotError(this, \'' + type + '\')" style="max-height:240px;width:100%;object-fit:contain;border:none;background:transparent;">';
     h += '<div class="thumb-overlay" style="position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,0.68);color:#fff;font-size:11.5px;padding:3px 9px;border-radius:6px;backdrop-filter:blur(2px);font-weight:600;">🔍 Xem lớn</div>';
     h += '</div>';
 
@@ -2313,10 +2386,21 @@ function renderImgSlot(id, type, label) {
     h += '<button type="button" class="btn mini-b del" data-img-act="del" data-img-type="' + type + '" title="Xóa ảnh này">🗑 Xóa</button>';
     h += '</div>';
   } else {
-    h += '<div class="noimg">Chưa có ' + esc(label.toLowerCase()) + '</div>';
-    h += '<div class="ibtns">';
-    h += '<button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="' + type + '">📷 Tải ' + esc(label.toLowerCase()) + ' lên</button>';
-    h += '</div>';
+    if (type === "cmnd") {
+      h += '<div class="noimg-cmnd-notice" style="border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 10px; padding: 16px 14px; text-align: center; margin-bottom: 8px;">';
+      h += '  <div style="font-size: 24px; line-height: 1; margin-bottom: 5px;">🪪</div>';
+      h += '  <div style="font-weight: 700; color: #334155; font-size: 13px; margin-bottom: 3px;">Đang yêu cầu bổ sung ảnh CMND / Thẻ căn cước</div>';
+      h += '  <div style="font-size: 12px; color: #64748b; max-width: 340px; margin: 0 auto 12px; line-height: 1.4;">Hồ sơ này chưa có ảnh chụp thẻ CMND. Bấm nút bên dưới để tải ảnh lên.</div>';
+      h += '  <div class="ibtns" style="justify-content:center;margin-top:0;">';
+      h += '    <button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="cmnd" style="font-weight:600;padding:7px 16px;">📷 Tải ảnh CMND lên</button>';
+      h += '  </div>';
+      h += '</div>';
+    } else {
+      h += '<div class="noimg">Chưa có ' + esc(label.toLowerCase()) + '</div>';
+      h += '<div class="ibtns">';
+      h += '<button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="' + type + '">📷 Tải ' + esc(label.toLowerCase()) + ' lên</button>';
+      h += '</div>';
+    }
   }
   h += '</div>';
   return h;
@@ -2751,6 +2835,9 @@ function openEdit(id, prefillRoom, backRoom) {
     if (t === "addr") {
       return '<div class="fld"><label>' + lbl + '</label><div class="fld-addr-wrap"><input data-k="' + k + '" value="' + v + '" placeholder="Nhập địa chỉ hoặc quét từ CMND"><button type="button" class="btn-trans" data-field="' + k + '" title="Dịch địa chỉ tiếng Khmer sang tiếng Việt chuẩn">🌐 Dịch TV</button></div></div>';
     }
+    if (k === "cmnd") {
+      return '<div class="fld"><label>' + lbl + (isValidCmnd(cur.cmnd) ? (' ' + verifiedBadgeHtml(cur)) : '') + '</label><input data-k="' + k + '" value="' + v + '" placeholder="Nhập số CMND / CCCD hoặc quét từ ảnh"></div>';
+    }
     return '<div class="fld"><label>' + lbl + '</label><input data-k="' + k + '" value="' + v + '"></div>';
   };
   
@@ -2774,9 +2861,10 @@ function openEdit(id, prefillRoom, backRoom) {
 
   const sheet = document.getElementById("sheet");
   const workerName = (cur.ten_that || cur.ten_ho_so || "").trim();
+  const badge = id !== "__new__" ? verifiedBadgeHtml(cur) : "";
   const modalTitle = id === "__new__" 
     ? "➕ Thêm người mới" 
-    : ("✏️ " + esc(workerName || "Hồ sơ công nhân"));
+    : ("✏️ " + esc(workerName || "Hồ sơ công nhân") + (badge ? " " + badge : ""));
 
   sheet.innerHTML =
     '<div class="sheet-h"><h2 id="sheetTitle">' + modalTitle + '</h2><button class="x" id="bClose">×</button></div>' +
@@ -3757,6 +3845,403 @@ function printDisciplineReport() {
   h += '<div style="margin-top:30px;display:flex;justify-content:space-around;text-align:center;">';
   h += '  <div><b>NGƯỜI LẬP BIỂU</b><br><br><br><br>(Ký, họ tên)</div>';
   h += '  <div><b>TỔ TRƯỞNG / QUẢN LÝ</b><br><br><br><br>(Ký, họ tên)</div>';
+  h += '  <div><b>CHỈ HUY ĐỘI SX02</b><br><br><br><br>(Ký, đóng dấu)</div>';
+  h += '</div>';
+  h += '</body></html>';
+
+  printWindow.document.write(h);
+  printWindow.document.close();
+}
+
+/* ---------- Sổ Quản Lý Công Nhân Chưa Có CMND (Missing CMND Manager) ---------- */
+let currentMissingFilter = "all"; // "all" | "ld" | "gt" | "has_img" | "no_img"
+let currentMissingSearch = "";
+let currentMissingTo = "";
+
+function showMissingCmndManager(initFilter, initSearch, toFilter) {
+  if (initFilter != null) currentMissingFilter = initFilter;
+  if (initSearch != null) currentMissingSearch = initSearch;
+  if (toFilter != null) currentMissingTo = toFilter;
+
+  const allMissing = DATA.filter(p => !p.deleted && !isValidCmnd(p.cmnd));
+  const totalCount = allMissing.length;
+  const countLd = allMissing.filter(p => p.loai === "Lao động").length;
+  const countGt = allMissing.filter(p => p.loai === "Gia thuộc").length;
+  const countHasImg = allMissing.filter(p => !!getImg(p.id, "cmnd")).length;
+  const countNoImg = totalCount - countHasImg;
+
+  // Filter list
+  let displayed = allMissing.filter(p => {
+    if (currentMissingFilter === "ld" && p.loai !== "Lao động") return false;
+    if (currentMissingFilter === "gt" && p.loai !== "Gia thuộc") return false;
+    if (currentMissingFilter === "has_img" && !getImg(p.id, "cmnd")) return false;
+    if (currentMissingFilter === "no_img" && getImg(p.id, "cmnd")) return false;
+    if (currentMissingTo && p.to !== currentMissingTo) return false;
+
+    if (currentMissingSearch) {
+      const q = noAccent(currentMissingSearch.trim());
+      const hay = noAccent([p.ten_that, p.ten_ho_so, p.phong_o, p.to, p.phan_cay, p.quan_he, getPhone(p), p.ghi_chu].join(" "));
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const sheet = document.getElementById("sheet");
+  if (!sheet) return;
+
+  let html = '';
+  // Sheet Header
+  html += '<div class="sheet-h" style="border-bottom:1px solid #fed7aa;background:linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);">';
+  html += '  <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">';
+  html += '    <span style="font-size:22px;">📋</span>';
+  html += '    <div>';
+  html += '      <h2 style="font-size:16px;color:#9a3412;margin:0;">Sổ Quản Lý Chưa Có CMND</h2>';
+  html += '      <div style="font-size:11.5px;color:#c2410c;margin-top:1px;">Đang yêu cầu bổ sung CMND / CCCD · ' + totalCount + ' trường hợp</div>';
+  html += '    </div>';
+  html += '  </div>';
+  html += '  <button class="x" id="bCloseMissingBook">×</button>';
+  html += '</div>';
+
+  html += '<div class="sheet-b" style="padding:14px;">';
+
+  // KPI summary grid
+  html += '<div class="missing-kpi-grid">';
+  html += '  <div class="missing-kpi-card" style="cursor:pointer;" onclick="showMissingCmndManager(\'all\');">';
+  html += '    <b>' + totalCount + '</b>';
+  html += '    <span>Tổng thiếu CMND</span>';
+  html += '  </div>';
+  html += '  <div class="missing-kpi-card" style="cursor:pointer;background:#fff1e8;" onclick="showMissingCmndManager(\'ld\');">';
+  html += '    <b style="color:#c2410c;">' + countLd + '</b>';
+  html += '    <span>🚨 Lao động thiếu</span>';
+  html += '  </div>';
+  html += '  <div class="missing-kpi-card" style="cursor:pointer;" onclick="showMissingCmndManager(\'gt\');">';
+  html += '    <b style="color:#0284c7;">' + countGt + '</b>';
+  html += '    <span>👨‍👩‍👧 Gia thuộc thiếu</span>';
+  html += '  </div>';
+  html += '  <div class="missing-kpi-card" style="cursor:pointer;background:#ecfdf5;border-color:#a7f3d0;" onclick="showMissingCmndManager(\'has_img\');">';
+  html += '    <b style="color:#059669;">' + countHasImg + '</b>';
+  html += '    <span>📷 Có ảnh chờ nhập số</span>';
+  html += '  </div>';
+  html += '</div>';
+
+  // Quick Action Buttons (Excel & Print)
+  html += '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">';
+  html += '  <button type="button" class="btn" id="bPrintMissingReport" style="background:#0f766e;color:#fff;border-color:#0d9488;font-weight:700;" title="In biểu mẫu danh sách đôn đốc kèm chữ ký Tổ trưởng và Chỉ huy Đội">🖨️ In Danh sách Đôn đốc</button>';
+  html += '  <button type="button" class="btn" id="bExportMissingExcel" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0;font-weight:700;" title="Tải xuống bảng tính Excel danh sách công nhân thiếu CMND">⬇️ Xuất Excel DS thiếu CMND</button>';
+  html += '</div>';
+
+  // Search & Tổ Filter Bar
+  html += '<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">';
+  html += '  <input type="search" id="missingSearchInput" value="' + esc(currentMissingSearch) + '" placeholder="Tìm tên, phòng, tổ, phần cây, SĐT…" style="flex:1;border:1px solid #fed7aa;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;">';
+  html += '  <select id="missingToSelect" style="border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:#fff;">';
+  html += '    <option value="">Tất cả tổ (' + totalCount + ')</option>';
+  TO_LIST.forEach(t => {
+    const tCount = allMissing.filter(p => p.to === t).length;
+    html += '<option value="' + esc(t) + '"' + (currentMissingTo === t ? ' selected' : '') + '>' + esc(t) + ' (' + tCount + ')</option>';
+  });
+  html += '  </select>';
+  html += '</div>';
+
+  // Sub-filter tabs
+  const tabs = [
+    ["all", "Tất cả (" + totalCount + ")"],
+    ["ld", "🚨 Lao động (" + countLd + ")"],
+    ["gt", "Gia thuộc (" + countGt + ")"],
+    ["has_img", "📷 Đã có ảnh (" + countHasImg + ")"],
+    ["no_img", "❌ Chưa có ảnh (" + countNoImg + ")"]
+  ];
+  html += '<div class="disc-tabs-bar" style="border-color:#fed7aa;">';
+  tabs.forEach(t => {
+    const isAct = currentMissingFilter === t[0];
+    html += '<button type="button" class="disc-tab-btn' + (isAct ? ' on' : '') + '" data-missing-filter="' + t[0] + '" style="' + (isAct ? 'color:#c2410c;font-weight:700;' : '') + '">' + t[1] + '</button>';
+  });
+  html += '</div>';
+
+  // Workers List
+  if (displayed.length === 0) {
+    if (totalCount === 0) {
+      html += '<div style="text-align:center;padding:36px 16px;background:#f0fdf4;border:1.5px dashed #86efac;border-radius:12px;margin-top:8px;">';
+      html += '  <div style="font-size:42px;margin-bottom:8px;">🎉</div>';
+      html += '  <div style="font-size:16px;font-weight:800;color:#166534;margin-bottom:4px;">Tuyệt vời! 100% công nhân đã có đủ CMND/CCCD!</div>';
+      html += '  <div style="font-size:13px;color:#15803d;max-width:440px;margin:0 auto;">Tất cả hồ sơ công nhân và gia thuộc tại ĐSX 02 đã cập nhật đầy đủ số thẻ CMND/CCCD hợp lệ.</div>';
+      html += '</div>';
+    } else {
+      html += '<div style="text-align:center;padding:28px 16px;background:#fff7ed;border:1px dashed #fed7aa;border-radius:10px;color:#9a3412;font-size:13px;">Không tìm thấy công nhân nào khớp với bộ lọc hoặc từ khóa tìm kiếm.</div>';
+    }
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:9px;margin-top:6px;">';
+    displayed.forEach(p => {
+      const hasImgCmnd = !!getImg(p.id, "cmnd");
+      const av = avatar(p);
+      const avHtml = av ? '<img class="avatar" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;" src="' + av + '" onerror="handleAvatarError(this, \''+esc(p.ten_that||p.ten_ho_so||'')+'\')">' : '<div class="avatar" style="width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#ffedd5;color:#c2410c;font-size:18px;flex-shrink:0;">🧑</div>';
+      const ph = getPhone(p);
+      const cleanP = cleanPhone(ph);
+
+      html += '<div class="missing-card">';
+      html += '  <div class="missing-card-bar ' + (hasImgCmnd ? 'has-img' : '') + '"></div>';
+      
+      // Header row
+      html += '  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px;">';
+      html += '    <div style="display:flex;gap:10px;align-items:center;min-width:0;">';
+      html += avHtml;
+      html += '      <div style="min-width:0;">';
+      html += '        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+      html += '          <span style="font-size:15px;font-weight:800;color:#0f172a;">' + esc(p.ten_that || "(Chưa có tên)") + '</span>';
+      if (isMuon(p)) html += '<span class="tag muon" style="font-size:10px;padding:1px 5px;">⚑ ' + esc(p.ten_ho_so) + '</span>';
+      html += (p.loai === "Lao động" ? ' <span class="tag">Lao động</span>' : (p.loai === "Gia thuộc" ? ' <span class="tag gt">Gia thuộc</span>' : ' <span class="tag kh">Khác</span>'));
+      if (p.chu_phong) html += ' <span class="tag chu">👑 Chủ phòng</span>';
+      html += '        </div>';
+      html += '        <div style="font-size:12px;color:#64748b;margin-top:2px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">';
+      if (p.to) html += '<span>' + esc(p.to) + '</span><span aria-hidden="true">&bull;</span>';
+      if (p.phong_o) html += '<span>🏠 Phòng ' + esc(p.phong_o) + '</span><span aria-hidden="true">&bull;</span>';
+      if (p.phan_cay) html += '<span>🌳 ' + esc(p.phan_cay) + '</span><span aria-hidden="true">&bull;</span>';
+      if (p.quan_he) html += '<span>' + esc(p.quan_he) + '</span>';
+      if (cleanP) {
+        html += '<span aria-hidden="true">&bull;</span><a href="tel:' + esc(cleanP) + '" style="color:#0f766e;font-weight:700;text-decoration:none;" title="Gọi ' + esc(formatPhone(cleanP)) + '">📞 ' + esc(formatPhone(cleanP)) + '</a>';
+      }
+      html += '        </div>';
+      html += '      </div>';
+      html += '    </div>';
+
+      // Status badge
+      html += '    <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Đang yêu cầu bổ sung</span>';
+      html += '  </div>';
+
+      // Middle status row (Image Status & Instruction)
+      html += '  <div style="display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap;font-size:12px;">';
+      if (hasImgCmnd) {
+        html += '    <span style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:3px 8px;border-radius:6px;font-weight:700;display:inline-flex;align-items:center;gap:4px;">📷 Đã có ảnh chụp CMND (Chờ đọc/nhập số)</span>';
+      } else {
+        html += '    <span style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:3px 8px;border-radius:6px;font-weight:700;display:inline-flex;align-items:center;gap:4px;">❌ Chưa có ảnh thẻ CMND</span>';
+      }
+      if (p.cmnd && String(p.cmnd).trim()) {
+        html += '    <span style="color:#94a3b8;font-size:11px;">Ghi chú hiện tại: "' + esc(p.cmnd) + '"</span>';
+      }
+      html += '  </div>';
+
+      // Action buttons
+      html += '  <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center;">';
+      html += '    <button type="button" class="btn primary mini-b btn-supplement-cmnd" data-id="' + p.id + '" style="background:#ea580c;border-color:#c2410c;font-weight:700;">📷 Bổ sung CMND ngay</button>';
+      if (cleanP) {
+        html += '    <a href="tel:' + esc(cleanP) + '" class="btn mini-b" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0;text-decoration:none;font-weight:700;">📞 Gọi đôn đốc</a>';
+      }
+      if (p.phong_o) {
+        html += '    <button type="button" class="btn mini-b btn-view-missing-room" data-room="' + esc(p.phong_o) + '" style="background:#f8fafc;color:#475569;border-color:#cbd5e1;">🏠 Xem phòng</button>';
+      }
+      html += '    <button type="button" class="btn mini-b btn-full-profile" data-id="' + p.id + '" style="margin-left:auto;background:transparent;color:#0f766e;border-color:transparent;">Hồ sơ chi tiết &rarr;</button>';
+      html += '  </div>';
+
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
+  html += '<div class="sheet-f">';
+  html += '  <button class="btn primary" id="bCloseMissingBookBottom" style="width:100%;justify-content:center;background:#0f766e;border-color:#0f766e;">Đóng</button>';
+  html += '</div>';
+
+  sheet.innerHTML = html;
+  document.getElementById("overlay").classList.add("show");
+
+  const closeFn = () => {
+    document.getElementById("overlay").classList.remove("show");
+  };
+  const bCloseTop = document.getElementById("bCloseMissingBook");
+  if (bCloseTop) bCloseTop.onclick = closeFn;
+  const bCloseBot = document.getElementById("bCloseMissingBookBottom");
+  if (bCloseBot) bCloseBot.onclick = closeFn;
+
+  // Search input live event
+  const sInp = sheet.querySelector("#missingSearchInput");
+  if (sInp) {
+    sInp.addEventListener("input", e => {
+      currentMissingSearch = e.target.value;
+      showMissingCmndManager(currentMissingFilter, currentMissingSearch, currentMissingTo);
+      const newInp = document.getElementById("missingSearchInput");
+      if (newInp) {
+        newInp.focus();
+        newInp.setSelectionRange(newInp.value.length, newInp.value.length);
+      }
+    });
+  }
+
+  // To Select event
+  const toSel = sheet.querySelector("#missingToSelect");
+  if (toSel) {
+    toSel.addEventListener("change", e => {
+      currentMissingTo = e.target.value;
+      showMissingCmndManager(currentMissingFilter, currentMissingSearch, currentMissingTo);
+    });
+  }
+
+  // Filter tabs
+  sheet.querySelectorAll("[data-missing-filter]").forEach(btn => {
+    btn.onclick = () => {
+      currentMissingFilter = btn.dataset.missingFilter;
+      showMissingCmndManager(currentMissingFilter, currentMissingSearch, currentMissingTo);
+    };
+  });
+
+  // Action: Export Excel
+  const bExport = sheet.querySelector("#bExportMissingExcel");
+  if (bExport) bExport.onclick = exportMissingCmndXlsx;
+
+  // Action: Print Report
+  const bPrint = sheet.querySelector("#bPrintMissingReport");
+  if (bPrint) bPrint.onclick = printMissingCmndReport;
+
+  // Action: Supplement CMND button -> opens openEdit(id)
+  sheet.querySelectorAll(".btn-supplement-cmnd, .btn-full-profile").forEach(btn => {
+    btn.onclick = () => {
+      const id = +btn.dataset.id || btn.dataset.id;
+      openEdit(id);
+    };
+  });
+
+  // Action: View Room
+  sheet.querySelectorAll(".btn-view-missing-room").forEach(btn => {
+    btn.onclick = () => {
+      const room = btn.dataset.room;
+      if (room) openRoom(room);
+    };
+  });
+}
+
+function exportMissingCmndXlsx() {
+  const missing = DATA.filter(p => !p.deleted && !isValidCmnd(p.cmnd));
+  if (missing.length === 0) {
+    toast("Hiện không có công nhân nào thiếu CMND để xuất Excel.");
+    return;
+  }
+
+  const head = [
+    "STT",
+    "Họ và tên (Tên thật)",
+    "Tên trong hồ sơ (Tên mượn)",
+    "Loại đối tượng",
+    "Tổ",
+    "Phòng ở",
+    "Phần cây hiện tại",
+    "Quan hệ gia đình",
+    "Số điện thoại",
+    "Tình trạng CMND",
+    "Đã có ảnh CMND?",
+    "Ngày sinh",
+    "Địa chỉ thường trú",
+    "Ghi chú hồ sơ"
+  ];
+
+  const aoa = [head];
+  missing.forEach((p, i) => {
+    const hasImg = !!getImg(p.id, "cmnd");
+    aoa.push([
+      i + 1,
+      p.ten_that || "",
+      p.ten_ho_so || "",
+      p.loai || "",
+      p.to || "",
+      p.phong_o || "",
+      p.phan_cay || "",
+      p.quan_he || "",
+      getPhone(p) || "",
+      "Đang yêu cầu bổ sung",
+      hasImg ? "Đã có ảnh" : "Chưa có ảnh",
+      p.ngay_sinh || "",
+      p.dia_chi || "",
+      p.ghi_chu || ""
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [
+    { wch: 6 },
+    { wch: 24 },
+    { wch: 22 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 22 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 35 },
+    { wch: 30 }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "DS_Thieu_CMND");
+  const d = new Date();
+  const dateStr = d.getFullYear() + ("0" + (d.getMonth() + 1)).slice(-2) + ("0" + d.getDate()).slice(-2);
+  const fn = "DS_CongNhan_ChuaCo_CMND_DSX02_" + dateStr + ".xlsx";
+  XLSX.writeFile(wb, fn);
+  toast("Đã xuất " + missing.length + " hồ sơ thiếu CMND ra Excel ✓");
+}
+
+function printMissingCmndReport() {
+  const missing = DATA.filter(p => !p.deleted && !isValidCmnd(p.cmnd));
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+  const d = new Date();
+  const dateStr = ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear();
+
+  let h = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Danh Sách Đôn Đốc Bổ Sung CMND/CCCD - ĐSX 02</title>';
+  h += '<style>';
+  h += 'body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:20px;}';
+  h += 'h1{font-size:18px;text-align:center;margin-bottom:4px;color:#9a3412;text-transform:uppercase;}';
+  h += '.sub{text-align:center;font-size:12px;color:#555;margin-bottom:16px;}';
+  h += 'table{width:100%;border-collapse:collapse;margin-top:10px;}';
+  h += 'th,td{border:1px solid #333;padding:6px 8px;font-size:11.5px;text-align:left;}';
+  h += 'th{background:#f1f5f9;font-weight:bold;text-align:center;}';
+  h += '.alert-status{color:#c2410c;font-weight:bold;}';
+  h += '@media print{button{display:none;}}';
+  h += '</style></head><body>';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+  h += '  <div><b>ĐỘI SẢN XUẤT 02</b><br>BỘ PHẬN NHÂN SỰ & QUẢN LÝ LAO ĐỘNG</div>';
+  h += '  <button onclick="window.print()" style="padding:6px 12px;font-weight:bold;cursor:pointer;">🖨️ In trang này</button>';
+  h += '</div>';
+  h += '<h1>DANH SÁCH CÔNG NHÂN & GIA THUỘC ĐANG YÊU CẦU BỔ SUNG CMND / CCCD</h1>';
+  h += '<div class="sub">Ngày in: ' + dateStr + ' · Tổng số: ' + missing.length + ' trường hợp cần đôn đốc thu nộp</div>';
+
+  h += '<table><thead><tr>';
+  h += '<th style="width:36px;">STT</th>';
+  h += '<th>Họ và tên (Tên thật)</th>';
+  h += '<th>Tên mượn (nếu có)</th>';
+  h += '<th style="width:75px;">Đối tượng</th>';
+  h += '<th style="width:60px;">Tổ</th>';
+  h += '<th style="width:65px;">Phòng ở</th>';
+  h += '<th style="width:70px;">Phần cây</th>';
+  h += '<th style="width:90px;">Số ĐT</th>';
+  h += '<th style="width:130px;">Tình trạng giấy tờ</th>';
+  h += '<th style="width:90px;">Ký xác nhận</th>';
+  h += '</tr></thead><tbody>';
+
+  missing.forEach((p, idx) => {
+    const hasImg = !!getImg(p.id, "cmnd");
+    const statusText = hasImg ? "Đã có ảnh (chờ nhập)" : "Chưa có ảnh & số";
+    h += '<tr>';
+    h += '<td style="text-align:center;">' + (idx + 1) + '</td>';
+    h += '<td><b>' + esc(p.ten_that || "") + '</b></td>';
+    h += '<td>' + (isMuon(p) ? esc(p.ten_ho_so) : "—") + '</td>';
+    h += '<td style="text-align:center;">' + esc(p.loai || "") + '</td>';
+    h += '<td style="text-align:center;">' + esc(p.to || "") + '</td>';
+    h += '<td style="text-align:center;">' + esc(p.phong_o || "") + '</td>';
+    h += '<td style="text-align:center;">' + esc(p.phan_cay || "") + '</td>';
+    h += '<td>' + esc(formatPhone(cleanPhone(getPhone(p)))) + '</td>';
+    h += '<td class="alert-status">⚠️ ' + statusText + '</td>';
+    h += '<td></td>';
+    h += '</tr>';
+  });
+
+  h += '</tbody></table>';
+  h += '<div style="margin-top:30px;display:flex;justify-content:space-around;text-align:center;">';
+  h += '  <div><b>NGƯỜI LẬP BIỂU</b><br><br><br><br>(Ký, họ tên)</div>';
+  h += '  <div><b>TỔ TRƯỞNG / QUẢN LÝ TỔ</b><br><br><br><br>(Ký, họ tên)</div>';
   h += '  <div><b>CHỈ HUY ĐỘI SX02</b><br><br><br><br>(Ký, đóng dấu)</div>';
   h += '</div>';
   h += '</body></html>';
@@ -6108,6 +6593,13 @@ if(cPhoneEl) cPhoneEl.addEventListener("click", () => {
   render();
 });
 
+const cMissingCmndEl = document.getElementById("cMissingCmnd");
+if(cMissingCmndEl) cMissingCmndEl.addEventListener("click", () => {
+  state.missingCmnd = !state.missingCmnd;
+  cMissingCmndEl.classList.toggle("on", state.missingCmnd);
+  render();
+});
+
 // Filters - Room Categorization
 const fRoomBlockEl = document.getElementById("fRoomBlock");
 if(fRoomBlockEl) fRoomBlockEl.addEventListener("change", e => { state.roomBlock = e.target.value; render(); });
@@ -6125,6 +6617,13 @@ if(fRoomTypeEl) fRoomTypeEl.addEventListener("change", e => { state.roomType = e
 const listEl = document.getElementById("list");
 if(listEl){
   listEl.addEventListener("click", e => {
+    const missBtn = e.target.closest(".pill-missing-cmnd");
+    if(missBtn) {
+      e.stopPropagation();
+      const mid = missBtn.dataset.missingCmndId;
+      if(mid) openEdit(+mid || mid);
+      return;
+    }
     const discBtn = e.target.closest(".pill-discipline");
     if(discBtn) {
       e.stopPropagation();
@@ -6164,6 +6663,9 @@ if(bTopInstallBtn) bTopInstallBtn.onclick = () => triggerPWAInstall();
 
 const bTopSyncBtn = document.getElementById("bTopSync");
 if(bTopSyncBtn) bTopSyncBtn.onclick = () => syncNow(false);
+
+const bMissingCmndTopBtn = document.getElementById("bMissingCmndTop");
+if(bMissingCmndTopBtn) bMissingCmndTopBtn.onclick = () => showMissingCmndManager();
 
 const bDisciplineBtn = document.getElementById("bDiscipline");
 if(bDisciplineBtn) bDisciplineBtn.onclick = () => showDisciplineBook();
@@ -6458,6 +6960,16 @@ function openMoreMenu(){
           '<div class="more-menu-text">' +
             '<div class="more-menu-title">Đồng bộ Google Drive & Sheets</div>' +
             '<div class="more-menu-desc">' + (ROLE ? "Đang kết nối đám mây · Bấm để đồng bộ ngay" : "Chế độ ngoại tuyến · Bấm để kết nối hoặc cập nhật") + (q.length > 0 ? (" (⏳ " + q.length + " thay đổi chờ gửi)") : "") + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); showMissingCmndManager();" style="border-color:#fed7aa;background:linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);">' +
+          '<div class="more-menu-icon" style="background:#ffedd5;color:#c2410c;">📋</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title" style="display:flex;align-items:center;gap:6px;">' +
+              '<span>Sổ Quản lý Chưa có CMND</span>' +
+              '<span id="moreMenuMissingCmndBadge" style="background:#ea580c;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px;font-weight:800;">' + getMissingCmndCount() + '</span>' +
+            '</div>' +
+            '<div class="more-menu-desc">Theo dõi công nhân đang yêu cầu bổ sung CMND, đôn đốc nộp ảnh, in danh sách & xuất Excel</div>' +
           '</div>' +
         '</div>' +
         '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); showDisciplineBook();">' +
