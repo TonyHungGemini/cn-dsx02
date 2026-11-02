@@ -229,16 +229,21 @@ let _phoneSyncTimer = null;
 function scheduleServerPhoneSync(){
   if(_phoneSyncTimer) clearTimeout(_phoneSyncTimer);
   _phoneSyncTimer = setTimeout(() => {
-    try {
-      fetch("/api/sync-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phones: getPhoneCache(),
-          config: (typeof CFG !== "undefined") ? CFG : {}
-        })
-      }).catch(e => {});
-    } catch(e){}
+    const push = () => {
+      if(API_OK === false) return;
+      try {
+        fetch("/api/sync-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phones: getPhoneCache(),
+            config: (typeof CFG !== "undefined") ? CFG : {}
+          })
+        }).catch(e => {});
+      } catch(e){}
+    };
+    if(API_OK === null) detectApi().then(push);
+    else push();
   }, 400);
 }
 
