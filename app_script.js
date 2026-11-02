@@ -416,8 +416,32 @@ function getPhone(p){
     s = lookupPhoneFromCache(p);
   }
 
+  // 5. Fallback: SĐT tổ trưởng đã nhập trên Google Sheet nhưng chưa vào CSDL chính
+  if(!s){
+    s = lookupPendingPhone(p);
+  }
+
   if(!s) return "";
   return cleanPhone(s);
+}
+
+function getPendingPhoneMap(){
+  return (typeof window !== "undefined" && window.__PENDING_PHONES && typeof window.__PENDING_PHONES === "object")
+    ? window.__PENDING_PHONES : {};
+}
+
+function lookupPendingPhone(p){
+  if(!p || typeof p !== "object") return "";
+  const id = p.id;
+  if(id == null || id === "" || id === "__new__") return "";
+  const v = getPendingPhoneMap()[String(id)];
+  return v ? cleanPhone(v) : "";
+}
+
+function isPendingPhone(p){
+  if(!p || typeof p !== "object") return false;
+  const pending = lookupPendingPhone(p);
+  return !!pending && cleanPhone(getPhone(p)) === pending;
 }
 
 function formatPhone(phone){
@@ -449,8 +473,10 @@ function phonePillHtml(p, compact){
   if(!ph) return "";
   const cl = cleanPhone(ph);
   const disp = formatPhone(ph);
+  const pending = isPendingPhone(p);
   const iconSvg = '<svg class="phone-icon-svg" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.2 2.2z"/></svg>';
-  return '<a href="tel:'+esc(cl)+'" class="pill phone-pill" onclick="event.stopPropagation()" title="Bấm để gọi '+esc(disp)+'">' + iconSvg + '<span class="phone-number-text">' + esc(disp) + '</span></a>';
+  const pin = pending ? '<span style="font-size:10px;margin-left:2px;" title="SĐT do tổ trưởng nhập, chưa có trong CSDL chính thức">📌</span>' : '';
+  return '<a href="tel:'+esc(cl)+'" class="pill phone-pill" onclick="event.stopPropagation()" title="Bấm để gọi '+esc(disp)+(pending ? ' · SĐT do tổ trưởng nhập' : '')+'">' + iconSvg + '<span class="phone-number-text">' + esc(disp) + '</span>' + pin + '</a>';
 }
 
 function getBaseData(){
@@ -2878,7 +2904,10 @@ function openEdit(id, prefillRoom, backRoom) {
       const ph = cur.so_dt;
       const cl = cleanPhone(ph);
       const iconSvg = '<svg class="phone-icon-svg" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="color:#fff;"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.2 2.2z"/></svg>';
-      return '<div class="fld"><label>' + lbl + '</label><div class="fld-phone-wrap"><input type="tel" data-k="' + k + '" value="' + v + '" placeholder="Ví dụ: 0912345678 hoặc +855..."><a href="' + (cl ? ("tel:" + cl) : "#") + '" class="btn primary mini-b" style="' + (cl ? "" : "display:none") + '" id="bCallNow" title="Bấm gọi ngay">' + iconSvg + ' <span>Gọi ngay</span></a></div></div>';
+      const pendingNote = isPendingPhone(cur)
+        ? '<div style="font-size:11px;color:#7c3aed;margin-top:4px;">📌 SĐT do tổ trưởng nhập trên Google Sheet, chưa có trong CSDL chính thức.</div>'
+        : '';
+      return '<div class="fld"><label>' + lbl + '</label><div class="fld-phone-wrap"><input type="tel" data-k="' + k + '" value="' + v + '" placeholder="Ví dụ: 0912345678 hoặc +855..."><a href="' + (cl ? ("tel:" + cl) : "#") + '" class="btn primary mini-b" style="' + (cl ? "" : "display:none") + '" id="bCallNow" title="Bấm gọi ngay">' + iconSvg + ' <span>Gọi ngay</span></a></div>' + pendingNote + '</div>';
     }
     if (t === "addr") {
       return '<div class="fld"><label>' + lbl + '</label><div class="fld-addr-wrap"><input data-k="' + k + '" value="' + v + '" placeholder="Nhập địa chỉ hoặc quét từ CMND"><button type="button" class="btn-trans" data-field="' + k + '" title="Dịch địa chỉ tiếng Khmer sang tiếng Việt chuẩn">🌐 Dịch TV</button></div></div>';
@@ -4375,7 +4404,7 @@ function showStats(initTab){
 
   // Nhân sự data
   const byTo = {}, byLoai = { "Lao động": 0, "Gia thuộc": 0, "Khác": 0 };
-  let muon = 0, hasPhoneCount = 0, countM = 0, countF = 0, under25 = 0, mid2540 = 0, over40 = 0;
+  let muon = 0, hasPhoneCount = 0, countM = 0, countF = 0, under25 = 0, mid2540 = 0, over40 = 0, gt10to15 = 0;
   const roomsSet = new Set();
   let noRoomCount = 0;
 
@@ -4424,6 +4453,7 @@ function showStats(initTab){
       if(a < 25) under25++;
       else if(a <= 40) mid2540++;
       else over40++;
+      if(p.loai === "Gia thuộc" && a >= 10 && a <= 15) gt10to15++;
     }
   });
 
@@ -4539,6 +4569,19 @@ function showStats(initTab){
         '</div>'+
       '</div>';
   });
+
+  const gtTotal = byLoai["Gia thuộc"] || 0;
+  const gt10to15Pct = Math.round((gt10to15 / (gtTotal || 1)) * 100);
+  ageBarsHtml +=
+    '<div class="stat-bar-item" style="margin-top:12px;padding-top:12px;border-top:1px dashed #e2e8f0;">'+
+      '<div class="stat-bar-label-row">'+
+        '<span>👧 Gia thuộc 10–15 tuổi <span style="color:#94a3b8;font-size:11px;font-weight:500;">(Tuổi đến trường)</span></span>'+
+        '<span style="font-weight:700;color:#8b5cf6;">'+gt10to15+' người <span style="color:#94a3b8;font-size:11px;font-weight:500;">('+gt10to15Pct+'% gia thuộc)</span></span>'+
+      '</div>'+
+      '<div class="stat-bar-track">'+
+        '<div class="stat-bar-fill" data-pct="'+gt10to15Pct+'%" style="background:#8b5cf6;"></div>'+
+      '</div>'+
+    '</div>';
 
   const ldPercent = Math.round(((byLoai["Lao động"] || 0) / (DATA.length || 1)) * 100);
   const gtPercent = Math.round(((byLoai["Gia thuộc"] || 0) / (DATA.length || 1)) * 100);
@@ -4659,7 +4702,7 @@ function showStats(initTab){
     '<div class="stat-section">'+
       '<div class="stat-section-title">'+
         '<span>🎂 Phân bổ Độ tuổi nhân sự</span>'+
-        '<span class="stat-section-subtitle">Cơ cấu độ tuổi lao động</span>'+
+        '<span class="stat-section-subtitle">Cơ cấu độ tuổi lao động &amp; gia thuộc</span>'+
       '</div>'+
       ageBarsHtml+
     '</div>';

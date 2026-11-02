@@ -1,5 +1,5 @@
-var CACHE = "cn-dsx02-v59";
-var ASSETS = ["./", "./index.html", "./images_catalog.js?v=57", "./images_index.js?v=59", "./app_script.js?v=59", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+var CACHE = "cn-dsx02-v61";
+var ASSETS = ["./", "./index.html", "./images_catalog.js?v=57", "./images_index.js?v=61", "./pending_phones.js?v=61", "./app_script.js?v=61", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(e) {
   self.skipWaiting();
