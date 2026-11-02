@@ -718,6 +718,21 @@ function esc(s){
 const PRELOAD = (typeof PRELOAD_IMG!=="undefined") ? PRELOAD_IMG : {};
 let IMG_OVR = {}; let _db = null; const DEL="__DEL__";
 
+// Ảnh tĩnh xuất từ máy quản trị (images_index.js) — dùng khi GitHub Pages không có backend /api
+const IMG_STATIC = (typeof window !== "undefined" && window.__IMG_STATIC) ? window.__IMG_STATIC : {};
+const IMG_BASE = ((typeof window !== "undefined" && window.__IMG_BASE) || "images").replace(/\/+$/, "");
+
+// GitHub Pages là web tĩnh: không có /api. Chỉ gọi API khi thực sự chạy bằng server.js.
+let API_OK = null;
+async function detectApi(){
+  if (API_OK !== null) return API_OK;
+  try {
+    const r = await fetch("/api/health", { cache: "no-store" });
+    API_OK = !!(r && r.ok);
+  } catch(e){ API_OK = false; }
+  return API_OK;
+}
+
 function idbOpen(){
   return new Promise(res => {
     try{
@@ -769,8 +784,9 @@ function imgFileId(id, t){
 }
 
 function driveImgUrl(fid, id, t){
-  if (!fid && !id) return null;
-  return "/api/drive-image?" + (fid ? ("fid=" + encodeURIComponent(fid) + "&") : "") + (id ? ("id=" + encodeURIComponent(id) + "&") : "") + (t ? ("t=" + encodeURIComponent(t)) : "");
+  if (!fid) return null;
+  // Tải trực tiếp từ Google Drive: không phụ thuộc server /api, chạy được trên GitHub Pages
+  return "https://lh3.googleusercontent.com/d/" + encodeURIComponent(fid) + "=w1000";
 }
 
 let TEMP_NEW_IMGS = {};
@@ -784,12 +800,12 @@ function getImg(id, t) {
   const preloadSource = (typeof PRELOAD_IMG !== "undefined") ? PRELOAD_IMG : ((typeof window !== "undefined" && window.PRELOAD_IMG) ? window.PRELOAD_IMG : PRELOAD);
   const p = preloadSource ? (preloadSource[id] || preloadSource[String(id)]) : null;
   if (p && p[t]) return p[t];
-  // 3. Drive File ID synced from cloud -> proxy through server with zero login
+  // 3. Drive File ID synced from cloud -> tải trực tiếp, không cần đăng nhập
   const fid = imgFileId(id, t);
   if (fid) return driveImgUrl(fid, id, t);
-  // 4. Server-cached or proxy image by worker id (for Guest / iPhone users who don't have fid in local map)
-  if (t === "photo" && id && id !== "__new__" && !String(id).startsWith("srv_")) {
-    return "/api/drive-image?id=" + encodeURIComponent(id) + "&t=photo";
+  // 4. Ảnh tĩnh/cloud đã xuất từ máy quản trị (photo_<id>.jpg, cmnd_<id>.jpg)
+  if (id && id !== "__new__" && IMG_STATIC && IMG_STATIC[k]) {
+    return IMG_BASE + "/" + IMG_STATIC[k];
   }
   return null;
 }
@@ -822,12 +838,13 @@ function initServerImagesCatalog() {
   } catch(e) {}
 }
 
-// Auto-hydrate images catalog from server on load
+// Auto-hydrate images catalog from server on load (chỉ khi có backend server.js)
 if (typeof window !== "undefined") {
+  const hydrate = () => detectApi().then(ok => { if (ok) initServerImagesCatalog(); });
   if (typeof document !== "undefined" && (document.readyState === "complete" || document.readyState === "interactive")) {
-    setTimeout(initServerImagesCatalog, 10);
+    setTimeout(hydrate, 10);
   } else if (typeof window.addEventListener === "function") {
-    window.addEventListener("DOMContentLoaded", initServerImagesCatalog);
+    window.addEventListener("DOMContentLoaded", hydrate);
   }
 }
 
@@ -841,13 +858,15 @@ function setImg(id, t, uri) {
   try { addPendImg(t + ":" + id); } catch(e) {}
 
   // Auto-sync image directly to central server for instant cross-device display (iPhone/PC/Guest accounts)
-  try {
-    fetch("/api/save-image", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: id, type: t, image: uri, fid: imgFileId(id, t) || "" })
-    }).catch(() => {});
-  } catch(e) {}
+  if (API_OK !== false) {
+    try {
+      fetch("/api/save-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: id, type: t, image: uri, fid: imgFileId(id, t) || "" })
+      }).catch(() => {});
+    } catch(e) {}
+  }
 }
 
 function delImg(id, t) {
@@ -858,6 +877,19 @@ function delImg(id, t) {
   IMG_OVR[t + ":" + id] = DEL;
   idbPut(t + ":" + id, DEL);
   try { addPendDel(t + ":" + id); } catch(e) {}
+}
+
+function rememberImgFid(id, t, fid){
+  if(!id || !t || !fid) return;
+  if(!window.__IMG_MAP) window.__IMG_MAP = {};
+  if(!window.__IMG_MAP[id]) window.__IMG_MAP[id] = {};
+  window.__IMG_MAP[id][t] = String(fid);
+  try {
+    const m = JSON.parse(localStorage.getItem("cn_imgfiles_v1") || "{}");
+    m[t + ":" + id] = String(fid);
+    safeSetStorage("cn_imgfiles_v1", JSON.stringify(m));
+  } catch(e) {}
+  if (typeof render === "function") render();
 }
 
 function hasAnyImg(p){
@@ -879,6 +911,14 @@ function getInitials(name) {
 
 function handleAvatarError(imgEl, name) {
   if (!imgEl) return;
+  const current = imgEl.getAttribute("src") || "";
+  const driveMatch = current.match(/lh3\.googleusercontent\.com\/d\/([^=\/?#]+)/);
+  if (driveMatch && !imgEl.dataset.driveRetry) {
+    imgEl.dataset.driveRetry = "1";
+    imgEl.onerror = function(){ handleAvatarError(imgEl, name); };
+    imgEl.src = "https://drive.google.com/thumbnail?id=" + driveMatch[1] + "&sz=w1000";
+    return;
+  }
   imgEl.onerror = null;
   const parent = imgEl.parentElement;
   const init = getInitials(name);
@@ -2304,6 +2344,14 @@ function renderDriveBadge(driveUrl) {
 
 function handleImgSlotError(img, type) {
   if (!img) return;
+  const current = img.getAttribute("src") || "";
+  const driveMatch = current.match(/lh3\.googleusercontent\.com\/d\/([^=\/?#]+)/);
+  if (driveMatch && !img.dataset.driveRetry) {
+    img.dataset.driveRetry = "1";
+    img.onerror = function(){ handleImgSlotError(img, type); };
+    img.src = "https://drive.google.com/thumbnail?id=" + driveMatch[1] + "&sz=w1000";
+    return;
+  }
   img.onerror = null;
   const wrap = img.closest(".islot");
   if (!wrap) return;
@@ -5561,6 +5609,7 @@ async function fetchServerImages(imgs, deleted){
 
 async function syncNow(silent){
   if(!silent) toast("Đang đồng bộ dữ liệu…");
+  if (API_OK === false && (!CFG.url || !CFG.key)) return;
 
   // 1. STEP 1: ALWAYS perform full bidirectional 2-way sync with server.js
   // Pushes all local phones, queued changes, modified records, and config.
@@ -5577,7 +5626,7 @@ async function syncNow(silent){
       Object.assign(mapToSend, window.__IMG_MAP);
     }
 
-    const srvRes = await fetch("/api/sync-data", {
+    const srvRes = (API_OK === false) ? null : await fetch("/api/sync-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -5590,22 +5639,24 @@ async function syncNow(silent){
     });
 
     // Also push any local IMG_OVR portraits directly to server so all employee iPhones see them immediately
-    try {
-      const ovrKeys = Object.keys(IMG_OVR);
-      for (const k of ovrKeys) {
-        const val = IMG_OVR[k];
-        if (val && val !== DEL && typeof val === "string" && val.startsWith("data:image/")) {
-          const [t, id] = k.split(":");
-          fetch("/api/save-image", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id, type: t, image: val, fid: imgFileId(id, t) || "" })
-          }).catch(() => {});
+    if (API_OK !== false) {
+      try {
+        const ovrKeys = Object.keys(IMG_OVR);
+        for (const k of ovrKeys) {
+          const val = IMG_OVR[k];
+          if (val && val !== DEL && typeof val === "string" && val.startsWith("data:image/")) {
+            const [t, id] = k.split(":");
+            fetch("/api/save-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id, type: t, image: val, fid: imgFileId(id, t) || "" })
+            }).catch(() => {});
+          }
         }
-      }
-    } catch(e) {}
+      } catch(e) {}
+    }
 
-    if(srvRes.ok){
+    if(srvRes && srvRes.ok){
       const srvData = await srvRes.json();
       if(srvData.ok){
         serverSyncSuccess = true;
@@ -5681,7 +5732,12 @@ async function syncNow(silent){
       if(!uri) continue;
       try{
         const r = await api("uploadImage", { id: id, type: t, dataUrl: uri });
-        if(!r.ok){
+        if(r.ok){
+          const newFid = r.fid || r.fileId || r.file_id ||
+            (r.data && (r.data.fid || r.data.fileId || r.data.file_id)) ||
+            (r.file && (r.file.id || r.file.fileId));
+          if(newFid) rememberImgFid(id, t, newFid);
+        } else {
           if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
             if(!silent){
               toast("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
@@ -6509,7 +6565,7 @@ function toast(msg){
 
 /* ---------- Init & Event Listeners ---------- */
 document.addEventListener("DOMContentLoaded", () => {
-  idbOpen().then(idbAll).then(async () => {
+  detectApi().then(() => idbOpen().then(idbAll)).then(async () => {
     // If local storage has inflated/duplicate records (> 570), clean it immediately!
     if(DATA.length > 570){
       DATA = dedupeDataset(DATA);
