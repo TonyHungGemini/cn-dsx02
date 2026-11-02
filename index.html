@@ -231,6 +231,14 @@ header{position:sticky;top:0;z-index:30;background:var(--green);color:#fff;paddi
   .tb-hide-mobile {
     display: none !important;
   }
+  #bSecurity,
+  #bMoreTop {
+    padding: 6px 9px;
+  }
+  #bSecurity .sec-label,
+  #bMoreTop .more-top-label {
+    display: none;
+  }
 }
 .btn{border:1px solid var(--line);background:#fff;color:var(--green-d);font-size:12.5px;font-weight:600;border-radius:8px;padding:6px 11px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s ease;}
 .btn.primary{background:var(--green);color:#fff;border-color:var(--green);}
@@ -2495,7 +2503,8 @@ a[href^="tel:"]:hover .phone-icon-svg {
     <button class="btn tb-hide-mobile" id="bMissingCmndTop" type="button" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;font-weight:700;" title="Quản lý hồ sơ công nhân đang yêu cầu bổ sung CMND">📋 Thiếu CMND <span class="badge" id="bMissingCmndBadge" style="background:#ea580c;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px;margin-left:3px;display:none;">0</span></button>
     <button class="btn tb-hide-mobile" id="bDiscipline" type="button" style="background:#fff1f2;color:#be123c;border-color:#fecdd3;font-weight:700;" title="Sổ Kỷ luật & Rèn luyện công nhân (1-2★)">📕 Sổ Kỷ luật <span class="badge" id="bDisciplineBadge" style="background:#e11d48;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px;margin-left:3px;display:none;">0</span></button>
     <button class="btn tb-hide-mobile" id="bStat" type="button" title="Báo cáo & Thống kê">📊 Thống kê</button>
-    <button class="btn" id="bMoreTop" type="button" title="Mở danh sách tiện ích mở rộng">⚡ Tiện ích</button>
+    <button class="btn" id="bSecurity" type="button" style="background:#f5f3ff;color:#5b21b6;border-color:#ddd6fe;font-weight:700;" title="Nhận diện an ninh: đối chiếu ảnh camera/người dân với hồ sơ công nhân">🛡️<span class="sec-label"> Nhận diện</span></button>
+    <button class="btn" id="bMoreTop" type="button" title="Mở danh sách tiện ích mở rộng">⚡<span class="more-top-label"> Tiện ích</span></button>
   </div>
   <button class="btn" id="bImport" style="display:none">⬆️ Nhập Excel</button>
   <button class="btn" id="bSync" style="display:none">☁️ Đồng bộ</button>
@@ -2552,7 +2561,8 @@ a[href^="tel:"]:hover .phone-icon-svg {
 <script src="images_catalog.js?v=57"></script>
 <script src="images_index.js?v=61"></script>
 <script src="pending_phones.js?v=61"></script>
-<script src="app_script.js?v=62"></script>
+<script src="app_script.js?v=64"></script>
+<script src="security_face.js?v=72"></script>
 <script>
 (function(){
   function loadImgs(){

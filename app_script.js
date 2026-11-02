@@ -6774,6 +6774,11 @@ if(bMissingCmndTopBtn) bMissingCmndTopBtn.onclick = () => showMissingCmndManager
 const bDisciplineBtn = document.getElementById("bDiscipline");
 if(bDisciplineBtn) bDisciplineBtn.onclick = () => showDisciplineBook();
 
+const bSecurityBtn = document.getElementById("bSecurity");
+if(bSecurityBtn) bSecurityBtn.onclick = () => {
+  if (typeof window.openSecurityPanel === "function") window.openSecurityPanel();
+};
+
 const bMoreTopBtn = document.getElementById("bMoreTop");
 if(bMoreTopBtn) bMoreTopBtn.onclick = () => openMoreMenu();
 
@@ -7040,6 +7045,16 @@ function openMoreMenu(){
           '<div class="more-menu-text">' +
             '<div class="more-menu-title">Báo cáo & Thống kê nhân sự</div>' +
             '<div class="more-menu-desc">Phân tích cơ cấu lao động, giới tính, nhóm máu, phòng ở và tay nghề</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); openSecurityPanel();" style="border-color:#ddd6fe;background:linear-gradient(135deg,#f5f3ff 0%,#ffffff 100%);" title="Đối chiếu ảnh camera an ninh với ảnh công nhân">' +
+          '<div class="more-menu-icon" style="background:#ede9fe;color:#6d28d9;">🛡️</div>' +
+          '<div class="more-menu-text">' +
+            '<div class="more-menu-title" style="display:flex;align-items:center;gap:6px;">' +
+              '<span>Nhận diện an ninh</span>' +
+              '<span style="background:#6d28d9;color:#fff;font-size:10px;padding:1px 6px;border-radius:999px;font-weight:700;">AI cục bộ</span>' +
+            '</div>' +
+            '<div class="more-menu-desc">Đưa ảnh từ camera hoặc người dân cung cấp, xếp hạng các hồ sơ công nhân có khuôn mặt tương đồng nhất</div>' +
           '</div>' +
         '</div>' +
         '<div class="more-menu-card more-menu-card-highlight" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); exportXlsx();" title="Tải xuống file bảng tính Excel toàn bộ danh sách">' +
