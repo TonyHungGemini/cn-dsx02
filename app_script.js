@@ -5211,8 +5211,8 @@ function auditEntryHtml(l){
   const remote = l.source === "cloud";
   const meta = [];
   if(l.team) meta.push('<span class="audit-chip team">' + esc(auditTeamLabel(l.team)) + '</span>');
-  if(l.user) meta.push('<span class="audit-chip user">' + esc(l.user) + '</span>');
-  if(l.role) meta.push('<span class="audit-chip role' + (l.role === "Admin" ? " admin" : "") + '">' + esc(l.role) + '</span>');
+  if(l.user && l.user !== "Thiết bị khác") meta.push('<span class="audit-chip user">' + esc(l.user) + '</span>');
+  if(l.role && l.role !== "Đồng bộ") meta.push('<span class="audit-chip role' + (l.role === "Admin" ? " admin" : "") + '">' + esc(l.role) + '</span>');
   meta.push('<span class="audit-chip src ' + (remote ? "remote" : "local") + '">' + (remote ? "Từ thiết bị khác" : "Trên máy này") + '</span>');
   return '<div class="audit-item ' + (remote ? "remote" : "local") + '">' +
       '<div class="audit-top"><b>' + esc(l.action || "Thao tác") + '</b><span class="audit-time">' + esc(l.time || "") + '</span></div>' +
@@ -5421,6 +5421,13 @@ function auditMarkOwn(p){
   }catch(e){}
 }
 
+function auditMeaningfulServerRec(rec){
+  const n = cleanStr(rec.ten_that);
+  const c = isValidCmnd(rec.cmnd) ? String(rec.cmnd).trim() : "";
+  const r = cleanStr(rec.phong_o);
+  return !!(n || c || r);
+}
+
 // Ghi nhận thay đổi do thiết bị khác đẩy lên (Google Sheet / server), tránh ghi trùng
 // với thay đổi của chính máy này đang chờ gửi.
 function logIncomingChanges(list){
@@ -5439,6 +5446,7 @@ function logIncomingChanges(list){
       let srec;
       try{ srec = normServerRec(raw); }catch(e){ return; }
       if(!srec || srec.id == null) return;
+      if(!auditMeaningfulServerRec(srec)) return;
       const key = String(srec.id);
       const hash = auditHash(srec);
       next[key] = hash;
@@ -5449,8 +5457,12 @@ function logIncomingChanges(list){
       if(findMatchingRecord(srec, queued)) return;
 
       const existing = findMatchingRecord(srec, DATA);
-      const rawUser = String(raw._editedBy || raw.nguoi_cap_nhat || raw["Người cập nhật"] || "").trim();
-      const ts = Number(raw._editedAt) > 0 ? Number(raw._editedAt) : Date.now();
+      let rawUser = String(raw._editedBy || raw.updatedBy || raw.updated_by || raw.nguoi_cap_nhat || raw.nguoi_sua || raw["Người cập nhật"] || raw["Người sửa"] || raw["Cập nhật bởi"] || "").trim();
+      if(/^(guest)$/i.test(rawUser)) rawUser = "Thành viên";
+      if(/^(admin)$/i.test(rawUser)) rawUser = "Admin";
+      if(/^(null|undefined)$/i.test(rawUser)) rawUser = "";
+      const rawTs = Number(raw._editedAt) > 0 ? Number(raw._editedAt) : (Date.parse(raw.updatedAt || raw.updated_at) || 0);
+      const ts = rawTs > 0 ? rawTs : Date.now();
       const name = srec.ten_that || srec.ten_ho_so || "";
       if(!prev){
         found.push({
@@ -5464,7 +5476,7 @@ function logIncomingChanges(list){
           source: "cloud"
         });
       } else if(existing){
-        const parts = auditDiffParts(auditSnap(existing), auditSnap(srec));
+        const parts = auditDiffParts(auditSnap(normServerRec(existing)), auditSnap(srec));
         if(parts.length){
           found.push({
             action: "Cập nhật từ thiết bị khác",
