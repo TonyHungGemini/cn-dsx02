@@ -945,6 +945,40 @@ table.mini td:last-child { text-align: right; font-weight: 700; color: var(--gre
 .cli-desc { color: #334155; line-height: 1.35; }
 .cli-user { color: #64748b; font-size: 11.5px; }
 
+/* ===== Nhật ký thay đổi: cửa sổ dài, lọc theo tổ / người dùng ===== */
+.audit-body { padding-top: 10px; }
+.audit-toolbar input { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; font-size: 14px; outline: none; font-family: inherit; }
+.audit-toolbar input:focus { border-color: var(--green); }
+.audit-filters { display: flex; gap: 6px; margin-top: 6px; }
+.audit-filters select { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 8px 6px; font-size: 12.5px; background: #fff; color: #334155; font-family: inherit; }
+.audit-summary { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: #475569; margin: 7px 2px 8px; }
+.audit-summary b { color: #0f766e; }
+.audit-sum-remote { color: #1d4ed8; }
+.audit-sum-local { color: #047857; }
+.audit-list { max-height: calc(92vh - 210px); min-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; }
+.audit-item { padding: 9px 11px; border-bottom: 1px solid #e2e8f0; border-left: 3px solid #10b981; }
+.audit-item.remote { border-left-color: #3b82f6; background: #f8fbff; }
+.audit-item:last-child { border-bottom: none; }
+.audit-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.audit-top b { font-size: 13px; color: #0f172a; }
+.audit-time { font-size: 11px; color: #64748b; white-space: nowrap; }
+.audit-worker { font-size: 12.5px; color: #0f766e; font-weight: 700; margin-top: 2px; }
+.audit-detail { font-size: 12.5px; color: #334155; line-height: 1.4; margin-top: 2px; word-break: break-word; }
+.audit-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.audit-chip { font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 7px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+.audit-chip.team { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.audit-chip.role.admin { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.audit-chip.src.remote { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
+.audit-foot { margin-top: 10px; display: flex; justify-content: flex-end; }
+.audit-foot .btn { flex: 0 0 auto; }
+.audit-more { display: flex; width: calc(100% - 20px); margin: 8px 10px; justify-content: center; }
+.audit-hint { font-size: 11.5px; color: var(--muted); margin-top: 6px; text-align: center; }
+@media (max-width: 520px) {
+  .audit-list { max-height: calc(100vh - 320px); }
+  .audit-filters { flex-wrap: wrap; }
+  .audit-filters select { flex: 1 1 30%; }
+}
+
 /* ===== Google Drive Badge & Image Action Toolbar ===== */
 .drive-badge-link, a.drive-badge-link {
   display: inline-flex !important;
@@ -2561,7 +2595,7 @@ a[href^="tel:"]:hover .phone-icon-svg {
 <script src="images_catalog.js?v=57"></script>
 <script src="images_index.js?v=61"></script>
 <script src="pending_phones.js?v=61"></script>
-<script src="app_script.js?v=64"></script>
+<script src="app_script.js?v=65"></script>
 <script src="security_face.js?v=72"></script>
 <script>
 (function(){

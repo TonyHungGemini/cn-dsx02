@@ -169,7 +169,6 @@ function safeSetStorage(key, val) {
   } catch (err) {
     console.warn("Storage write warning for key " + key + ":", err && err.message);
     if (err && (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED" || err.code === 22 || err.code === 1014)) {
-      try { localStorage.removeItem("cn_audit_logs_v1"); } catch(e) {}
       try { localStorage.removeItem("cn_pendimg_v1"); } catch(e) {}
       if (key !== "cn_imgfiles_v1") {
         try { localStorage.removeItem("cn_imgfiles_v1"); } catch(e) {}
@@ -1918,7 +1917,10 @@ function openRoom(room){
       });
       p.chu_phong = makeLeader;
       p._edited = true;
+      p._editedAt = Date.now();
+      p._editedBy = auditUserName();
       queueChange(p);
+      logRecordChange(makeLeader ? "Đặt chủ phòng" : "Bỏ chủ phòng", p, "Phòng " + room);
       save();
       openRoom(room);
       render();
@@ -1937,10 +1939,14 @@ function movePerson(id, fromRoom){
   const target = prompt("Chuyển " + p.ten_that + " sang phòng:", p.phong_o || "");
   if(target === null) return;
   const newR = target.trim();
+  const oldR = p.phong_o || "";
   p.phong_o = newR;
   p._edited = true;
   p.chu_phong = false;
+  p._editedAt = Date.now();
+  p._editedBy = auditUserName();
   queueChange(p);
+  logRecordChange("Chuyển phòng", p, (oldR || "(chưa có)") + " → " + (newR || "(chưa có)"));
   save();
   render();
   toast("Đã chuyển sang phòng " + (newR || "(chưa có phòng)"));
@@ -2629,6 +2635,7 @@ function saveEdit(id) {
   const isNew = id === "__new__";
   let rec = isNew ? blank() : DATA.find(x => x.id === id);
   if (!rec) return;
+  const auditBefore = isNew ? null : auditSnap(rec);
 
   const inputs = sheet.querySelectorAll("[data-k]");
   inputs.forEach(inp => {
@@ -2708,7 +2715,15 @@ function saveEdit(id) {
     rec._edited = true;
   }
 
+  rec._editedAt = Date.now();
+  rec._editedBy = auditUserName();
   queueChange(rec);
+  if(isNew){
+    logRecordChange("Thêm hồ sơ", rec, [rec.ten_that, auditDescribeWorker(rec)].filter(Boolean).join(" · "));
+  } else {
+    const parts = auditDiffParts(auditBefore, rec);
+    if(parts.length) logRecordChange("Sửa hồ sơ", rec, auditDiffText(parts));
+  }
   save();
   updateDisciplineBadge();
   render();
@@ -3181,7 +3196,10 @@ function delRec(id){
   if(i >= 0){
     const p = DATA[i];
     p.deleted = true;
+    p._editedAt = Date.now();
+    p._editedBy = auditUserName();
     queueChange(p);
+    logRecordChange("Xóa hồ sơ", p, [p.ten_that || p.ten_ho_so, auditDescribeWorker(p)].filter(Boolean).join(" · "));
     DATA.splice(i, 1);
     save();
     render();
@@ -3374,6 +3392,7 @@ function openDisciplineQuickEdit(id) {
     const newNguoiLap = sheet.querySelector("#quickNguoiLap").value.trim();
     const newNote = sheet.querySelector("#quickGhiChu").value.trim();
 
+    const auditBefore = auditSnap(p);
     p.danh_gia_ky_nang = newSkill;
     p.danh_gia_dao_duc = newEthics;
     p.ngay_ky_luat = newDate;
@@ -3384,8 +3403,11 @@ function openDisciplineQuickEdit(id) {
     p._edited = true;
     p._manuallyRated = true;
     p._editedAt = Date.now();
+    p._editedBy = auditUserName();
 
     queueChange(p);
+    const parts = auditDiffParts(auditBefore, p);
+    if(parts.length) logRecordChange("Cập nhật kỷ luật", p, auditDiffText(parts));
     save();
     render();
     updateDisciplineBadge();
@@ -3659,13 +3681,16 @@ function showDisciplineBook(initFilter, initSearch) {
       const worker = DATA.find(x => x.id === pid);
       if (!worker) return;
       if (confirm("Nâng công nhân '" + (worker.ten_that || "này") + "' lên 3★ Đạt chuẩn và đánh dấu Đã khắc phục?")) {
+        const auditBefore = auditSnap(worker);
         worker.danh_gia_ky_nang = 3;
         worker.danh_gia_dao_duc = 3;
         worker.trang_thai_ky_luat = "Đã khắc phục xong (Đạt chuẩn)";
         worker._manuallyRated = true;
         worker._edited = true;
         worker._editedAt = Date.now();
+        worker._editedBy = auditUserName();
         queueChange(worker);
+        logRecordChange("Nâng 3★ Đạt chuẩn", worker, auditDiffText(auditDiffParts(auditBefore, worker)) || "Đặt lại đánh giá đạt chuẩn");
         save();
         render();
         updateDisciplineBadge();
@@ -5080,28 +5105,397 @@ function savePrefs(p){
 }
 
 /* ---------- Audit Logs ---------- */
-function addLog(action, detail){
+const AUDIT_KEY = "cn_audit_logs_v1";
+const AUDIT_BASE_KEY = "cn_audit_sync_v1";
+const AUDIT_OWN_KEY = "cn_audit_own_v1";
+const AUDIT_MAX = 1500;
+const AUDIT_TRIM = 1200;
+
+const AUDIT_FIELDS = [
+  ["ten_that", "Họ tên"],
+  ["ten_ho_so", "Tên hồ sơ"],
+  ["cmnd", "CMND"],
+  ["so_dt", "SĐT"],
+  ["ngay_sinh", "Ngày sinh"],
+  ["gioi_tinh", "Giới tính"],
+  ["loai", "Loại"],
+  ["to", "Tổ"],
+  ["phong_o", "Phòng"],
+  ["khu_vuc", "Khu vực"],
+  ["phan_cay", "Phần cây"],
+  ["quan_he", "Quan hệ"],
+  ["nhom_mau", "Nhóm máu"],
+  ["so_bao_hiem", "Số BH"],
+  ["chi_tiet_noi_o", "Chi tiết nơi ở"],
+  ["dia_chi", "Địa chỉ"],
+  ["ghi_chu", "Ghi chú"],
+  ["chu_phong", "Chủ phòng"],
+  ["danh_gia_ky_nang", "Kỹ năng"],
+  ["danh_gia_dao_duc", "Đạo đức"],
+  ["ghi_chu_ky_luat", "Ghi chú kỷ luật"],
+  ["ngay_ky_luat", "Ngày kỷ luật"],
+  ["hinh_thuc_ky_luat", "Hình thức KL"],
+  ["trang_thai_ky_luat", "Trạng thái KL"],
+  ["nguoi_lap_bien_ban", "Người lập BB"]
+];
+
+function auditUserName(){
+  const u = (CFG && CFG.user) ? String(CFG.user).trim() : "";
+  return u || "Người dùng";
+}
+
+function auditRoleLabel(){
+  if(typeof ROLE === "undefined") return "Thành viên";
+  return ROLE === "admin" ? "Admin" : (ROLE === "guest" ? "Khách" : "Thành viên");
+}
+
+function fmtAuditTime(ts){
   try{
-    const logs = JSON.parse(localStorage.getItem("cn_audit_logs_v1") || "[]");
+    return new Date(ts).toLocaleString("vi-VN", {hour12: false});
+  }catch(e){ return new Date().toLocaleString("vi-VN"); }
+}
+
+function saveAuditLogs(logs){
+  const write = list => localStorage.setItem(AUDIT_KEY, JSON.stringify(list));
+  try{
+    write(logs);
+  }catch(e){
+    try{ write(logs.slice(0, 400)); }
+    catch(e2){
+      try{ write(logs.slice(0, 60)); }
+      catch(e3){}
+    }
+  }
+}
+
+function logAudit(entry){
+  if(!entry) return;
+  try{
+    const logs = getLogs();
+    const ts = Number(entry.ts) > 0 ? Number(entry.ts) : Date.now();
     logs.unshift({
-      time: new Date().toLocaleString("vi-VN"),
-      user: CFG.user || "Người dùng",
-      action: action,
-      detail: detail || ""
+      ts: ts,
+      time: fmtAuditTime(ts),
+      user: String(entry.user || auditUserName()).slice(0, 80),
+      role: String(entry.role || (entry.source === "cloud" ? "Đồng bộ" : auditRoleLabel())),
+      team: entry.team != null ? String(entry.team).slice(0, 40) : "",
+      action: String(entry.action || "Thao tác").slice(0, 120),
+      detail: String(entry.detail || "").slice(0, 400),
+      workerId: entry.workerId != null ? String(entry.workerId) : "",
+      workerName: entry.workerName != null ? String(entry.workerName).slice(0, 120) : "",
+      source: entry.source === "cloud" ? "cloud" : "local"
     });
-    if(logs.length > 25) logs.length = 25;
-    safeSetStorage("cn_audit_logs_v1", JSON.stringify(logs));
+    if(logs.length > AUDIT_MAX) logs.length = AUDIT_TRIM;
+    saveAuditLogs(logs);
   }catch(e){}
+}
+
+function addLog(action, detail, opts){
+  logAudit(Object.assign({ action: action, detail: detail || "" }, opts || {}));
 }
 
 function getLogs(){
   try{
-    return JSON.parse(localStorage.getItem("cn_audit_logs_v1") || "[]");
+    const arr = JSON.parse(localStorage.getItem(AUDIT_KEY) || "[]");
+    return Array.isArray(arr) ? arr : [];
   }catch(e){ return []; }
 }
 
 function clearLogs(){
-  localStorage.removeItem("cn_audit_logs_v1");
+  try{ localStorage.removeItem(AUDIT_KEY); }catch(e){}
+}
+
+let AUDIT_VIEW = { q: "", team: "", user: "", source: "", limit: 150 };
+
+function auditEntryHtml(l){
+  const remote = l.source === "cloud";
+  const meta = [];
+  if(l.team) meta.push('<span class="audit-chip team">' + esc(auditTeamLabel(l.team)) + '</span>');
+  if(l.user) meta.push('<span class="audit-chip user">' + esc(l.user) + '</span>');
+  if(l.role) meta.push('<span class="audit-chip role' + (l.role === "Admin" ? " admin" : "") + '">' + esc(l.role) + '</span>');
+  meta.push('<span class="audit-chip src ' + (remote ? "remote" : "local") + '">' + (remote ? "Từ thiết bị khác" : "Trên máy này") + '</span>');
+  return '<div class="audit-item ' + (remote ? "remote" : "local") + '">' +
+      '<div class="audit-top"><b>' + esc(l.action || "Thao tác") + '</b><span class="audit-time">' + esc(l.time || "") + '</span></div>' +
+      (l.workerName ? '<div class="audit-worker">👤 ' + esc(l.workerName) + '</div>' : '') +
+      (l.detail ? '<div class="audit-detail">' + esc(l.detail) + '</div>' : '') +
+      '<div class="audit-meta">' + meta.join("") + '</div>' +
+    '</div>';
+}
+
+function auditFiltered(logs){
+  const q = noAccent((AUDIT_VIEW.q || "").trim());
+  return logs.filter(l => {
+    if(AUDIT_VIEW.team && String(l.team || "") !== AUDIT_VIEW.team) return false;
+    if(AUDIT_VIEW.user && String(l.user || "") !== AUDIT_VIEW.user) return false;
+    if(AUDIT_VIEW.source && (l.source === "cloud" ? "cloud" : "local") !== AUDIT_VIEW.source) return false;
+    if(q){
+      const hay = noAccent([l.action, l.detail, l.workerName, l.user, l.team, l.role].join(" "));
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function auditFilterOptions(logs){
+  const teams = {}, users = {};
+  logs.forEach(l => {
+    if(l.team) teams[String(l.team)] = (teams[String(l.team)] || 0) + 1;
+    if(l.user) users[String(l.user)] = (users[String(l.user)] || 0) + 1;
+  });
+  const sortKey = (a, b) => a.localeCompare(b, "vi", { numeric: true });
+  return {
+    teams: Object.keys(teams).sort(sortKey).map(t => ({ v: t, n: teams[t] })),
+    users: Object.keys(users).sort(sortKey).map(u => ({ v: u, n: users[u] }))
+  };
+}
+
+function renderAuditList(){
+  const listEl = document.getElementById("auditList");
+  if(!listEl) return;
+  const all = getLogs();
+  const rows = auditFiltered(all);
+  const shown = rows.slice(0, AUDIT_VIEW.limit);
+  const sumEl = document.getElementById("auditSummary");
+  if(sumEl){
+    const remote = rows.filter(l => l.source === "cloud").length;
+    sumEl.innerHTML = '<span><b>' + rows.length + '</b> mục trong ' + all.length + ' mục đã lưu</span>' +
+      '<span class="audit-sum-remote">🌐 ' + remote + ' từ thiết bị khác</span>' +
+      '<span class="audit-sum-local">💾 ' + (rows.length - remote) + ' trên máy này</span>';
+  }
+  if(!rows.length){
+    listEl.innerHTML = '<div class="empty" style="padding:32px 10px">Không có mục nào khớp bộ lọc.</div>';
+    return;
+  }
+  listEl.innerHTML = shown.map(auditEntryHtml).join("") +
+    (rows.length > shown.length
+      ? '<button class="btn audit-more" id="bAuditMore" type="button">Xem thêm ' + Math.min(150, rows.length - shown.length) + ' mục</button>'
+      : '');
+  const more = document.getElementById("bAuditMore");
+  if(more) more.onclick = () => { AUDIT_VIEW.limit += 150; renderAuditList(); };
+}
+
+function openAuditLog(){
+  const logs = getLogs();
+  const opts = auditFilterOptions(logs);
+  AUDIT_VIEW = { q: "", team: "", user: "", source: "", limit: 150 };
+  const sheetEl = document.getElementById("sheet");
+  if(!sheetEl) return;
+
+  sheetEl.innerHTML =
+    '<div class="sheet-h"><h2>📜 Nhật ký thay đổi</h2><button class="x" id="bCloseAudit" type="button" aria-label="Đóng">×</button></div>' +
+    '<div class="sheet-b audit-body">' +
+      '<div class="audit-toolbar">' +
+        '<input id="auditSearch" type="search" placeholder="Tìm theo tên, nội dung, người sửa…" autocomplete="off">' +
+        '<div class="audit-filters">' +
+          '<select id="auditTeam" title="Lọc theo tổ"><option value="">Mọi tổ</option>' +
+            opts.teams.map(t => '<option value="' + esc(t.v) + '">' + esc(auditTeamLabel(t.v)) + ' (' + t.n + ')</option>').join("") +
+          '</select>' +
+          '<select id="auditUser" title="Lọc theo người dùng"><option value="">Mọi người</option>' +
+            opts.users.map(u => '<option value="' + esc(u.v) + '">' + esc(u.v) + ' (' + u.n + ')</option>').join("") +
+          '</select>' +
+          '<select id="auditSource" title="Lọc theo nguồn"><option value="">Mọi nguồn</option><option value="local">Trên máy này</option><option value="cloud">Từ thiết bị khác</option></select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="audit-summary" id="auditSummary"></div>' +
+      '<div class="audit-list" id="auditList"></div>' +
+      '<div class="audit-foot">' +
+        '<button class="btn del" id="bClearAudit" type="button">🧹 Xóa toàn bộ nhật ký</button>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById("overlay").classList.add("show");
+  document.getElementById("bCloseAudit").onclick = closeEdit;
+
+  const qInp = document.getElementById("auditSearch");
+  qInp.value = "";
+  qInp.addEventListener("input", e => {
+    AUDIT_VIEW.q = e.target.value;
+    AUDIT_VIEW.limit = 150;
+    renderAuditList();
+  });
+  const teamSel = document.getElementById("auditTeam");
+  teamSel.onchange = e => { AUDIT_VIEW.team = e.target.value; AUDIT_VIEW.limit = 150; renderAuditList(); };
+  const userSel = document.getElementById("auditUser");
+  userSel.onchange = e => { AUDIT_VIEW.user = e.target.value; AUDIT_VIEW.limit = 150; renderAuditList(); };
+  const srcSel = document.getElementById("auditSource");
+  srcSel.onchange = e => { AUDIT_VIEW.source = e.target.value; AUDIT_VIEW.limit = 150; renderAuditList(); };
+  document.getElementById("bClearAudit").onclick = () => {
+    if(confirm("Xóa toàn bộ nhật ký thay đổi trên máy này?")){
+      clearLogs();
+      toast("Đã xóa nhật ký");
+      openAuditLog();
+    }
+  };
+  renderAuditList();
+}
+
+function auditFieldVal(p, key){
+  if(!p) return "";
+  if(key === "so_dt") return getPhone(p) || "";
+  if(key === "chu_phong") return p.chu_phong ? "x" : "";
+  const v = p[key];
+  return v == null ? "" : String(v).trim();
+}
+
+function auditSnap(p){
+  const o = {};
+  AUDIT_FIELDS.forEach(f => { o[f[0]] = auditFieldVal(p, f[0]); });
+  return o;
+}
+
+function auditHash(p){
+  let s = "";
+  for(let i = 0; i < AUDIT_FIELDS.length; i++) s += auditFieldVal(p, AUDIT_FIELDS[i][0]) + "\u001f";
+  let h = 2166136261;
+  for(let i = 0; i < s.length; i++){
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function auditDiffParts(before, after){
+  const parts = [];
+  AUDIT_FIELDS.forEach(f => {
+    const a = auditFieldVal(before, f[0]);
+    const b = auditFieldVal(after, f[0]);
+    if(a !== b) parts.push(f[1] + ": " + (a || "(trống)") + " → " + (b || "(trống)"));
+  });
+  return parts;
+}
+
+function auditDiffText(parts){
+  if(!parts || !parts.length) return "";
+  const shown = parts.slice(0, 5).join(" · ");
+  return parts.length > 5 ? shown + " (+" + (parts.length - 5) + " mục nữa)" : shown;
+}
+
+function auditTeamLabel(t){
+  const s = String(t || "").trim();
+  if(!s) return "";
+  return /^tổ/i.test(s) ? s : ("Tổ " + s);
+}
+
+function auditDescribeWorker(p){
+  const bits = [];
+  if(p.to) bits.push(auditTeamLabel(p.to));
+  if(p.phong_o) bits.push("Phòng " + p.phong_o);
+  if(p.loai) bits.push(p.loai);
+  return bits.join(" · ");
+}
+
+function logRecordChange(action, p, detail, opts){
+  if(!p) return;
+  p._editedBy = auditUserName();
+  if(!p._editedAt) p._editedAt = Date.now();
+  logAudit(Object.assign({
+    action: action,
+    detail: detail || "",
+    team: p.to != null ? String(p.to) : "",
+    workerId: p.id,
+    workerName: p.ten_that || p.ten_ho_so || "",
+    source: "local"
+  }, opts || {}));
+}
+
+function auditLoadMap(key){
+  try{
+    const m = JSON.parse(localStorage.getItem(key) || "{}");
+    return (m && typeof m === "object" && !Array.isArray(m)) ? m : {};
+  }catch(e){ return {}; }
+}
+
+function auditSaveMap(key, m){
+  try{ localStorage.setItem(key, JSON.stringify(m)); }catch(e){}
+}
+
+function auditMarkOwn(p){
+  if(!p || p.id == null) return;
+  try{
+    const own = auditLoadMap(AUDIT_OWN_KEY);
+    const k = String(p.id);
+    own[k] = auditHash(p);
+    const keys = Object.keys(own);
+    if(keys.length > 800) keys.slice(0, keys.length - 800).forEach(x => { delete own[x]; });
+    auditSaveMap(AUDIT_OWN_KEY, own);
+  }catch(e){}
+}
+
+// Ghi nhận thay đổi do thiết bị khác đẩy lên (Google Sheet / server), tránh ghi trùng
+// với thay đổi của chính máy này đang chờ gửi.
+function logIncomingChanges(list){
+  if(!Array.isArray(list) || list.length === 0) return;
+  try{
+    const baseline = auditLoadMap(AUDIT_BASE_KEY);
+    const firstIndex = Object.keys(baseline).length === 0;
+    const own = auditLoadMap(AUDIT_OWN_KEY);
+    let queued = [];
+    try{ queued = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]"); }catch(e){}
+    const next = {};
+    const found = [];
+
+    list.forEach(raw => {
+      if(!raw || typeof raw !== "object") return;
+      let srec;
+      try{ srec = normServerRec(raw); }catch(e){ return; }
+      if(!srec || srec.id == null) return;
+      const key = String(srec.id);
+      const hash = auditHash(srec);
+      next[key] = hash;
+      if(firstIndex) return;
+      const prev = baseline[key];
+      if(prev === hash){ if(own[key]) delete own[key]; return; }
+      if(own[key] === hash){ delete own[key]; return; }
+      if(findMatchingRecord(srec, queued)) return;
+
+      const existing = findMatchingRecord(srec, DATA);
+      const rawUser = String(raw._editedBy || raw.nguoi_cap_nhat || raw["Người cập nhật"] || "").trim();
+      const ts = Number(raw._editedAt) > 0 ? Number(raw._editedAt) : Date.now();
+      const name = srec.ten_that || srec.ten_ho_so || "";
+      if(!prev){
+        found.push({
+          action: "Hồ sơ mới từ thiết bị khác",
+          detail: [name, auditDescribeWorker(srec)].filter(Boolean).join(" · ") || "Có hồ sơ mới được đồng bộ",
+          team: srec.to || "",
+          workerId: srec.id,
+          workerName: name,
+          user: rawUser || "Thiết bị khác",
+          ts: ts,
+          source: "cloud"
+        });
+      } else if(existing){
+        const parts = auditDiffParts(auditSnap(existing), auditSnap(srec));
+        if(parts.length){
+          found.push({
+            action: "Cập nhật từ thiết bị khác",
+            detail: auditDiffText(parts),
+            team: srec.to || "",
+            workerId: srec.id,
+            workerName: name,
+            user: rawUser || "Thiết bị khác",
+            ts: ts,
+            source: "cloud"
+          });
+        }
+      } else {
+        found.push({
+          action: "Cập nhật từ thiết bị khác",
+          detail: [name, auditDescribeWorker(srec)].filter(Boolean).join(" · ") || "Dữ liệu hồ sơ thay đổi khi đồng bộ",
+          team: srec.to || "",
+          workerId: srec.id,
+          workerName: name,
+          user: rawUser || "Thiết bị khác",
+          ts: ts,
+          source: "cloud"
+        });
+      }
+    });
+
+    auditSaveMap(AUDIT_BASE_KEY, next);
+    auditSaveMap(AUDIT_OWN_KEY, own);
+    if(firstIndex) return;
+    found.forEach(entry => logAudit(entry));
+  }catch(e){}
 }
 
 /* ---------- Backup & Restore JSON ---------- */
@@ -5387,6 +5781,7 @@ function enrichRecordForServer(r){
   if(o.nguoi_lap_bien_ban != null) o["Người lập biên bản"] = o.nguoi_lap_bien_ban;
   if(o._manuallyRated != null) o._manuallyRated = o._manuallyRated;
   if(o._editedAt != null) o._editedAt = o._editedAt;
+  if(o._editedBy != null) o._editedBy = o._editedBy;
 
   return o;
 }
@@ -5398,6 +5793,7 @@ function queueChange(p){
     const i = q.findIndex(x => String(x.id) === String(enriched.id));
     if(i >= 0) q[i] = enriched; else q.push(enriched);
     safeSetStorage("cn_queue_v1", JSON.stringify(q));
+    auditMarkOwn(enriched);
     updateSyncBadge();
   }catch(e){}
 }
@@ -5505,6 +5901,9 @@ function normServerRec(o){
     else if (existing && existing._editedAt) r._editedAt = existing._editedAt;
   }
 
+  if (o._editedBy != null) r._editedBy = String(o._editedBy).trim();
+  else if (existing && existing._editedBy) r._editedBy = existing._editedBy;
+
   // Extract phone number from server record, with fallback to existing local record and cache
   let phone = getPhone(o);
   if(!phone) phone = getPhone(r);
@@ -5584,6 +5983,7 @@ function mergeServerData(serverList, queuedList){
       if (queued.hinh_thuc_ky_luat != null) srec.hinh_thuc_ky_luat = queued.hinh_thuc_ky_luat;
       if (queued.trang_thai_ky_luat != null) srec.trang_thai_ky_luat = queued.trang_thai_ky_luat;
       if (queued.nguoi_lap_bien_ban != null) srec.nguoi_lap_bien_ban = queued.nguoi_lap_bien_ban;
+      if (queued._editedBy) srec._editedBy = queued._editedBy;
       srec._edited = true;
       srec._manuallyRated = true;
     } else {
@@ -5739,6 +6139,7 @@ async function syncNow(silent){
 
         // Merge master records from server
         if(Array.isArray(srvData.data) && srvData.data.length > 0){
+          logIncomingChanges(srvData.data);
           DATA = mergeServerData(srvData.data, q);
           save();
           initFilterOptions();
@@ -5863,6 +6264,7 @@ async function syncNow(silent){
 
     const incomingData = (res && (res.data || res.rows || res.records)) || [];
     if(Array.isArray(incomingData) && incomingData.length > 0){
+      logIncomingChanges(incomingData);
       DATA = mergeServerData(incomingData, q);
       save();
       initFilterOptions();
@@ -5884,7 +6286,7 @@ async function syncNow(silent){
       } catch(e){}
     }
     if(res.images) fetchServerImages(res.images, res.deletedImages);
-    addLog("Đồng bộ đám mây", `Thành công (${incomingData.length} hồ sơ)`);
+    if(!silent) addLog("Đồng bộ đám mây", `Thành công (${incomingData.length} hồ sơ)`);
     if(!silent) toast("Đồng bộ đám mây thành công ✓");
   }catch(e){
     if(!silent) toast("✓ Đã đồng bộ máy chủ nội bộ. Google Sheet: " + e.message);
@@ -5912,6 +6314,7 @@ async function connect(silent = false){
       applyRole();
       const rData = (r && (r.data || r.rows || r.records)) || [];
       if(Array.isArray(rData) && rData.length > 0){
+        logIncomingChanges(rData);
         DATA = mergeServerData(rData, []);
         save();
         initFilterOptions();
@@ -6052,19 +6455,16 @@ function openSettings(initTab){
     const logs = getLogs();
     tabContent =
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-        '<div class="cfg-sec-title" style="margin:0">📜 Nhật ký thao tác gần đây (' + logs.length + ')</div>' +
+        '<div class="cfg-sec-title" style="margin:0">📜 Nhật ký thay đổi (' + logs.length + ')</div>' +
         (logs.length > 0 ? '<button class="btn mini-b del" id="bClearLogs">🧹 Xóa nhật ký</button>' : '') +
       '</div>' +
+      '<button class="btn primary" id="bOpenAuditLog" style="width:100%;justify-content:center;margin-bottom:10px;">🔎 Mở cửa sổ nhật ký đầy đủ</button>' +
       (logs.length === 0 ?
         '<div class="empty" style="padding:24px 0">Chưa có thao tác nào được ghi nhận.</div>' :
         '<div class="cfg-log-list">' +
-          logs.map(l =>
-            '<div class="cfg-log-item">' +
-              '<div class="cli-top"><b>' + esc(l.action) + '</b><span class="cli-time">' + esc(l.time) + '</span></div>' +
-              '<div class="cli-desc">' + esc(l.detail) + (l.user ? (' <span class="cli-user">(' + esc(l.user) + ')</span>') : '') + '</div>' +
-            '</div>'
-          ).join("") +
-        '</div>'
+          logs.slice(0, 10).map(auditEntryHtml).join("") +
+        '</div>' +
+        (logs.length > 10 ? '<div class="audit-hint">Còn ' + (logs.length - 10) + ' mục nữa — bấm nút phía trên để xem toàn bộ.</div>' : '')
       );
   } else if(curSettingsTab === "about"){
     tabContent =
@@ -6587,6 +6987,8 @@ function doGet(e) {
 
   // Tab 4: Logs bindings
   if(curSettingsTab === "logs"){
+    const openLogs = s.querySelector("#bOpenAuditLog");
+    if(openLogs) openLogs.onclick = openAuditLog;
     const clrLogs = s.querySelector("#bClearLogs");
     if(clrLogs){
       clrLogs.onclick = () => {
@@ -7098,11 +7500,11 @@ function openMoreMenu(){
             '<div class="more-menu-desc">Theo dõi công nhân cần rèn luyện (1-2★) và quản lý biên bản vi phạm</div>' +
           '</div>' +
         '</div>' +
-        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); openSettings(\'logs\');">' +
+        '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); openAuditLog();">' +
           '<div class="more-menu-icon" style="background:#f5f3ff;color:#6d28d9;">🔔</div>' +
           '<div class="more-menu-text">' +
             '<div class="more-menu-title">Nhật ký thay đổi hồ sơ</div>' +
-            '<div class="more-menu-desc">Xem lịch sử các thao tác thêm mới, chỉnh sửa và điều chuyển phòng</div>' +
+            '<div class="more-menu-desc">Lịch sử thêm/sửa/xóa, chuyển phòng, kỷ luật — lọc theo tổ và người dùng</div>' +
           '</div>' +
         '</div>' +
         '<div class="more-menu-card" onclick="document.getElementById(\'overlay\').classList.remove(\'show\'); openSettings(\'about\');">' +
