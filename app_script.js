@@ -1203,6 +1203,12 @@ function delImg(id, t) {
   }
   IMG_OVR[t + ":" + id] = DEL;
   idbPut(t + ":" + id, DEL);
+  // Bỏ khỏi hàng đợi upload để lần đồng bộ sau không tải ảnh lên lại
+  try {
+    const up = getPendImg();
+    const i = up.indexOf(t + ":" + id);
+    if (i >= 0) { up.splice(i, 1); setPendImg(up); }
+  } catch(e) {}
   try { addPendDel(t + ":" + id); } catch(e) {}
 }
 
@@ -6455,12 +6461,15 @@ async function fetchServerImages(imgs, deleted){
       }
     }
   }
+  let delApplied = false;
   if(deleted){
     for(const id in deleted){
       for(const t in deleted[id]){
         const key = t + ":" + id;
         if(IMG_OVR[key] !== DEL){ IMG_OVR[key] = DEL; idbPut(key, DEL); }
+        if(window.__IMG_MAP && window.__IMG_MAP[id]) delete window.__IMG_MAP[id][t];
         if(map[key]){ delete map[key]; mapChanged = true; }
+        delApplied = true;
       }
     }
   }
@@ -6470,6 +6479,10 @@ async function fetchServerImages(imgs, deleted){
     } catch(storageErr) {
       console.warn("Storage warning for cn_imgfiles_v1:", storageErr);
     }
+  }
+  if(delApplied){
+    try { if(typeof _cardCache !== "undefined") _cardCache.clear(); _lastPeopleHtml = null; } catch(e){}
+    if(typeof render === "function") render();
   }
 }
 
@@ -6633,6 +6646,13 @@ async function syncNow(silent){
             return;
           }
           stillD.push(k);
+        } else {
+          // Đã xoá trên Drive: dọn fid cũ trong danh mục ảnh máy này
+          try {
+            if(window.__IMG_MAP && window.__IMG_MAP[id]) delete window.__IMG_MAP[id][t];
+            const m = JSON.parse(localStorage.getItem("cn_imgfiles_v1") || "{}");
+            if(m[k] != null){ delete m[k]; safeSetStorage("cn_imgfiles_v1", JSON.stringify(m)); }
+          } catch(e) {}
         }
       }catch(e){ stillD.push(k); }
     }
@@ -6703,7 +6723,7 @@ async function syncNow(silent){
         }).catch(e => {});
       } catch(e){}
     }
-    if(res.images) fetchServerImages(res.images, res.deletedImages);
+    if(res.images) fetchServerImages(res.images, res.deletedImages || res.deleted);
     if(!silent) addLog("Đồng bộ đám mây", `Thành công (${incomingData.length} hồ sơ)`);
     if(!silent) toast(t("Đồng bộ đám mây thành công ✓"));
   }catch(e){
@@ -6738,7 +6758,7 @@ async function connect(silent = false){
         initFilterOptions();
         render();
       }
-      if(r.images) fetchServerImages(r.images, r.deletedImages);
+      if(r.images) fetchServerImages(r.images, r.deletedImages || r.deleted);
       return true;
     } else {
       if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
