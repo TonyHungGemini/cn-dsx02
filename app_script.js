@@ -1538,6 +1538,7 @@ function filtered(){
   const qDigits = cleanPhone(qRaw);
 
   return DATA.filter(p => {
+    if(p.deleted) return false;
     if(state.to && p.to !== state.to) return false;
     if(state.loai && p.loai !== state.loai) return false;
     if(state.muon && !isMuon(p)) return false;
@@ -1824,7 +1825,7 @@ function render(){
 /* ---------- Popup Chi Tiết & Quản Lý Phòng Ở (Room Modal) ---------- */
 function openRoom(room){
   currentRoom = room;
-  const ppl = DATA.filter(p => roomKey(p) === room).sort((a,b) => (b.chu_phong?1:0)-(a.chu_phong?1:0) || (a.ten_that||"").localeCompare(b.ten_that||"", "vi"));
+  const ppl = DATA.filter(p => !p.deleted && roomKey(p) === room).sort((a,b) => (b.chu_phong?1:0)-(a.chu_phong?1:0) || (a.ten_that||"").localeCompare(b.ten_that||"", "vi"));
   const blk = getRoomBlock(room);
   const leader = ppl.find(p => p.chu_phong);
 
@@ -5452,10 +5453,6 @@ function logIncomingChanges(list){
       next[key] = hash;
       if(firstIndex) return;
       const prev = baseline[key];
-      if(prev === hash){ if(own[key]) delete own[key]; return; }
-      if(own[key] === hash){ delete own[key]; return; }
-      if(findMatchingRecord(srec, queued)) return;
-
       const existing = findMatchingRecord(srec, DATA);
       let rawUser = String(raw._editedBy || raw.updatedBy || raw.updated_by || raw.nguoi_cap_nhat || raw.nguoi_sua || raw["Người cập nhật"] || raw["Người sửa"] || raw["Cập nhật bởi"] || "").trim();
       if(/^(guest)$/i.test(rawUser)) rawUser = "Thành viên";
@@ -5464,6 +5461,25 @@ function logIncomingChanges(list){
       const rawTs = Number(raw._editedAt) > 0 ? Number(raw._editedAt) : (Date.parse(raw.updatedAt || raw.updated_at) || 0);
       const ts = rawTs > 0 ? rawTs : Date.now();
       const name = srec.ten_that || srec.ten_ho_so || "";
+      if(srec.deleted){
+        if(existing && !existing.deleted){
+          found.push({
+            action: "Xóa hồ sơ từ thiết bị khác",
+            detail: [name, auditDescribeWorker(srec)].filter(Boolean).join(" · ") || "Hồ sơ bị xóa khi đồng bộ",
+            team: srec.to || "",
+            workerId: srec.id,
+            workerName: name,
+            user: rawUser || "Thiết bị khác",
+            ts: ts,
+            source: "cloud"
+          });
+        }
+        return;
+      }
+      if(prev === hash){ if(own[key]) delete own[key]; return; }
+      if(own[key] === hash){ delete own[key]; return; }
+      if(findMatchingRecord(srec, queued)) return;
+
       if(!prev){
         found.push({
           action: "Hồ sơ mới từ thiết bị khác",
@@ -5941,6 +5957,7 @@ function mergeServerData(serverList, queuedList){
     if(!cleanN && !cleanC && !cleanR) return;
 
     const srec = normServerRec(rawRec);
+    if(srec.deleted) return; // Hồ sơ đã bị xóa trên máy chủ — không đưa vào danh sách
 
     // Find corresponding local record and queued record with 100% precision
     const existing = findMatchingRecord(srec, DATA);
@@ -6239,7 +6256,7 @@ async function syncNow(silent){
     if(enrichedQ.length > 0){
       try {
         await api("push", {
-          changes: enrichedQ.map(r => ({ rec: r })),
+          changes: enrichedQ.map(r => ({ rec: r, deleted: r.deleted === true })),
           records: enrichedQ
         });
       } catch(pushErr){
