@@ -309,12 +309,12 @@ function setLang(l){
 
 /* Chặn ký tự Khmer trong ô nhập liệu — dữ liệu phải là chữ Latin */
 const KHMER_INPUT_RE = /[\u1780-\u17FF\u19E0-\u19FF\u200C\u200D]/g;
+const KHMER_TEST_RE = /[\u1780-\u17FF\u19E0-\u19FF\u200C\u200D]/;
 let _khmerWarnAt = 0;
 document.addEventListener("input", (e) => {
   const el = e.target;
   if(!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA")) return;
-  if(!el.value || !KHMER_INPUT_RE.test(el.value)) return;
-  KHMER_INPUT_RE.lastIndex = 0;
+  if(!el.value || !KHMER_TEST_RE.test(el.value)) return;
   el.value = el.value.replace(KHMER_INPUT_RE, "");
   el.classList.remove("field-pulse-red"); void el.offsetWidth; el.classList.add("field-pulse-red");
   setTimeout(() => el.classList.remove("field-pulse-red"), 2000);
@@ -1272,26 +1272,46 @@ function handleAvatarError(imgEl, name) {
   }
 }
 
-function compress(file,max,q){
-  return new Promise((res,rej)=>{
+function loadImageFromFile(file){
+  return new Promise((res, rej) => {
     const fr = new FileReader();
     fr.onload = () => {
       const im = new Image();
-      im.onload = () => {
-        let w=im.width, h=im.height;
-        const s = Math.min(1, max/Math.max(w,h));
-        const c = document.createElement("canvas");
-        c.width = Math.round(w*s);
-        c.height = Math.round(h*s);
-        c.getContext("2d").drawImage(im,0,0,c.width,c.height);
-        res(c.toDataURL("image/jpeg",q));
-      };
-      im.onerror = rej;
+      im.onload = () => res(im);
+      im.onerror = () => rej(new Error("decode_failed"));
       im.src = fr.result;
     };
-    fr.onerror = rej;
+    fr.onerror = () => rej(new Error("read_failed"));
     fr.readAsDataURL(file);
   });
+}
+
+async function compress(file, max, q){
+  let bmp = null;
+  try {
+    let im = null;
+    // createImageBitmap: nhanh, tốn ít RAM và tự áp EXIF trên điện thoại
+    if (typeof createImageBitmap === "function") {
+      try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); im = bmp; } catch(e) { bmp = null; }
+    }
+    if (!im) im = await loadImageFromFile(file);
+    const w = im.width || im.naturalWidth || 0;
+    const h = im.height || im.naturalHeight || 0;
+    if (!w || !h) throw new Error("bad_image");
+    const s = Math.min(1, max / Math.max(w, h));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w * s));
+    c.height = Math.max(1, Math.round(h * s));
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(im, 0, 0, c.width, c.height);
+    const out = c.toDataURL("image/jpeg", q);
+    if (!out || out.length < 100) throw new Error("encode_failed");
+    return out;
+  } finally {
+    if (bmp && typeof bmp.close === "function") { try { bmp.close(); } catch(e){} }
+  }
 }
 
 function ageFromDOB(ds){
@@ -1689,15 +1709,17 @@ function parseMRZ(text) {
 async function ocrCMND(uri, progCb) {
   // Method 1: Try Server-Side Smart Gemini Vision AI OCR with automatic Khmer-to-Vietnamese translation
   try {
-    if (progCb) progCb("Đang kết nối AI nhận diện & dịch địa chỉ sang tiếng Việt…");
-    const aiRes = await fetch("/api/ocr-cmnd", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: uri })
-    });
-    const aiJson = await aiRes.json();
-    if (aiJson.ok && aiJson.data && (aiJson.data.ten_that || aiJson.data.cmnd || aiJson.data.dia_chi)) {
-      return { ok: true, source: "ai", parsed: aiJson.data };
+    if (API_OK !== false) {
+      if (progCb) progCb("Đang kết nối AI nhận diện & dịch địa chỉ sang tiếng Việt…");
+      const aiRes = await fetch("/api/ocr-cmnd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: uri })
+      });
+      const aiJson = await aiRes.json();
+      if (aiJson.ok && aiJson.data && (aiJson.data.ten_that || aiJson.data.cmnd || aiJson.data.dia_chi)) {
+        return { ok: true, source: "ai", parsed: aiJson.data };
+      }
     }
   } catch(e) {
     // Fallback to offline / client-side Tesseract OCR
@@ -1706,7 +1728,10 @@ async function ocrCMND(uri, progCb) {
   // Method 2: Client-side Tesseract OCR + MRZ parsing + Offline Khmer place translation fallback
   try {
     if (progCb) progCb("Đang tải công cụ quét cục bộ…");
-    await loadTesseract();
+    await Promise.race([
+      loadTesseract(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("Không tải được công cụ quét trên thiết bị này")), 25000))
+    ]);
     
     // First pass: Crop bottom 46% (MRZ region)
     const cropped = await cropBottom(uri);
@@ -1741,7 +1766,8 @@ async function ocrCMND(uri, progCb) {
   }
 }
 
-async function doOcrCMND(id) {
+async function doOcrCMND(id, opts) {
+  const auto = !!(opts && opts.auto);
   const uri = getImg(id, "cmnd");
   if (!uri) {
     toast("Chưa có ảnh CMND để quét");
@@ -1761,6 +1787,12 @@ async function doOcrCMND(id) {
 
   const res = await ocrCMND(uri, progCb);
   if (!res.ok) {
+    if (auto) {
+      if (ocrBox) {
+        ocrBox.innerHTML = '<div style="font-size:12.5px;color:#64748b;padding:10px 12px;border:1px dashed #cbd5e1;background:#f8fafc;border-radius:8px;">📷 Ảnh CMND đã được lưu. Thiết bị này chưa đọc tự động được — bạn có thể nhập tay hoặc bấm "⚡ Đọc CMND &amp; Dịch" để thử lại.</div>';
+      }
+      return;
+    }
     if (ocrBox) {
       ocrBox.innerHTML = '<div class="ocr-status-err">❌ Không thể nhận diện: ' + esc(res.err) + '</div>';
     }
@@ -2340,12 +2372,13 @@ function rotateImage(uri, angle = 90) {
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate(rad);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        resolve(canvas.toDataURL("image/jpeg", 0.92));
+        const out = canvas.toDataURL("image/jpeg", 0.92);
+        resolve(out && out.length > 100 ? out : null);
       } catch (e) {
-        resolve(uri);
+        resolve(null);
       }
     };
-    img.onerror = () => resolve(uri);
+    img.onerror = () => resolve(null);
     img.src = uri;
   });
 }
@@ -2367,12 +2400,13 @@ function flipImage(uri, horizontal = true) {
           ctx.scale(1, -1);
         }
         ctx.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL("image/jpeg", 0.92));
+        const out = canvas.toDataURL("image/jpeg", 0.92);
+        resolve(out && out.length > 100 ? out : null);
       } catch (e) {
-        resolve(uri);
+        resolve(null);
       }
     };
-    img.onerror = () => resolve(uri);
+    img.onerror = () => resolve(null);
     img.src = uri;
   });
 }
@@ -2690,7 +2724,12 @@ function openManualCropModal(id, type, label, onDone) {
     renderCropPreview();
 
     wrap.querySelector("#bApplyCrop").onclick = () => {
-      const croppedUri = canvas.toDataURL("image/jpeg", 0.92);
+      let croppedUri = null;
+      try { croppedUri = canvas.toDataURL("image/jpeg", 0.92); } catch(e) { croppedUri = null; }
+      if (!croppedUri) {
+        toast("Ảnh gốc đang lưu trên Drive nên không cắt được. Bấm 📷 Đổi ảnh để tải bản mới rồi cắt.");
+        return;
+      }
       wrap.remove();
       if (onDone) onDone(croppedUri);
     };
@@ -2836,15 +2875,23 @@ function pickImageFile(onPick) {
   const inp = document.createElement("input");
   inp.type = "file";
   inp.accept = "image/*";
+  // iOS Safari / Zalo / Messenger chỉ mở bộ chọn ảnh khi input nằm trong DOM
+  inp.setAttribute("style", "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;");
+  document.body.appendChild(inp);
+  const cleanup = () => { try { inp.remove(); } catch(e){} };
   inp.onchange = async e => {
     const file = e.target.files && e.target.files[0];
+    cleanup();
     if (!file) return;
     try {
       toast("Đang xử lý & nén ảnh…");
       const compressedUri = await compress(file, 1280, 0.82);
       onPick(compressedUri);
     } catch(err) {
-      toast("Không đọc được file ảnh");
+      const isHeic = /heic|heif/i.test(file.type || "") || /\.(heic|heif)$/i.test(file.name || "");
+      toast(isHeic
+        ? "Ảnh HEIC chưa đọc được. Chọn ảnh khác hoặc vào Cài đặt Camera → Định dạng → \"Tương thích nhất\"."
+        : "Không đọc được file ảnh. Thử chọn ảnh khác hoặc chụp lại.");
     }
   };
   inp.click();
@@ -2899,7 +2946,7 @@ function wireImgEvents(id) {
           wireImgEvents(id);
           toast("Đã tải ảnh lên thành công ✓");
           if (type === "cmnd") {
-            doOcrCMND(id);
+            doOcrCMND(id, { auto: true });
           }
         });
       } else if (act === "rotate") {
@@ -2907,6 +2954,10 @@ function wireImgEvents(id) {
         if (!curUri) return;
         toast("Đang xoay ảnh 90°…");
         const rotated = await rotateImage(curUri, 90);
+        if (!rotated) {
+          toast("Không xoay được ảnh này. Ảnh gốc đang lưu trên Drive — bấm 📷 Đổi ảnh để tải bản mới rồi xoay.");
+          return;
+        }
         setImg(id, type, rotated);
         container.innerHTML = renderImgSection(id);
         wireImgEvents(id);
@@ -2916,6 +2967,10 @@ function wireImgEvents(id) {
         if (!curUri) return;
         toast("Đang lật ảnh…");
         const flipped = await flipImage(curUri, true);
+        if (!flipped) {
+          toast("Không lật được ảnh này. Ảnh gốc đang lưu trên Drive — bấm 📷 Đổi ảnh để tải bản mới rồi lật.");
+          return;
+        }
         setImg(id, type, flipped);
         container.innerHTML = renderImgSection(id);
         wireImgEvents(id);

@@ -271,14 +271,14 @@ header{position:sticky;top:0;z-index:30;background:var(--green);color:#fff;paddi
 @keyframes up{from{transform:translateY(100%);}to{transform:translateY(0);}}
 .sheet-h{position:sticky;top:0;background:#fff;display:flex;align-items:center;gap:8px;padding:14px 14px 10px;border-bottom:1px solid var(--line);}
 .sheet-h h2{font-size:16px;margin:0;flex:1;}
-.sheet-b{padding:12px 14px 16px;}
+.sheet-b{padding:12px 14px calc(76px + env(safe-area-inset-bottom, 0px));}
 .fld{margin-bottom:11px;}
 .fld label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:4px;}
 .fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:14.5px;outline:none;background:#fff;font-family:inherit;}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--green);}
 .row2{display:flex;gap:9px;}.row2>div{flex:1;}
 .muon-note{font-size:11.5px;color:var(--warn);margin-top:-4px;}
-.sheet-f{position:sticky;bottom:0;background:#fff;display:flex;gap:8px;padding:11px 14px;border-top:1px solid var(--line);}
+.sheet-f{position:sticky;bottom:0;background:#fff;display:flex;gap:8px;padding:11px 14px calc(11px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--line);}
 .sheet-f .btn{flex:1;justify-content:center;padding:12px;font-size:14.5px;}
 .btn.del{color:#b91c1c;border-color:#fca5a5;background:#fff;flex:0 0 auto;}
 .x{background:none;border:none;font-size:22px;color:var(--muted);cursor:pointer;padding:0 4px;}
@@ -2604,7 +2604,7 @@ a[href^="tel:"]:hover .phone-icon-svg {
 <script src="images_catalog.js?v=57"></script>
 <script src="images_index.js?v=61"></script>
 <script src="pending_phones.js?v=61"></script>
-<script src="app_script.js?v=70"></script>
+<script src="app_script.js?v=71"></script>
 <script src="security_face.js?v=72"></script>
 <script>
 (function(){
