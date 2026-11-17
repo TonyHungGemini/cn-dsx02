@@ -725,6 +725,14 @@ table.mini td:last-child { text-align: right; font-weight: 700; color: var(--gre
 .field-pulse {
   animation: fieldPulse 2.2s ease-in-out;
 }
+.field-pulse-red {
+  animation: fieldPulseRed 2s ease-in-out;
+}
+@keyframes fieldPulseRed {
+  0% { background-color: #fecaca; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.45); border-color: #ef4444; }
+  50% { background-color: #fee2e2; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3); border-color: #ef4444; }
+  100% { background-color: transparent; box-shadow: none; border-color: inherit; }
+}
 @keyframes fieldPulse {
   0% { background-color: #bbf7d0; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.4); border-color: #22c55e; }
   50% { background-color: #dcfce7; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25); border-color: #22c55e; }
@@ -2451,6 +2459,7 @@ a[href^="tel:"]:hover .phone-icon-svg {
       <span class="count" id="syncBadge" style="display:none"></span>
     </div>
     <div class="htop-actions">
+      <button type="button" class="htop-btn" id="bLang" title="Ngôn ngữ / ភាសា (VI ↔ KM)" style="background:rgba(255,255,255,0.25);border-color:rgba(255,255,255,0.4);font-weight:700;">🌐 VI</button>
       <button type="button" class="htop-btn" id="bTopInstall" title="Cài đặt Ứng dụng (PWA) vào màn hình chính" style="background:rgba(255,255,255,0.25);border-color:rgba(255,255,255,0.4);font-weight:700;">📲 Cài App</button>
       <button type="button" class="htop-btn" id="bTopSync" title="Đồng bộ dữ liệu máy chủ">☁️ Đồng bộ</button>
     </div>
@@ -2595,7 +2604,7 @@ a[href^="tel:"]:hover .phone-icon-svg {
 <script src="images_catalog.js?v=57"></script>
 <script src="images_index.js?v=61"></script>
 <script src="pending_phones.js?v=61"></script>
-<script src="app_script.js?v=68"></script>
+<script src="app_script.js?v=69"></script>
 <script src="security_face.js?v=72"></script>
 <script>
 (function(){

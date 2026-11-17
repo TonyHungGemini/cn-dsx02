@@ -28,6 +28,303 @@ const FIELDS = [
 
 const TO_LIST = ["Tổ 1","Tổ 2","Tổ 3","Tổ 4","Tổ 5","Tổ 6","Tổ 7","Tổ 8"];
 
+/* ==========================================================================
+   ĐA NGÔN NGỮ VIETNAMESE / KHMER (VI/KM) — lớp dịch giao diện nhân viên
+   Dịch theo chuỗi tiếng Việt gốc; dữ liệu nhập liệu luôn giữ nguyên tiếng Latin.
+   ========================================================================== */
+let UI_LANG = "vi";
+try { UI_LANG = localStorage.getItem("cn_lang_v1") || "vi"; } catch(e){}
+
+const KM = {
+  "Tra cứu Công nhân – ĐSX 02": "ស្វែងរកកម្មករ – ĐSX 02",
+  "☁️ Đồng bộ": "☁️ សមកាលកម្ម",
+  "📲 Cài App": "📲 ដំឡើង App",
+  "👥 Người": "👥 មនុស្ស",
+  "🏠 Phòng": "🏠 បន្ទប់",
+  "🔔 Nhật ký": "🔔 កំណត់ហេតុ",
+  "⚙️ Cài đặt": "⚙️ ការកំណត់",
+  "Công nhân": "កម្មករ",
+  "Phòng ở": "បន្ទប់ស្នាក់នៅ",
+  "Thêm mới": "បន្ថែមថ្មី",
+  "Sổ Kỷ luật": "សៀវភៅវិន័យ",
+  "Tiện ích": "ឧបករណ៍",
+  "Tất cả tổ": "គ្រប់ក្រុម",
+  "Tất cả Dãy phòng": "គ្រប់ជួរបន្ទប់",
+  "Tất cả loại": "គ្រប់ប្រភេទ",
+  "🩸 Tất cả nhóm máu": "🩸 គ្រប់ក្រុមឈាម",
+  "⭐ Tất cả xếp hạng": "⭐ គ្រប់ចំណាត់ថ្នាក់",
+  "Tất cả sức chứa": "គ្រប់សមត្ថភាព",
+  "Chủ phòng: Tất cả": "ម្ចាស់បន្ទប់: ទាំងអស់",
+  "Thành phần: Tất cả": "សមាសភាព: ទាំងអស់",
+  "⚑ Tên mượn": "⚑ ឈ្មោះខ្ចី",
+  "📞 Có SĐT": "📞 មានលេខទូរសព្ទ",
+  "🪪 Thiếu CMND": "🪪 ខ្វះអត្តសញ្ញាណប័ណ្ណ",
+  "Tìm tên, CMND, SĐT, nhóm máu, phòng, phần cây…": "ស្វែងរកឈ្មោះ អត្តសញ្ញាណប័ណ្ណ លេខទូរសព្ទ ក្រុមឈាម បន្ទប់ ផ្នែកឈើ…",
+  "Tìm tên, CMND, SĐT, phòng, phần cây…": "ស្វែងរកឈ្មោះ អត្តសញ្ញាណប័ណ្ណ លេខទូរសព្ទ បន្ទប់ ផ្នែកឈើ…",
+  "Tìm mã phòng, tên người hoặc SĐT…": "ស្វែងរកលេខបន្ទប់ ឈ្មោះ ឬលេខទូរសព្ទ…",
+  "Lao động": "កម្មករ",
+  "Gia thuộc": "សមាជិកគ្រួសារ",
+  "Khác": "ផ្សេងៗ",
+  "👑 Chủ phòng": "👑 ម្ចាស់បន្ទប់",
+  "⚑ Mượn tên: ": "⚑ ឈ្មោះខ្ចី: ",
+  "(chưa có tên)": "(គ្មានឈ្មោះ)",
+  "Không tìm thấy ai khớp với bộ lọc.": "រកមិនឃើញអ្នកណាតាមតម្រង។",
+  "hồ sơ": "បញ្ជី",
+  " phòng (": " បន្ទប់ (",
+  " người)": " នាក់)",
+  " người": " នាក់",
+  " người (đông)": " នាក់ (ច្រើន)",
+  "1 người (đơn)": "1 នាក់ (តែម្នាក់)",
+  "⚠️ Chưa có chủ phòng": "⚠️ មិនទាន់មានម្ចាស់បន្ទប់",
+  "Không có phòng nào khớp với bộ lọc phân loại hiện tại.": "រកមិនឃើញបន្ទប់តាមតម្រង។",
+  "Dãy Popok": "ជួរ Popok",
+  "Dãy Nhà": "ជួរ Nhà",
+  "Dãy Quán": "ជួរ Quán",
+  "Dãy Khác": "ជួរផ្សេងៗ",
+  "Dãy ": "ជួរ ",
+  "Chưa có phòng": "មិនទាន់មានបន្ទប់",
+  "Chưa có SĐT": "មិនទាន់មានលេខទូរសព្ទ",
+  "👑 Chủ": "👑 ម្ចាស់",
+  "☆ Đặt chủ": "☆ តែងម្ចាស់",
+  "Sửa": "កែ",
+  "Chuyển": "ផ្លាស់",
+  "Họ và tên (tên thật)*": "ឈ្មោះពេញ (ឈ្មោះពិត)*",
+  "Tên trong hồ sơ (tên mượn)": "ឈ្មោះក្នុងឯកសារ (ឈ្មោះខ្ចី)",
+  "CMND / CCCD": "អត្តសញ្ញាណប័ណ្ណ / CCCD",
+  "Ngày sinh (dd/mm/yyyy)": "ថ្ងៃកំណើត (dd/mm/yyyy)",
+  "Giới tính": "ភេទ",
+  "Nam (M)": "ប្រុស (M)",
+  "Nữ (F)": "ស្រី (F)",
+  "Tuổi": "អាយុ",
+  "Loại đối tượng": "ប្រភេទអ្នក",
+  "Tổ": "ក្រុម",
+  "Phần cây hiện tại": "ផ្នែកឈើបច្ចុប្បន្ន",
+  "👑 Là chủ phòng này": "👑 ជាម្ចាស់បន្ទប់នេះ",
+  "Số điện thoại (SĐT / Zalo)": "លេខទូរសព្ទ (SĐT / Zalo)",
+  "Gọi ngay": "ខលភ្លាម",
+  "📌 SĐT do tổ trưởng nhập trên Google Sheet, chưa có trong CSDL chính thức.": "📌 លេខទូរសព្ទដែលថ្នាក់ដឹកនាំក្រុមបញ្ចូលក្នុង Google Sheet មិនទាន់មានក្នុងមូលដ្ឋានទិន្នន័យ។",
+  "Ví dụ: 0912345678 hoặc +855...": "ឧទាហរណ៍: 0912345678 ឬ +855...",
+  "Nhập địa chỉ hoặc quét từ CMND": "បញ្ចូលអាសយដ្ឋាន ឬស្កេនពីអត្តសញ្ញាណប័ណ្ណ",
+  "🌐 Dịch TV": "🌐 បកប្រែ VN",
+  "Nhập số CMND / CCCD hoặc quét từ ảnh": "បញ្ចូលលេខអត្តសញ្ញាណប័ណ្ណ ឬស្កេនពីរូបថត",
+  "Khu vực": "តំបន់",
+  "Quan hệ": "ទំនាក់ទំនង",
+  "Số bảo hiểm": "លេខធានារ៉ាប់រង",
+  "Nơi sinh": "កន្លែងកំណើត",
+  "Địa chỉ thường trú": "អាសយដ្ឋានទំនាក់ទំនង",
+  "Chi tiết nơi ở": "ព័ត៌មានលម្អិតទីតាំង",
+  "Ghi chú": "កំណត់សម្គាល់",
+  "➕ Thêm người mới": "➕ បន្ថែមមនុស្សថ្មី",
+  "Hồ sơ công nhân": "បញ្ជីកម្មករ",
+  "🗑 Xóa": "🗑 លុប",
+  "Xóa": "លុប",
+  "💾 Lưu thay đổi": "💾 រក្សាទុក",
+  "🩸 Nhóm máu": "🩸 ក្រុមឈាម",
+  "Nhóm ": "ក្រុម ",
+  "Chưa có": "មិនទាន់មាន",
+  "✕ Xóa": "✕ លុប",
+  "Chi tiết:": "លម្អិត:",
+  "Khác...": "ផ្សេងៗ...",
+  "⭐ Đánh giá tay nghề & Đạo đức": "⭐ វាយតម្លៃជំនាញ & សីលធម៌",
+  "Thang điểm 1 - 5 sao &bull; Mặc định 3 sao (Đạt chuẩn) &bull; Không áp dụng Gia thuộc": "ពិន្ទុ 1 - 5 ផ្កាយ • លំនាំដើម 3 ផ្កាយ (តាមស្តង់ដារ) • មិនអនុវត្តសមាជិកគ្រួសារ",
+  "📕 Ghi chú Kỷ luật": "📕 កំណត់វិន័យ",
+  "↺ 3★ mặc định": "↺ 3★ លំនាំដើម",
+  "🛠️ Kỹ năng tay nghề:": "🛠️ ជំនាញ:",
+  "🤝 Đạo đức & Kỷ luật:": "🤝 សីលធម៌ & វិន័យ:",
+  "📕 Sổ Kỷ luật & Ghi chú Chấn chỉnh (1-2★)": "📕 សៀវភៅវិន័យ & កំណត់កែតម្រូវ (1-2★)",
+  "⚠️ 1-2★ Cần theo dõi": "⚠️ 1-2★ ត្រូវតាមដាន",
+  "Đã ghi nhận": "បានកត់ត្រា",
+  "📖 Mở Sổ Kỷ luật chung": "📖 បើកសៀវភៅវិន័យរួម",
+  "⚠️ Quản lý kỷ luật và theo dõi đào tạo lại riêng cho công nhân có Kỹ năng hoặc Đạo đức từ 1 đến 2 sao.": "⚠️ គ្រប់គ្រងវិន័យ និងតាមដានបណ្តុះបណ្តាលឡើងវិញ សម្រាប់កម្មករដែលមានជំនាញ ឬសីលធម៌ 1 ដល់ 2 ផ្កាយ។",
+  "Ngày ghi nhận kỷ luật": "ថ្ងៃកត់ត្រាវិន័យ",
+  "Hình thức xử lý": "ទម្រង់ដោះស្រាយ",
+  "— Chưa chọn —": "— មិនទាន់ជ្រើស —",
+  "Nhắc nhở": "រំលឹក",
+  "Khiển trách": "ថ្កោលទោស",
+  "Cảnh cáo": "ព្រមាន",
+  "Đào tạo lại tay nghề": "បណ្តុះបណ្តាលជំនាញឡើងវិញ",
+  "Đình chỉ tạm thời": "ផ្អាកបណ្តោះអាសន្ន",
+  "Chuyển tổ kiểm điểm": "ផ្លាស់ក្រុមពិន័យ",
+  "Trạng thái theo dõi": "ស្ថានភាពតាមដាន",
+  "Cần chấn chỉnh": "ត្រូវកែតម្រូវ",
+  "Đang theo dõi": "កំពុងតាមដាន",
+  "Đang đào tạo lại": "កំពុងបណ្តុះបណ្តាលឡើងវិញ",
+  "Đã có tiến bộ": "បានរីកចម្រើន",
+  "Đã khắc phục xong (Đạt chuẩn)": "បានដោះស្រាយរួច (តាមស្តង់ដារ)",
+  "Cán bộ / Quản lý phụ trách": "មន្ត្រី / អ្នកគ្រប់គ្រងទទួលខុសត្រូវ",
+  "Tổ trưởng / Giám sát...": "ថ្នាក់ដឹកនាំក្រុម / អ្នកត្រួតពិនិត្យ...",
+  "Nội dung vi phạm / Ghi chú rèn luyện & kế hoạch đào tạo*": "មាតិការំលះវិន័យ / កំណត់បណ្តុះបណ្តាល & ផែនការបណ្តុះបណ្តាល*",
+  "Ghi rõ hành vi vi phạm kỷ luật hoặc thiếu sót kỹ năng thao tác, kế hoạch đào tạo lại, các mốc kiểm tra...": "សរសេរច្បាស់អំពីទង្វើរំលះវិន័យ ឬកង្វះជំនាញ ផែនការបណ្តុះបណ្តាលឡើងវិញ ចំណុចត្រួតពិនិត្យ...",
+  "Xác nhận xóa người này?": "បញ្ជាក់លុបមនុស្សនេះ?",
+  "Xác nhận xóa ảnh này?": "បញ្ជាក់លុបរូបភាពនេះ?",
+  "Đã xóa": "បានលុប",
+  "Vui lòng nhập Họ và tên (tên thật)": "សូមបញ្ចូលឈ្មោះពេញ (ឈ្មោះពិត)",
+  "Đã thêm hồ sơ mới ✓": "បានបន្ថែមបញ្ជីថ្មី ✓",
+  "Đã lưu thay đổi hồ sơ ✓": "បានរក្សាទុកការផ្លាស់ប្តែ ✓",
+  "Không tìm thấy công nhân": "រកមិនឃើញកម្មករ",
+  "Đã chuyển sang phòng ": "បានផ្លាស់ទៅបន្ទប់ ",
+  "Vui lòng nhập địa chỉ cần dịch": "សូមបញ្ចូលអាសយដ្ឋានដែលត្រូវបកប្រែ",
+  "Đã chuyển đổi sang tiếng Việt ✓": "បានបកប្រែទៅភាសាវៀតណាម ✓",
+  "Địa chỉ đã ở dạng tiếng Việt chuẩn": "អាសយដ្ឋានជាភាសាវៀតណាមត្រឹមត្រូវ",
+  "Không thể dịch địa chỉ": "មិនអាចបកប្រែអាសយដ្ឋាន",
+  "Đang đồng bộ dữ liệu…": "កំពុងធ្វើសមកាលកម្មទិន្នន័យ…",
+  "✓ Đã đồng bộ máy chủ (mọi máy tính/điện thoại đều đã nhận SĐT)": "✓ បានធ្វើសមកាលកម្មម៉ាស៊ីនមេ (គ្រប់ឧបករណ៍ទទួលបានលេខទូរសព្ទ)",
+  "Vui lòng cấu hình Web App URL và Key trong ⚙️ Cài đặt để đồng bộ Google Sheet": "សូមកំណត់ Web App URL និង Key ក្នុង ⚙️ ការកំណត់ ដើម្បីធ្វើសមកាលកម្ម Google Sheet",
+  "Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.": "កូដសុវត្ថិភាព (Key) មិនត្រឹមត្រូវ។ សូមពិនិត្យម្តងទៀតក្នុង ⚙️ ការកំណត់។",
+  "✓ Đã đồng bộ máy chủ, nhưng Key Google Sheet chưa đúng.": "✓ បានធ្វើសមកាលកម្មម៉ាស៊ីនមេ ប៉ុន្តែ Key មិនទាន់ត្រឹមត្រូវ។",
+  "✓ Đã đồng bộ máy chủ. Google Sheet: ": "✓ បានធ្វើសមកាលកម្មម៉ាស៊ីនមេ។ Google Sheet: ",
+  "Đồng bộ đám mây thành công ✓": "ធ្វើសមកាលកម្មជោគជ័យ ✓",
+  "✓ Đã đồng bộ máy chủ nội bộ. Google Sheet: ": "✓ បានធ្វើសមកាលកម្មម៉ាស៊ីនមេក្នុងការិយាល័យ។ Google Sheet: ",
+  "Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.": "កូដសុវត្ថិភាព (Key) មិនត្រឹមត្រូវ។ សូមពិនិត្យម្តងទៀតក្នុង ⚙️ ការកំណត់។",
+  "Lỗi kết nối: ": "បញ្ហាការភ្ជាប់: ",
+  "Không kết nối được: ": "មិនអាចភ្ជាប់បាន៖ ",
+  "⚙️ Cài đặt & Quản lý hệ thống": "⚙️ ការកំណត់ & គ្រប់គ្រងប្រព័ន្ធ",
+  "📖 Giới thiệu": "📖 ណែនាំ",
+  "☁️ Đồng bộ": "☁️ សមកាលកម្ម",
+  "💾 Dữ liệu": "💾 ទិន្នន័យ",
+  "🎨 Tùy chọn": "🎨 ជម្រើស",
+  "📜 Nhật ký": "📜 កំណត់ហេតុ",
+  "Đóng": "បិទ",
+  "Máy chủ Google Drive & Sheets: Đã kết nối": "ម៉ាស៊ីនមេ Google Drive & Sheets: បានភ្ជាប់",
+  "Chế độ Ngoại tuyến / Chưa kết nối": "របៀប Offine / មិនទាន់ភ្ជាប់",
+  "Quyền hạn: ": "សិទ្ធិ: ",
+  "🛡️ Quản trị viên (Admin) - Toàn quyền quản trị & đồng bộ": "🛡️ អ្នកគ្រប់គ្រង (Admin) - សិទ្ធិពេញលេញ",
+  "⭐ Thành viên VIP": "⭐ សមាជិក VIP",
+  "Dữ liệu được lưu an toàn trên máy này. Nhập mã bảo mật để đồng bộ lên Đám mây.": "ទិន្នន័យត្រូវបានរក្សាទុកសុវត្ថិភាពនៅលើម៉ាស៊ីននេះ។ បញ្ចូលកូដសុវត្ថិភាពដើម្បីធ្វើសមកាលកម្មទៅក្នុងពិភពលោក។",
+  " thay đổi chưa đồng bộ": " ការផ្លាស់ប្តែមិនទាន់ធ្វើសមកាលកម្ម",
+  "Mã bảo mật / Mật khẩu tài khoản (Key)": "កូដសុវត្ថិភាព / ពាក្យសម្ងាត់គណនី (Key)",
+  "Nhập mã bảo mật (Key) hoặc mật khẩu Admin": "បញ្ចូលកូដសុវត្ថិភាព (Key) ឬពាក្យសម្ងាត់ Admin",
+  "Tên người dùng / Mã nhân sự": "ឈ្មោះអ្នកប្រើប្រាស់ / កូដបុគ្គលិក",
+  "Ví dụ: Tony, QuanLy_01, ToTruong_1": "ឧទាហរណ៍: Tony, QuanLy_01, ToTruong_1",
+  "💾 Lưu cấu hình & Kết nối": "💾 រក្សាទុក & ភ្ជាប់",
+  "🔍 Kiểm tra kết nối": "🔍 ពិនិត្យការភ្ជាប់",
+  "☁️ Đồng bộ ngay": "☁️ ធ្វើសមកាលកម្មភ្លាម",
+  "🧹 Xóa hàng đợi (": "🧹 លុបជួររង់ចាំ (",
+  "Quyền hiện tại: ": "សិទ្ធិបច្ចុប្បន្ន៖ ",
+  "🛡️ Quản trị viên (Admin)": "🛡️ អ្នកគ្រប់គ្រង (Admin)",
+  "✓ Đã mở toàn quyền": "✓ បានបើកសិទ្ធិពេញលេញ",
+  "🔓 Cấp toàn quyền Admin": "🔓 ផ្តល់សិទ្ធិ Admin",
+  "Vui lòng nhập bằng chữ Latin, không dùng chữ Khmer": "សូមបញ្ចូលជាអក្សរ Latin កុំប្រើអក្សរខ្មែរ",
+  "Ghi chú kỷ luật: ": "កំណត់វិន័យ៖ ",
+  "Công nhân có Kỹ năng hoặc Đạo đức 1-2★ - Quản lý bằng Sổ Kỷ luật": "កម្មករមានជំនាញ ឬសីលធម៌ 1-2★ - គ្រប់គ្រងដោយសៀវភៅវិន័យ",
+  "📕 Sổ Kỷ luật: ": "📕 សៀវភៅវិន័យ៖ ",
+  "📕 Ghi chú Sổ Kỷ luật (1-2★)": "📕 កំណត់សៀវភៅវិន័យ (1-2★)",
+  "📕 Sổ Kỷ luật (1-2★)": "📕 សៀវភៅវិន័យ (1-2★)",
+  "Xem/sửa ghi chú kỷ luật": "មើល/កែកំណត់វិន័យ",
+  "1★ Cần đào tạo lại": "1★ ត្រូវបណ្តុះបណ្តាលឡើងវិញ",
+  "2★ Trung bình yếu": "2★ មធ្យមខ្សោយ",
+  "3★ Đạt yêu cầu (Mặc định)": "3★ សម្រេចតាមតម្រូវការ (លំនាំដើម)",
+  "4★ Giỏi - Thao tác vững": "4★ ពូកែ - ប្រតិបត្តិរឹងមាំ",
+  "5★ Xuất sắc": "5★ ឆ្នើម",
+  "1★ Cần chấn chỉnh": "1★ ត្រូវកែតម្រូវ",
+  "2★ Vi phạm nhắc nhở": "2★ រំលះការរំលឹក",
+  "4★ Gương mẫu, trách nhiệm": "4★ គំរូ និងទទួលខុសត្រូវ",
+  "5★ Rất tốt": "5★ ល្អណាស់",
+};
+
+function t(vi){
+  if(UI_LANG !== "km") return vi;
+  const s = KM[vi];
+  return (s == null || s === "") ? vi : s;
+}
+// Tên Tổ hiển thị: giữ nguyên số, chỉ dịch tiền tố "Tổ"
+function tTo(v){
+  if(UI_LANG !== "km" || !v) return v;
+  return v.replace(/^Tổ\s*/, "ក្រុម ");
+}
+
+// Các phần tử tĩnh (header, bnav, chip lọc, option "Tất cả" của select) — dịch qua selector
+const STATIC_I18N = [
+  ["#bTopSync", "☁️ Đồng bộ"],
+  ["#bTopInstall", "📲 Cài App"],
+  ["#tabPeople", "👥 Người"],
+  ["#tabRooms", "🏠 Phòng"],
+  ["#bLog", "🔔 Nhật ký"],
+  ["#bSettings", "⚙️ Cài đặt"],
+  ["#bnavPeople .bnav-label", "Công nhân"],
+  ["#bnavRooms .bnav-label", "Phòng ở"],
+  ["#bnavAdd .bnav-label", "Thêm mới"],
+  ["#bnavDiscipline .bnav-label", "Sổ Kỷ luật"],
+  ["#bnavMore .bnav-label", "Tiện ích"],
+  ["#cMuon", "⚑ Tên mượn"],
+  ["#cPhone", "📞 Có SĐT"],
+  ["#cMissingCmnd", "🪪 Thiếu CMND"]
+];
+// Option đầu tiên (value="") của các bộ lọc — dịch theo chuỗi gốc, giữ nguyên giá trị lọc
+const ALL_OPT_I18N = [
+  ["#fLoai", "Tất cả loại"],
+  ["#fBlood", "🩸 Tất cả nhóm máu"],
+  ["#fRating", "⭐ Tất cả xếp hạng"],
+  ["#fRoomCap", "Tất cả sức chứa"],
+  ["#fRoomChu", "Chủ phòng: Tất cả"],
+  ["#fRoomType", "Thành phần: Tất cả"]
+];
+
+function _setElText(el, txt){
+  if(!el) return;
+  // Chip có badge lồng bên trong — chỉ thay text node đầu tiên
+  if(el.id === "cMissingCmnd" || el.id === "cMuon" || el.id === "cPhone"){
+    const n = el.firstChild;
+    if(n && n.nodeType === 3) n.nodeValue = txt;
+    return;
+  }
+  el.textContent = txt;
+}
+
+function applyLang(){
+  STATIC_I18N.forEach(([sel, vi]) => _setElText(document.querySelector(sel), t(vi)));
+  ALL_OPT_I18N.forEach(([sel, vi]) => {
+    const opt = document.querySelector(sel + " option[value='']");
+    if(opt){
+      if(opt.dataset.tVi == null) opt.dataset.tVi = opt.textContent;
+      opt.textContent = t(vi);
+    }
+  });
+  // Option có text trùng giá trị (Lao động/Gia thuộc/Khác, Nhóm máu...) — dịch hiển thị, giữ value
+  document.querySelectorAll("select option").forEach(o => {
+    if(o.value && o.value === o.textContent && KM[o.value]){
+      if(o.dataset.tVi == null) o.dataset.tVi = o.textContent;
+      o.textContent = t(o.dataset.tVi);
+    }
+  });
+  const h1 = document.querySelector("header h1");
+  if(h1){
+    if(h1.dataset.tVi == null) h1.dataset.tVi = h1.textContent;
+    h1.textContent = t(h1.dataset.tVi);
+  }
+}
+
+function setLang(l){
+  UI_LANG = (l === "km") ? "km" : "vi";
+  try { localStorage.setItem("cn_lang_v1", UI_LANG); } catch(e){}
+  const b = document.getElementById("bLang");
+  if(b) b.textContent = UI_LANG === "km" ? "🌐 KM" : "🌐 VI";
+  applyLang();
+  initFilterOptions();
+  // Card đã vẽ cất HTML theo ngôn ngữ cũ — buộc dựng lại
+  if(typeof _cardCache !== "undefined"){ _cardCache.clear(); _lastPeopleHtml = null; }
+  if(typeof render === "function") render();
+  if(typeof setView === "function") setView(state.view);
+}
+
+/* Chặn ký tự Khmer trong ô nhập liệu — dữ liệu phải là chữ Latin */
+const KHMER_INPUT_RE = /[\u1780-\u17FF\u19E0-\u19FF\u200C\u200D]/g;
+let _khmerWarnAt = 0;
+document.addEventListener("input", (e) => {
+  const el = e.target;
+  if(!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA")) return;
+  if(!el.value || !KHMER_INPUT_RE.test(el.value)) return;
+  KHMER_INPUT_RE.lastIndex = 0;
+  el.value = el.value.replace(KHMER_INPUT_RE, "");
+  el.classList.remove("field-pulse-red"); void el.offsetWidth; el.classList.add("field-pulse-red");
+  setTimeout(() => el.classList.remove("field-pulse-red"), 2000);
+  const now = Date.now();
+  if(now - _khmerWarnAt > 2500){
+    _khmerWarnAt = now;
+    if(typeof toast === "function") toast(t("Vui lòng nhập bằng chữ Latin, không dùng chữ Khmer"));
+  }
+}, true);
+
 const SKILL_LABELS = {
   1: "1★ Cần đào tạo lại",
   2: "2★ Trung bình yếu",
@@ -1664,8 +1961,8 @@ function renderSugg(){
     const ph = getPhone(p);
     const meta = [p.to, p.phong_o?("🏠 "+p.phong_o):"", p.phan_cay?("🌳 "+p.phan_cay):"", ph?("📞 "+ph):""].filter(Boolean).join(" · ");
     return '<div class="sgrow" data-id="'+p.id+'">'+avh+
-      '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">'+highlightName(p.ten_that||"(chưa có tên)", q)+verifiedBadgeHtml(p)+
-      (p.chu_phong?' <span class="tag chu">👑 Chủ phòng</span>':'')+'</div><div style="font-size:11.5px;color:var(--muted)">'+esc(meta)+'</div></div>'+
+      '<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">'+highlightName(p.ten_that||t("(chưa có tên)"), q)+verifiedBadgeHtml(p)+
+      (p.chu_phong?' <span class="tag chu">' + t("👑 Chủ phòng") + '</span>':'')+'</div><div style="font-size:11.5px;color:var(--muted)">'+esc(meta)+'</div></div>'+
       '<span class="sgchev">›</span></div>';
   }).join("");
   el.classList.add("show");
@@ -1693,10 +1990,10 @@ function renderPeople(){
   const rows = filtered();
   document.getElementById("count").textContent = rows.length + " / " + DATA.length;
   const tbStatus = document.getElementById("tbStatusText");
-  if(tbStatus) tbStatus.textContent = rows.length + " / " + DATA.length + " hồ sơ";
+  if(tbStatus) tbStatus.textContent = rows.length + " / " + DATA.length + " " + t("hồ sơ") + "";
   const list = document.getElementById("list");
   if(!rows.length){
-    list.innerHTML = '<div class="empty">Không tìm thấy ai khớp với bộ lọc.</div>';
+    list.innerHTML = '<div class="empty">' + t("Không tìm thấy ai khớp với bộ lọc.") + '</div>';
     _cardCache.clear();
     _lastPeopleHtml = null;
     return;
@@ -1724,7 +2021,7 @@ function renderPeople(){
       sub.push('<span class="pill">CMND: '+esc(p.cmnd)+'</span>');
     }
     if(phone) sub.push(phonePillHtml(p));
-    if(blood) sub.push('<span class="pill pill-blood" title="Nhóm máu: '+esc(blood)+'">🩸 Nhóm '+esc(blood)+'</span>');
+    if(blood) sub.push('<span class="pill pill-blood" title="' + t("Nhóm máu: ") + esc(blood) + '">' + t("🩸 Nhóm ") + esc(blood) + '</span>');
     
     // Rating display pill (Skill & Ethics stars - Không xếp hạng cho Gia thuộc)
     if (skill != null && ethics != null && p.loai !== "Gia thuộc") {
@@ -1737,14 +2034,14 @@ function renderPeople(){
     // Dedicated discipline note button for workers with 1-2 stars or discipline record
     if (p.loai !== "Gia thuộc" && isDisciplineCase(p)) {
       const discNote = (p.ghi_chu_ky_luat || "").trim();
-      const discTitle = discNote ? ('Ghi chú kỷ luật: ' + esc(discNote)) : 'Công nhân có Kỹ năng hoặc Đạo đức 1-2★ - Quản lý bằng Sổ Kỷ luật';
+      const discTitle = discNote ? (t('Ghi chú kỷ luật: ') + esc(discNote)) : t('Công nhân có Kỹ năng hoặc Đạo đức 1-2★ - Quản lý bằng Sổ Kỷ luật');
       const discText = discNote 
-        ? ('📕 Sổ Kỷ luật: ' + esc(discNote.length > 22 ? (discNote.slice(0, 20) + '…') : discNote)) 
-        : '📕 Ghi chú Sổ Kỷ luật (1-2★)';
+        ? (t('📕 Sổ Kỷ luật: ') + esc(discNote.length > 22 ? (discNote.slice(0, 20) + '…') : discNote)) 
+        :t('📕 Ghi chú Sổ Kỷ luật (1-2★)');
       sub.push('<button type="button" class="pill pill-discipline" data-disc-id="' + p.id + '" title="' + discTitle + '">' + discText + '</button>');
     }
 
-    if(p.to) sub.push('<span class="pill">'+esc(p.to)+'</span>');
+    if(p.to) sub.push('<span class="pill">'+esc(tTo(p.to))+'</span>');
     if(p.phong_o) sub.push('<span class="pill">🏠 '+esc(p.phong_o)+'</span>');
     if(p.phan_cay) sub.push('<span class="pill">🌳 '+esc(p.phan_cay)+'</span>');
     if(p.quan_he) sub.push('<span class="pill">'+esc(p.quan_he)+'</span>');
@@ -1752,10 +2049,10 @@ function renderPeople(){
     const avHtml = av ? '<img class="avatar" src="'+av+'" onerror="handleAvatarError(this, \''+esc(p.ten_that||p.ten_ho_so||'')+'\')">' : '<div class="avatar" style="display:flex;align-items:center;justify-content:center;color:#9bb0a5;font-size:18px;">🧑</div>';
 
     const cardHtml = '<div class="card" data-id="'+p.id+'"><div class="cardrow">'+avHtml+'<div class="cbody">'+
-      '<div class="nm">'+esc(p.ten_that||"(chưa có tên)")+verifiedBadgeHtml(p)+
-      (p.loai==="Lao động"?' <span class="tag">Lao động</span>':(p.loai==="Gia thuộc"?' <span class="tag gt">Gia thuộc</span>':' <span class="tag kh">Khác</span>'))+
-      (p.chu_phong?' <span class="tag chu">👑 Chủ phòng</span>':'')+
-      (muon?' <span class="tag muon">⚑ Mượn tên: '+esc(p.ten_ho_so)+'</span>':'')+
+      '<div class="nm">'+esc(p.ten_that||t("(chưa có tên)"))+verifiedBadgeHtml(p)+
+      (p.loai==="Lao động"?' <span class="tag">' + t("Lao động") + '</span>':(p.loai==="Gia thuộc"?' <span class="tag gt">' + t("Gia thuộc") + '</span>':' <span class="tag kh">' + t("Khác") + '</span>'))+
+      (p.chu_phong?' <span class="tag chu">' + t("👑 Chủ phòng") + '</span>':'')+
+      (muon?' <span class="tag muon">' + t("⚑ Mượn tên: ")+esc(p.ten_ho_so)+'</span>':'')+
       (p._edited?' <span class="tag edited">✎</span>':'')+
       '</div>'+
       '<div class="sub">'+sub.join(" ")+'</div>'+
@@ -1786,13 +2083,13 @@ function renderRooms(){
   });
 
   const totalPpl = Object.values(groups).reduce((acc, ppl) => acc + ppl.length, 0);
-  document.getElementById("count").textContent = keys.length + " phòng (" + totalPpl + " người)";
+  document.getElementById("count").textContent = keys.length + t(" phòng (") + totalPpl + t(" người)");
   const tbStatus = document.getElementById("tbStatusText");
-  if(tbStatus) tbStatus.textContent = keys.length + " phòng (" + totalPpl + " người)";
+  if(tbStatus) tbStatus.textContent = keys.length + t(" phòng (") + totalPpl + t(" người)");
   const list = document.getElementById("list");
 
   if(!keys.length){
-    list.innerHTML = '<div class="empty">Không có phòng nào khớp với bộ lọc phân loại hiện tại.</div>';
+    list.innerHTML = '<div class="empty">' + t("Không có phòng nào khớp với bộ lọc phân loại hiện tại.") + '</div>';
     return;
   }
 
@@ -1811,16 +2108,16 @@ function renderRooms(){
         const lPhone = getPhone(leader);
         leaderTag = '<span class="tag chu">👑 '+esc(leader.ten_that)+(lPhone?(' · 📞 '+esc(formatPhone(lPhone))):'')+'</span>';
       } else {
-        leaderTag = '<span class="tag alert-tag">⚠️ Chưa có chủ phòng</span>';
+        leaderTag = '<span class="tag alert-tag">' + t("⚠️ Chưa có chủ phòng") + '</span>';
       }
     }
 
     // Capacity tag
-    let capTag = '<span class="tag">'+ppl.length+' người</span>';
+    let capTag = '<span class="tag">'+ppl.length+t(" người")+'</span>';
     if(ppl.length >= 4){
-      capTag = '<span class="tag warn">'+ppl.length+' người (đông)</span>';
+      capTag = '<span class="tag warn">'+ppl.length+t(" người (đông)")+'</span>';
     } else if(ppl.length === 1){
-      capTag = '<span class="tag gt">1 người (đơn)</span>';
+      capTag = '<span class="tag gt">' + t("1 người (đơn)") + '</span>';
     }
 
     // Members list preview chips
@@ -1831,15 +2128,15 @@ function renderRooms(){
 
     // Composition info
     const compMeta = [];
-    if(countLd > 0) compMeta.push(countLd + " Lao động");
-    if(countGt > 0) compMeta.push(countGt + " Gia thuộc");
+    if(countLd > 0) compMeta.push(countLd + " " + t("Lao động"));
+    if(countGt > 0) compMeta.push(countGt + " " + t("Gia thuộc"));
     const toNames = Array.from(new Set(ppl.map(p => p.to).filter(Boolean))).join(", ");
     if(toNames) compMeta.push(toNames);
 
     html += '<div class="card" data-room="'+esc(r)+'">'+
       '<div class="nm">'+
       '<span>🏠 '+esc(r)+'</span>'+
-      '<span class="pill" style="font-size:11px;background:#e0f2fe;color:#0369a1;font-weight:700;">🏷️ '+esc(blk)+'</span>'+
+      '<span class="pill" style="font-size:11px;background:#e0f2fe;color:#0369a1;font-weight:700;">🏷️ '+esc(t(blk))+'</span>'+
       capTag+
       leaderTag+
       '</div>'+
@@ -1869,7 +2166,7 @@ function openRoom(room){
     const av = avatar(p);
     const avHtml = av ? '<img class="avatar" src="'+av+'" onerror="handleAvatarError(this, \''+esc(p.ten_that||p.ten_ho_so||'')+'\')">' : '<div class="avatar" style="display:flex;align-items:center;justify-content:center;color:#9bb0a5">🧑</div>';
     const ph = getPhone(p);
-    const phoneBtn = ph ? phonePillHtml(p) : '<span style="font-size:11.5px;color:var(--muted)">Chưa có SĐT</span>';
+    const phoneBtn = ph ? phonePillHtml(p) : '<span style="font-size:11.5px;color:var(--muted)">' + t("Chưa có SĐT") + '</span>';
 
     const bld = getBloodType(p);
     const sk = getSkillRating(p);
@@ -1880,33 +2177,33 @@ function openRoom(room){
       extraBadges += ' <span class="pill pill-rating' + (sk === 5 && et === 5 ? ' pill-rating-perfect' : '') + '" style="font-size:11px;padding:1px 6px;">⭐ KN ' + sk + '★ · ĐĐ ' + et + '★</span>';
     }
     if (p.loai !== "Gia thuộc" && isDisciplineCase(p)) {
-      extraBadges += ' <button type="button" class="pill pill-discipline" data-disc-id="' + p.id + '" style="font-size:10.5px;padding:1px 6px;cursor:pointer;" title="Xem/sửa ghi chú kỷ luật">📕 Sổ Kỷ luật (1-2★)</button>';
+      extraBadges += ' <button type="button" class="pill pill-discipline" data-disc-id="' + p.id + '" style="font-size:10.5px;padding:1px 6px;cursor:pointer;" title="' + t("Xem/sửa ghi chú kỷ luật") + '">📕 ' + t("Sổ Kỷ luật (1-2★)") + '</button>';
     }
 
     rows += '<div class="occ" data-id="'+p.id+'">'+avHtml+
-      '<div class="onm">'+esc(p.ten_that||"(chưa có tên)")+verifiedBadgeHtml(p)+
-      (p.chu_phong?' <span class="tag chu">👑 Chủ phòng</span>':'')+
+      '<div class="onm">'+esc(p.ten_that||t("(chưa có tên)"))+verifiedBadgeHtml(p)+
+      (p.chu_phong?' <span class="tag chu">' + t("👑 Chủ phòng") + '</span>':'')+
       (isMuon(p)?' <span class="tag muon">⚑</span>':'')+
       '<div style="font-size:12px;color:var(--muted);font-weight:400;margin-top:3px">'+
-      esc(p.loai)+(p.quan_he?' · '+esc(p.quan_he):'')+(p.to?' · '+esc(p.to):'')+(p.phan_cay?' · 🌳 '+esc(p.phan_cay):'')+(isValidCmnd(p.cmnd) ? (' · CMND ' + esc(p.cmnd)) : '')+
+      esc(t(p.loai))+(p.quan_he?' · '+esc(p.quan_he):'')+(p.to?' · '+esc(p.to):'')+(p.phan_cay?' · 🌳 '+esc(p.phan_cay):'')+(isValidCmnd(p.cmnd) ? (' · CMND ' + esc(p.cmnd)) : '')+
       '</div>'+
       '<div style="margin-top:4px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">'+phoneBtn+extraBadges+'</div>'+
       '</div>'+
-      '<button class="mini-b" data-act="chu" title="Đặt làm chủ phòng">'+(p.chu_phong?'👑 Chủ':'☆ Đặt chủ')+'</button>'+
-      '<button class="mini-b" data-act="edit">Sửa</button>'+
-      '<button class="mini-b move" data-act="move">Chuyển</button>'+
+      '<button class="mini-b" data-act="chu" title="Đặt làm chủ phòng">'+(p.chu_phong?t('👑 Chủ'):t('☆ Đặt chủ'))+'</button>'+
+      '<button class="mini-b" data-act="edit">' + t("Sửa") + '</button>'+
+      '<button class="mini-b move" data-act="move">' + t("Chuyển") + '</button>'+
       '</div>';
   }
 
   const sheet = document.getElementById("sheet");
   sheet.innerHTML =
     '<div class="sheet-h">'+
-    '<h2>🏠 Phòng '+esc(room)+' <span class="pill" style="font-size:12px;background:#e0f2fe;color:#0369a1">🏷️ '+esc(blk)+'</span></h2>'+
+    '<h2>🏠 Phòng '+esc(room)+' <span class="pill" style="font-size:12px;background:#e0f2fe;color:#0369a1">🏷️ '+esc(t(blk))+'</span></h2>'+
     '<button class="x" id="bClose">×</button>'+
     '</div>'+
     '<div class="sheet-b">'+
     '<div class="roomhdr">'+
-    '<span>👥 <b>'+ppl.length+'</b> người</span>'+
+    '<span>👥 <b>'+ppl.length+'</b>' + t(" người") + '</span>'+
     (leader ? (' · 👑 Chủ phòng: <b>'+esc(leader.ten_that)+'</b>') : ' · <span style="color:#ea580c;font-weight:700">⚠️ Chưa có chủ phòng</span>')+
     '</div>'+
     (rows || '<div class="empty">Phòng trống.</div>')+
@@ -1985,7 +2282,7 @@ function movePerson(id, fromRoom){
   logRecordChange("Chuyển phòng", p, (oldR || "(chưa có)") + " → " + (newR || "(chưa có)"));
   save();
   render();
-  toast("Đã chuyển sang phòng " + (newR || "(chưa có phòng)"));
+  toast(t("Đã chuyển sang phòng ") + (newR || "(chưa có phòng)"));
   if(fromRoom) openRoom(fromRoom);
 }
 
@@ -2504,7 +2801,7 @@ function renderImgSlot(id, type, label) {
     }
     h += '<button type="button" class="btn mini-b" data-img-act="change" data-img-type="' + type + '" title="Tải ảnh khác thay thế">📷 Đổi ảnh</button>';
     h += '<button type="button" class="btn mini-b" data-img-act="download" data-img-type="' + type + '" data-img-label="' + esc(label) + '" style="font-weight:700;color:#047857;background:#ecfdf5;border-color:#a7f3d0;" title="Tải ảnh này về máy">⬇ Tải về</button>';
-    h += '<button type="button" class="btn mini-b del" data-img-act="del" data-img-type="' + type + '" title="Xóa ảnh này">🗑 Xóa</button>';
+    h += '<button type="button" class="btn mini-b del" data-img-act="del" data-img-type="' + type + '" title="Xóa ảnh này">🗑 ' + t("Xóa") + '</button>';
     h += '</div>';
   } else {
     if (type === "cmnd") {
@@ -2644,7 +2941,7 @@ function wireImgEvents(id) {
           toast("Đã áp dụng cắt viền CMND ✓");
         });
       } else if (act === "del") {
-        if (confirm("Xác nhận xóa ảnh này?")) {
+        if (confirm(t("Xác nhận xóa ảnh này?"))) {
           delImg(id, type);
           container.innerHTML = renderImgSection(id);
           wireImgEvents(id);
@@ -2682,7 +2979,7 @@ function saveEdit(id) {
   });
 
   if (!rec.ten_that) {
-    toast("Vui lòng nhập Họ và tên (tên thật)");
+    toast(t("Vui lòng nhập Họ và tên (tên thật)"));
     const nameInp = sheet.querySelector('[data-k="ten_that"]');
     if (nameInp) nameInp.focus();
     return;
@@ -2812,10 +3109,10 @@ function renderBloodTypeField(curVal) {
   // Header with title, current status badge, and clear button
   h += '  <div class="blood-picker-top">';
   h += '    <div class="blood-picker-title">';
-  h += '      <span>🩸 Nhóm máu</span>';
-  h += '      <span class="blood-cur-badge' + (hasVal ? '' : ' empty') + '" id="lblCurrentBlood">' + (hasVal ? ('Nhóm ' + esc(cleanVal)) : 'Chưa có') + '</span>';
+  h += '      <span>' + t("🩸 Nhóm máu") + '</span>';
+  h += '      <span class="blood-cur-badge' + (hasVal ? '' : ' empty') + '" id="lblCurrentBlood">' + (hasVal ? (t('Nhóm ') + esc(cleanVal)) : t('Chưa có')) + '</span>';
   h += '    </div>';
-  h += '    <button type="button" class="blood-clear-btn" id="bClearBlood" title="Bỏ chọn nhóm máu">✕ Xóa</button>';
+  h += '    <button type="button" class="blood-clear-btn" id="bClearBlood" title="Bỏ chọn nhóm máu">✕ ' + t("Xóa") + '</button>';
   h += '  </div>';
 
   // 4 Main ABO Segment Buttons (Gom gọn 1 hàng duy nhất)
@@ -2828,12 +3125,12 @@ function renderBloodTypeField(curVal) {
 
   // Detail sub-row: Rh+, rare Rh-, and custom quick input
   h += '  <div class="blood-sub-pills">';
-  h += '    <span class="blood-sub-lbl">Chi tiết:</span>';
+  h += '    <span class="blood-sub-lbl">' + t("Chi tiết:") + '</span>';
   ["O+", "A+", "B+", "AB+", "Rh-"].forEach(subBg => {
     const isAct = cleanVal === subBg;
     h += '<button type="button" class="blood-mini-btn' + (isAct ? ' active' : '') + '" data-blood="' + subBg + '">' + subBg + '</button>';
   });
-  h += '    <input type="text" data-k="nhom_mau" id="inpBloodType" value="' + esc(cleanVal) + '" placeholder="Khác..." class="blood-inp-compact" maxlength="8" title="Hoặc nhập nhóm máu khác">';
+  h += '    <input type="text" data-k="nhom_mau" id="inpBloodType" value="' + esc(cleanVal) + '" placeholder="' + t("Khác...") + '" class="blood-inp-compact" maxlength="8" title="Hoặc nhập nhóm máu khác">';
   h += '  </div>';
 
   h += '</div></div>';
@@ -2849,20 +3146,20 @@ function renderRatingSection(cur) {
   h += '<div class="rating-box-card">';
   h += '<div class="rating-box-header">';
   h += '  <div>';
-  h += '    <div class="rating-box-title">⭐ Đánh giá tay nghề & Đạo đức</div>';
-  h += '    <div class="rating-box-sub">Thang điểm 1 - 5 sao &bull; Mặc định 3 sao (Đạt chuẩn) &bull; Không áp dụng Gia thuộc</div>';
+  h += '    <div class="rating-box-title">' + t("⭐ Đánh giá tay nghề & Đạo đức") + '</div>';
+  h += '    <div class="rating-box-sub">' + t("Thang điểm 1 - 5 sao &bull; Mặc định 3 sao (Đạt chuẩn) &bull; Không áp dụng Gia thuộc") + '</div>';
   h += '  </div>';
   h += '  <div style="display:flex;gap:6px;">';
-  h += '    <button type="button" class="btn mini-b" id="bToggleDisciplineBox" style="font-size:11px;padding:4px 8px;background:#fff1f2;color:#be123c;border-color:#fecdd3;" title="Bật/Tắt ghi chú Sổ Kỷ luật riêng">📕 Ghi chú Kỷ luật</button>';
-  h += '    <button type="button" class="btn mini-b" id="bResetRatings" style="font-size:11px;padding:4px 8px;background:#fefce8;color:#854d0e;border-color:#fef08a;" title="Đặt lại 3 sao mặc định">↺ 3★ mặc định</button>';
+  h += '    <button type="button" class="btn mini-b" id="bToggleDisciplineBox" style="font-size:11px;padding:4px 8px;background:#fff1f2;color:#be123c;border-color:#fecdd3;" title="Bật/Tắt ghi chú Sổ Kỷ luật riêng">' + t("📕 Ghi chú Kỷ luật") + '</button>';
+  h += '    <button type="button" class="btn mini-b" id="bResetRatings" style="font-size:11px;padding:4px 8px;background:#fefce8;color:#854d0e;border-color:#fef08a;" title="Đặt lại 3 sao mặc định">' + t("↺ 3★ mặc định") + '</button>';
   h += '  </div>';
   h += '</div>';
 
   // Skill row
   h += '<div class="rating-row" data-rating-type="ky_nang">';
   h += '  <div class="rating-row-info">';
-  h += '    <span class="rating-label">🛠️ Kỹ năng tay nghề:</span>';
-  h += '    <span class="rating-desc-badge" id="lblRatingSkill">' + esc(SKILL_LABELS[skill] || (skill + '★')) + '</span>';
+  h += '    <span class="rating-label">' + t("🛠️ Kỹ năng tay nghề:") + '</span>';
+  h += '    <span class="rating-desc-badge" id="lblRatingSkill">' + esc(t(SKILL_LABELS[skill]) || (skill + '★')) + '</span>';
   h += '  </div>';
   h += '  <input type="hidden" data-k="danh_gia_ky_nang" id="inpRatingSkill" value="' + skill + '">';
   h += '  <div class="stars-bar" id="starsSkill">';
@@ -2875,8 +3172,8 @@ function renderRatingSection(cur) {
   // Ethics row
   h += '<div class="rating-row" data-rating-type="dao_duc" style="margin-top:10px;">';
   h += '  <div class="rating-row-info">';
-  h += '    <span class="rating-label">🤝 Đạo đức & Kỷ luật:</span>';
-  h += '    <span class="rating-desc-badge" id="lblRatingEthics">' + esc(ETHICS_LABELS[ethics] || (ethics + '★')) + '</span>';
+  h += '    <span class="rating-label">' + t("🤝 Đạo đức & Kỷ luật:") + '</span>';
+  h += '    <span class="rating-desc-badge" id="lblRatingEthics">' + esc(t(ETHICS_LABELS[ethics]) || (ethics + '★')) + '</span>';
   h += '  </div>';
   h += '  <input type="hidden" data-k="danh_gia_dao_duc" id="inpRatingEthics" value="' + ethics + '">';
   h += '  <div class="stars-bar" id="starsEthics">';
@@ -2893,13 +3190,13 @@ function renderRatingSection(cur) {
   h += '<div class="discipline-edit-box" id="disciplineBox" style="' + (hasDisciplineRecord ? '' : 'display:none;') + '">';
   h += '  <div class="discipline-box-header">';
   h += '    <div class="discipline-box-title">';
-  h += '      <span>📕 Sổ Kỷ luật & Ghi chú Chấn chỉnh (1-2★)</span>';
-  h += '      <span class="discipline-badge-alert" id="discAlertTag">' + (hasLowStars ? '⚠️ 1-2★ Cần theo dõi' : 'Đã ghi nhận') + '</span>';
+  h += '      <span>' + t("📕 Sổ Kỷ luật & Ghi chú Chấn chỉnh (1-2★)") + '</span>';
+  h += '      <span class="discipline-badge-alert" id="discAlertTag">' + (hasLowStars ? t('⚠️ 1-2★ Cần theo dõi') : t('Đã ghi nhận')) + '</span>';
   h += '    </div>';
-  h += '    <button type="button" class="btn mini-b" id="bOpenDisciplineBookFromForm" style="font-size:11px;padding:3px 8px;background:#fff;border-color:#fca5a5;color:#991b1b;cursor:pointer;">📖 Mở Sổ Kỷ luật chung</button>';
+  h += '    <button type="button" class="btn mini-b" id="bOpenDisciplineBookFromForm" style="font-size:11px;padding:3px 8px;background:#fff;border-color:#fca5a5;color:#991b1b;cursor:pointer;">' + t("📖 Mở Sổ Kỷ luật chung") + '</button>';
   h += '  </div>';
   h += '  <div style="font-size:11.5px;color:#991b1b;margin-bottom:8px;line-height:1.4;">';
-  h += '    ⚠️ Quản lý kỷ luật và theo dõi đào tạo lại riêng cho công nhân có Kỹ năng hoặc Đạo đức từ 1 đến 2 sao.';
+  h += '    ' + t("⚠️ Quản lý kỷ luật và theo dõi đào tạo lại riêng cho công nhân có Kỹ năng hoặc Đạo đức từ 1 đến 2 sao.") + '';
   h += '  </div>';
 
   const curDate = (cur && cur.ngay_ky_luat) ? cur.ngay_ky_luat : '';
@@ -2909,31 +3206,31 @@ function renderRatingSection(cur) {
   const curGhiChu = (cur && cur.ghi_chu_ky_luat) ? cur.ghi_chu_ky_luat : '';
 
   h += '  <div class="row2">';
-  h += '    <div class="fld"><label>Ngày ghi nhận kỷ luật</label><input type="date" data-k="ngay_ky_luat" id="inpNgayKyLuat" value="' + esc(curDate) + '"></div>';
-  h += '    <div class="fld"><label>Hình thức xử lý</label>';
+  h += '    <div class="fld"><label>' + t("Ngày ghi nhận kỷ luật") + '</label><input type="date" data-k="ngay_ky_luat" id="inpNgayKyLuat" value="' + esc(curDate) + '"></div>';
+  h += '    <div class="fld"><label>' + t("Hình thức xử lý") + '</label>';
   h += '      <select data-k="hinh_thuc_ky_luat" id="selHinhThucKyLuat">';
-  h += '        <option value=""' + (!curHinhThuc ? ' selected' : '') + '>— Chưa chọn —</option>';
+  h += '        <option value=""' + (!curHinhThuc ? ' selected' : '') + '>' + t("— Chưa chọn —") + '</option>';
   ["Nhắc nhở", "Khiển trách", "Cảnh cáo", "Đào tạo lại tay nghề", "Đình chỉ tạm thời", "Chuyển tổ kiểm điểm", "Khác"].forEach(opt => {
-    h += '      <option value="' + opt + '"' + (curHinhThuc === opt ? ' selected' : '') + '>' + opt + '</option>';
+    h += '      <option value="' + opt + '"' + (curHinhThuc === opt ? ' selected' : '') + '>' + t(opt) + '</option>';
   });
   h += '      </select>';
   h += '    </div>';
   h += '  </div>';
 
   h += '  <div class="row2">';
-  h += '    <div class="fld"><label>Trạng thái theo dõi</label>';
+  h += '    <div class="fld"><label>' + t("Trạng thái theo dõi") + '</label>';
   h += '      <select data-k="trang_thai_ky_luat" id="selTrangThaiKyLuat">';
   ["Cần chấn chỉnh", "Đang theo dõi", "Đang đào tạo lại", "Đã có tiến bộ", "Đã khắc phục xong (Đạt chuẩn)"].forEach(opt => {
-    h += '      <option value="' + opt + '"' + (curTrangThai === opt ? ' selected' : '') + '>' + opt + '</option>';
+    h += '      <option value="' + opt + '"' + (curTrangThai === opt ? ' selected' : '') + '>' + t(opt) + '</option>';
   });
   h += '      </select>';
   h += '    </div>';
-  h += '    <div class="fld"><label>Cán bộ / Quản lý phụ trách</label><input type="text" data-k="nguoi_lap_bien_ban" id="inpNguoiLapBienBan" placeholder="Tổ trưởng / Giám sát..." value="' + esc(curNguoiLap) + '"></div>';
+  h += '    <div class="fld"><label>' + t("Cán bộ / Quản lý phụ trách") + '</label><input type="text" data-k="nguoi_lap_bien_ban" id="inpNguoiLapBienBan" placeholder="' + t("Tổ trưởng / Giám sát...") + '" value="' + esc(curNguoiLap) + '"></div>';
   h += '  </div>';
 
   h += '  <div class="fld" style="margin-top:6px;">';
-  h += '    <label>Nội dung vi phạm / Ghi chú rèn luyện & kế hoạch đào tạo*</label>';
-  h += '    <textarea rows="3" data-k="ghi_chu_ky_luat" id="inpGhiChuKyLuat" placeholder="Ghi rõ hành vi vi phạm kỷ luật hoặc thiếu sót kỹ năng thao tác, kế hoạch đào tạo lại, các mốc kiểm tra...">' + esc(curGhiChu) + '</textarea>';
+  h += '    <label>' + t("Nội dung vi phạm / Ghi chú rèn luyện & kế hoạch đào tạo*") + '</label>';
+  h += '    <textarea rows="3" data-k="ghi_chu_ky_luat" id="inpGhiChuKyLuat" placeholder="' + t("Ghi rõ hành vi vi phạm kỷ luật hoặc thiếu sót kỹ năng thao tác, kế hoạch đào tạo lại, các mốc kiểm tra...") + '">' + esc(curGhiChu) + '</textarea>';
   h += '  </div>';
   h += '</div>';
 
@@ -2950,61 +3247,61 @@ function openEdit(id, prefillRoom, backRoom) {
   const cur = clone(p);
   cur.so_dt = getPhone(cur);
   let body = "";
-  const mkInput = (k, lbl, t) => {
+  const mkInput = (k, lbl, typ) => {
     const v = esc(cur[k] || "");
-    if (t === "textarea") return '<div class="fld"><label>' + lbl + '</label><textarea rows="2" data-k="' + k + '">' + v + '</textarea></div>';
-    if (t === "sel_gt") return selField(k, lbl, ["", "M", "F"], cur[k], { "": "—", "M": "Nam (M)", "F": "Nữ (F)" });
-    if (t === "sel_loai") return selField(k, lbl, ["Lao động", "Gia thuộc", "Khác"], cur[k] || "Khác");
-    if (t === "sel_to") return selField(k, lbl, [""].concat(TO_LIST), cur[k]);
+    if (typ === "textarea") return '<div class="fld"><label>' + lbl + '</label><textarea rows="2" data-k="' + k + '">' + v + '</textarea></div>';
+    if (typ === "sel_gt") return selField(k, lbl, ["", "M", "F"], cur[k], { "": "—", "M": t("Nam (M)"), "F": t("Nữ (F)") });
+    if (typ === "sel_loai") return selField(k, lbl, ["Lao động", "Gia thuộc", "Khác"], cur[k] || "Khác", { "Lao động": t("Lao động"), "Gia thuộc": t("Gia thuộc"), "Khác": t("Khác") });
+    if (typ === "sel_to") return selField(k, lbl, [""].concat(TO_LIST), cur[k], Object.fromEntries(TO_LIST.map(x => [x, tTo(x)])));
     if (k === "so_dt") {
       const ph = cur.so_dt;
       const cl = cleanPhone(ph);
       const iconSvg = '<svg class="phone-icon-svg" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="color:#fff;"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.2 2.2z"/></svg>';
       const pendingNote = isPendingPhone(cur)
-        ? '<div style="font-size:11px;color:#7c3aed;margin-top:4px;">📌 SĐT do tổ trưởng nhập trên Google Sheet, chưa có trong CSDL chính thức.</div>'
+        ? '<div style="font-size:11px;color:#7c3aed;margin-top:4px;">' + t("📌 SĐT do tổ trưởng nhập trên Google Sheet, chưa có trong CSDL chính thức.") + '</div>'
         : '';
-      return '<div class="fld"><label>' + lbl + '</label><div class="fld-phone-wrap"><input type="tel" data-k="' + k + '" value="' + v + '" placeholder="Ví dụ: 0912345678 hoặc +855..."><a href="' + (cl ? ("tel:" + cl) : "#") + '" class="btn primary mini-b" style="' + (cl ? "" : "display:none") + '" id="bCallNow" title="Bấm gọi ngay">' + iconSvg + ' <span>Gọi ngay</span></a></div>' + pendingNote + '</div>';
+      return '<div class="fld"><label>' + lbl + '</label><div class="fld-phone-wrap"><input type="tel" data-k="' + k + '" value="' + v + '" placeholder="' + t("Ví dụ: 0912345678 hoặc +855...") + '"><a href="' + (cl ? ("tel:" + cl) : "#") + '" class="btn primary mini-b" style="' + (cl ? "" : "display:none") + '" id="bCallNow" title="Bấm gọi ngay">' + iconSvg + ' <span>' + t("Gọi ngay") + '</span></a></div>' + pendingNote + '</div>';
     }
-    if (t === "addr") {
-      return '<div class="fld"><label>' + lbl + '</label><div class="fld-addr-wrap"><input data-k="' + k + '" value="' + v + '" placeholder="Nhập địa chỉ hoặc quét từ CMND"><button type="button" class="btn-trans" data-field="' + k + '" title="Dịch địa chỉ tiếng Khmer sang tiếng Việt chuẩn">🌐 Dịch TV</button></div></div>';
+    if (k === "addr") {
+      return '<div class="fld"><label>' + lbl + '</label><div class="fld-addr-wrap"><input data-k="' + k + '" value="' + v + '" placeholder="' + t("Nhập địa chỉ hoặc quét từ CMND") + '"><button type="button" class="btn-trans" data-field="' + k + '" title="Dịch địa chỉ tiếng Khmer sang tiếng Việt chuẩn">🌐 ' + t("Dịch TV") + '</button></div></div>';
     }
     if (k === "cmnd") {
-      return '<div class="fld"><label>' + lbl + (isValidCmnd(cur.cmnd) ? (' ' + verifiedBadgeHtml(cur)) : '') + '</label><input data-k="' + k + '" value="' + v + '" placeholder="Nhập số CMND / CCCD hoặc quét từ ảnh"></div>';
+      return '<div class="fld"><label>' + lbl + (isValidCmnd(cur.cmnd) ? (' ' + verifiedBadgeHtml(cur)) : '') + '</label><input data-k="' + k + '" value="' + v + '" placeholder="' + t("Nhập số CMND / CCCD hoặc quét từ ảnh") + '"></div>';
     }
     return '<div class="fld"><label>' + lbl + '</label><input data-k="' + k + '" value="' + v + '"></div>';
   };
   
   body += '<div id="imgSection">' + renderImgSection(id) + '</div>';
-  body += mkInput("ten_that", "Họ và tên (tên thật)*", "input");
-  body += mkInput("ten_ho_so", "Tên trong hồ sơ (tên mượn)", "input");
-  body += '<div class="row2">' + mkInput("cmnd", "CMND / CCCD", "input") + mkInput("ngay_sinh", "Ngày sinh (dd/mm/yyyy)", "input") + '</div>';
-  body += '<div class="row2">' + mkInput("gioi_tinh", "Giới tính", "sel_gt") + mkInput("tuoi", "Tuổi", "input") + '</div>';
-  body += '<div class="row2">' + mkInput("loai", "Loại đối tượng", "sel_loai") + mkInput("to", "Tổ", "sel_to") + '</div>';
-  body += '<div class="row2">' + mkInput("phong_o", "Phòng ở", "input") + mkInput("phan_cay", "Phần cây hiện tại", "input") + '</div>';
-  body += '<div class="fld"><label class="ckrow"><input type="checkbox" id="ckChu"' + (cur.chu_phong ? " checked" : "") + '> 👑 Là chủ phòng này</label></div>';
-  body += mkInput("so_dt", "Số điện thoại (SĐT / Zalo)", "input");
+  body += mkInput("ten_that", "" + t("Họ và tên (tên thật)*") + "", "input");
+  body += mkInput("ten_ho_so", "" + t("Tên trong hồ sơ (tên mượn)") + "", "input");
+  body += '<div class="row2">' + mkInput("cmnd", "" + t("CMND / CCCD") + "", "input") + mkInput("ngay_sinh", "" + t("Ngày sinh (dd/mm/yyyy)") + "", "input") + '</div>';
+  body += '<div class="row2">' + mkInput("gioi_tinh", "" + t("Giới tính") + "", "sel_gt") + mkInput("tuoi", "" + t("Tuổi") + "", "input") + '</div>';
+  body += '<div class="row2">' + mkInput("loai", "" + t("Loại đối tượng") + "", "sel_loai") + mkInput("to", "" + t("Tổ") + "", "sel_to") + '</div>';
+  body += '<div class="row2">' + mkInput("phong_o", "" + t("Phòng ở") + "", "input") + mkInput("phan_cay", "" + t("Phần cây hiện tại") + "", "input") + '</div>';
+  body += '<div class="fld"><label class="ckrow"><input type="checkbox" id="ckChu"' + (cur.chu_phong ? " checked" : "") + '> ' + t("👑 Là chủ phòng này") + '</label></div>';
+  body += mkInput("so_dt", "" + t("Số điện thoại (SĐT / Zalo)") + "", "input");
   body += renderBloodTypeField(cur.nhom_mau);
   body += renderRatingSection(cur);
-  body += '<div class="row2">' + mkInput("khu_vuc", "Khu vực", "input") + mkInput("quan_he", "Quan hệ", "input") + '</div>';
-  body += mkInput("so_bao_hiem", "Số bảo hiểm", "input");
-  body += mkInput("noi_sinh", "Nơi sinh", "addr");
-  body += mkInput("dia_chi", "Địa chỉ thường trú", "addr");
-  body += mkInput("chi_tiet_noi_o", "Chi tiết nơi ở", "input");
-  body += mkInput("ghi_chu", "Ghi chú", "textarea");
+  body += '<div class="row2">' + mkInput("khu_vuc", "" + t("Khu vực") + "", "input") + mkInput("quan_he", "" + t("Quan hệ") + "", "input") + '</div>';
+  body += mkInput("so_bao_hiem", "" + t("Số bảo hiểm") + "", "input");
+  body += mkInput("noi_sinh", "" + t("Nơi sinh") + "", "addr");
+  body += mkInput("dia_chi", "" + t("Địa chỉ thường trú") + "", "addr");
+  body += mkInput("chi_tiet_noi_o", "" + t("Chi tiết nơi ở") + "", "input");
+  body += mkInput("ghi_chu", "" + t("Ghi chú") + "", "textarea");
 
   const sheet = document.getElementById("sheet");
   const workerName = (cur.ten_that || cur.ten_ho_so || "").trim();
   const badge = id !== "__new__" ? verifiedBadgeHtml(cur) : "";
   const modalTitle = id === "__new__" 
-    ? "➕ Thêm người mới" 
-    : ("✏️ " + esc(workerName || "Hồ sơ công nhân") + (badge ? " " + badge : ""));
+    ? t("➕ Thêm ngườ​i mới")
+    : ("✏️ " + esc(workerName || t("Hồ sơ công nhân")) + (badge ? " " + badge : ""));
 
   sheet.innerHTML =
     '<div class="sheet-h"><h2 id="sheetTitle">' + modalTitle + '</h2><button class="x" id="bClose">×</button></div>' +
     '<div class="sheet-b">' + body + '</div>' +
     '<div class="sheet-f">' +
-    (id !== "__new__" ? '<button class="btn del" id="bDel">🗑 Xóa</button>' : '') +
-    '<button class="btn primary" id="bSave">💾 Lưu thay đổi</button>' +
+    (id !== "__new__" ? '<button class="btn del" id="bDel">' + t("🗑 Xóa") + '</button>' : '') +
+    '<button class="btn primary" id="bSave">' + t("💾 Lưu thay đổi") + '</button>' +
     '</div>';
 
   document.getElementById("overlay").classList.add("show");
@@ -3019,7 +3316,7 @@ function openEdit(id, prefillRoom, backRoom) {
       const titleEl = sheet.querySelector("#sheetTitle");
       if (titleEl) {
         const val = e.target.value.trim();
-        titleEl.textContent = "✏️ " + (val || cur.ten_ho_so || "Hồ sơ công nhân");
+        titleEl.textContent = "✏️ " + (val || cur.ten_ho_so || t("Hồ sơ công nhân"));
       }
     });
   }
@@ -3045,7 +3342,7 @@ function openEdit(id, prefillRoom, backRoom) {
       const fieldKey = b.dataset.field;
       const inp = sheet.querySelector(`input[data-k="${fieldKey}"]`);
       if (!inp || !inp.value.trim()) {
-        toast("Vui lòng nhập địa chỉ cần dịch");
+        toast(t("Vui lòng nhập địa chỉ cần dịch"));
         return;
       }
       b.disabled = true;
@@ -3058,12 +3355,12 @@ function openEdit(id, prefillRoom, backRoom) {
           void inp.offsetWidth; // reflow
           inp.classList.add("field-pulse");
           setTimeout(() => inp.classList.remove("field-pulse"), 2500);
-          toast("Đã chuyển đổi sang tiếng Việt ✓");
+          toast(t("Đã chuyển đổi sang tiếng Việt ✓"));
         } else {
-          toast("Địa chỉ đã ở dạng tiếng Việt chuẩn");
+          toast(t("Địa chỉ đã ở dạng tiếng Việt chuẩn"));
         }
       } catch (err) {
-        toast("Không thể dịch địa chỉ");
+        toast(t("Không thể dịch địa chỉ"));
       } finally {
         b.disabled = false;
         b.textContent = "🌐 Dịch TV";
@@ -3227,7 +3524,7 @@ function openEdit(id, prefillRoom, backRoom) {
 }
 
 function delRec(id){
-  if(!confirm("Xác nhận xóa người này?")){ return; }
+  if(!confirm(t("Xác nhận xóa người này?"))){ return; }
   const i = DATA.findIndex(x => x.id === id);
   if(i >= 0){
     const p = DATA[i];
@@ -3239,7 +3536,7 @@ function delRec(id){
     DATA.splice(i, 1);
     save();
     render();
-    toast("Đã xóa");
+    toast(t("Đã xóa"));
     if(editBackRoom) openRoom(editBackRoom);
     else closeEdit();
   }
@@ -3258,7 +3555,7 @@ function closeEdit(){
 function openDisciplineQuickEdit(id) {
   const p = DATA.find(x => x.id === id);
   if (!p) {
-    toast("Không tìm thấy công nhân");
+    toast(t("Không tìm thấy công nhân"));
     return;
   }
   const sheet = document.getElementById("sheet");
@@ -3359,7 +3656,7 @@ function openDisciplineQuickEdit(id) {
   });
   html += '      </select>';
   html += '    </div>';
-  html += '    <div class="fld"><label>Cán bộ / Quản lý phụ trách</label><input type="text" id="quickNguoiLap" placeholder="Tổ trưởng / Giám sát..." value="' + esc(curNguoiLap) + '"></div>';
+  html += '    <div class="fld"><label>' + t("Cán bộ / Quản lý phụ trách") + '</label><input type="text" id="quickNguoiLap" placeholder="' + t("Tổ trưởng / Giám sát...") + '" value="' + esc(curNguoiLap) + '"></div>';
   html += '  </div>';
 
   html += '  <div class="fld" style="margin-top:6px;">';
@@ -4131,8 +4428,8 @@ function showMissingCmndManager(initFilter, initSearch, toFilter) {
       html += '        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
       html += '          <span style="font-size:15px;font-weight:800;color:#0f172a;">' + esc(p.ten_that || "(Chưa có tên)") + '</span>';
       if (isMuon(p)) html += '<span class="tag muon" style="font-size:10px;padding:1px 5px;">⚑ ' + esc(p.ten_ho_so) + '</span>';
-      html += (p.loai === "Lao động" ? ' <span class="tag">Lao động</span>' : (p.loai === "Gia thuộc" ? ' <span class="tag gt">Gia thuộc</span>' : ' <span class="tag kh">Khác</span>'));
-      if (p.chu_phong) html += ' <span class="tag chu">👑 Chủ phòng</span>';
+      html += (p.loai === "Lao động" ? ' <span class="tag">' + t("Lao động") + '</span>' : (p.loai === "Gia thuộc" ? ' <span class="tag gt">' + t("Gia thuộc") + '</span>' : ' <span class="tag kh">' + t("Khác") + '</span>'));
+      if (p.chu_phong) html += ' <span class="tag chu">' + t("👑 Chủ phòng") + '</span>';
       html += '        </div>';
       html += '        <div style="font-size:12px;color:#64748b;margin-top:2px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">';
       if (p.to) html += '<span>' + esc(p.to) + '</span><span aria-hidden="true">&bull;</span>';
@@ -4958,7 +5255,7 @@ function setView(v){
   if(pplFilters) pplFilters.style.display = v === "people" ? "" : "none";
   if(roomFilters) roomFilters.style.display = v === "rooms" ? "" : "none";
 
-  document.getElementById("q").placeholder = v === "rooms" ? "Tìm mã phòng, tên người hoặc SĐT…" : "Tìm tên, CMND, SĐT, phòng, phần cây…";
+  document.getElementById("q").placeholder = v === "rooms" ? t("Tìm mã phòng, tên người hoặc SĐT…") : t("Tìm tên, CMND, SĐT, phòng, phần cây…");
   render();
 }
 
@@ -4967,14 +5264,14 @@ function initFilterOptions(){
   const fTo = document.getElementById("fTo");
   if(fTo){
     const cur = state.to || "";
-    fTo.innerHTML = '<option value="">Tất cả tổ</option>' + TO_LIST.map(t => '<option value="'+t+'"'+(t===cur?' selected':'')+'>'+t+'</option>').join("");
+    fTo.innerHTML = '<option value="">' + t("Tất cả tổ") + '</option>' + TO_LIST.map(to => '<option value="'+to+'"'+(to===cur?' selected':'')+'>'+tTo(to)+'</option>').join("");
   }
 
   const fRoomBlock = document.getElementById("fRoomBlock");
   if(fRoomBlock){
     const blocks = allRoomBlocks();
     const curB = state.roomBlock || "";
-    fRoomBlock.innerHTML = '<option value="">Tất cả Dãy phòng</option>' + blocks.map(b => '<option value="'+b+'"'+(b===curB?' selected':'')+'>'+b+'</option>').join("");
+    fRoomBlock.innerHTML = '<option value="">' + t("Tất cả Dãy phòng") + '</option>' + blocks.map(b => '<option value="'+b+'"'+(b===curB?' selected':'')+'>'+t(b)+'</option>').join("");
   }
 }
 
@@ -6122,7 +6419,7 @@ async function fetchServerImages(imgs, deleted){
 }
 
 async function syncNow(silent){
-  if(!silent) toast("Đang đồng bộ dữ liệu…");
+  if(!silent) toast(t("Đang đồng bộ dữ liệu…"));
   if (API_OK === false && (!CFG.url || !CFG.key)) return;
 
   // 1. STEP 1: ALWAYS perform full bidirectional 2-way sync with server.js
@@ -6227,10 +6524,10 @@ async function syncNow(silent){
   // 2. STEP 2: If Google Apps Script Web App URL and Key are not configured
   if(!CFG.url || !CFG.key){
     if(serverSyncSuccess){
-      if(!silent) toast("✓ Đã đồng bộ máy chủ (mọi máy tính/điện thoại đều đã nhận SĐT)");
+      if(!silent) toast(t("✓ Đã đồng bộ máy chủ (mọi máy tính/điện thoại đều đã nhận SĐT)"));
     } else {
       if(!silent){
-        toast("Vui lòng cấu hình Web App URL và Key trong ⚙️ Cài đặt để đồng bộ Google Sheet");
+        toast(t("Vui lòng cấu hình Web App URL và Key trong ⚙️ Cài đặt để đồng bộ Google Sheet"));
         openSettings("sync");
       }
     }
@@ -6255,7 +6552,7 @@ async function syncNow(silent){
         } else {
           if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
             if(!silent){
-              toast("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+              toast(t("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt."));
               openSettings("sync");
             }
             return;
@@ -6275,7 +6572,7 @@ async function syncNow(silent){
         if(!r.ok){
           if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
             if(!silent){
-              toast("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+              toast(t("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt."));
               openSettings("sync");
             }
             return;
@@ -6312,12 +6609,12 @@ async function syncNow(silent){
     if(!res.ok){
       if(res.error === "unauthorized" || res.msg === "Sai khoá truy cập." || res.err === "unauthorized"){
         if(!silent){
-          toast("✓ Đã đồng bộ máy chủ, nhưng Key Google Sheet chưa đúng.");
+          toast(t("✓ Đã đồng bộ máy chủ, nhưng Key Google Sheet chưa đúng."));
           openSettings("sync");
         }
       } else {
         const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ Google Sheet";
-        if(!silent) toast("✓ Đã đồng bộ máy chủ. Google Sheet: " + errMsg);
+        if(!silent) toast(t("✓ Đã đồng bộ máy chủ. Google Sheet: ") + errMsg);
       }
       return;
     }
@@ -6353,9 +6650,9 @@ async function syncNow(silent){
     }
     if(res.images) fetchServerImages(res.images, res.deletedImages);
     if(!silent) addLog("Đồng bộ đám mây", `Thành công (${incomingData.length} hồ sơ)`);
-    if(!silent) toast("Đồng bộ đám mây thành công ✓");
+    if(!silent) toast(t("Đồng bộ đám mây thành công ✓"));
   }catch(e){
-    if(!silent) toast("✓ Đã đồng bộ máy chủ nội bộ. Google Sheet: " + e.message);
+    if(!silent) toast(t("✓ Đã đồng bộ máy chủ nội bộ. Google Sheet: ") + e.message);
   }
 }
 
@@ -6390,15 +6687,15 @@ async function connect(silent = false){
       return true;
     } else {
       if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
-        if(!silent) toast("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt.");
+        if(!silent) toast(t("Mã bảo mật (Key) không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt."));
       } else {
         const errMsg = r.msg || r.err || r.error || "Không thể xác thực máy chủ";
-        if(!silent) toast("Lỗi kết nối: " + errMsg);
+        if(!silent) toast(t("Lỗi kết nối: ") + errMsg);
       }
       return false;
     }
   }catch(e){
-    if(!silent) toast("Không kết nối được: " + e.message);
+    if(!silent) toast(t("Không kết nối được: ") + e.message);
     return false;
   }
 }
@@ -6440,9 +6737,9 @@ function openSettings(initTab){
       '<div class="cfg-card status-card ' + (isOnline ? "cfg-online" : "cfg-offline") + '">' +
         '<div class="status-indicator">' + (isOnline ? "🟢" : "🟡") + '</div>' +
         '<div class="status-info">' +
-          '<b>' + (isOnline ? "Máy chủ Google Drive & Sheets: Đã kết nối" : "Chế độ Ngoại tuyến / Chưa kết nối") + '</b>' +
-          '<span>' + (isOnline ? ("Quyền hạn: " + (ROLE === "admin" ? "🛡️ Quản trị viên (Admin) - Toàn quyền quản trị & đồng bộ" : "⭐ Thành viên VIP")) : "Dữ liệu được lưu an toàn trên máy này. Nhập mã bảo mật để đồng bộ lên Đám mây.") + '</span>' +
-          (q.length > 0 ? ('<div class="pending-tag">⏳ ' + q.length + ' thay đổi chưa đồng bộ</div>') : '') +
+          '<b>' + (isOnline ? t("Máy chủ Google Drive & Sheets: Đã kết nối") : t("Chế độ Ngoại tuyến / Chưa kết nối")) + '</b>' +
+          '<span>' + (isOnline ? (t("Quyền hạn: ") + (ROLE === "admin" ? t("🛡️ Quản trị viên (Admin) - Toàn quyền quản trị & đồng bộ") : t("⭐ Thành viên VIP"))) : t("Dữ liệu được lưu an toàn trên máy này. Nhập mã bảo mật để đồng bộ lên Đám mây.")) + '</span>' +
+          (q.length > 0 ? ('<div class="pending-tag">⏳ ' + q.length + t(' thay đổi chưa đồng bộ') + '</div>') : '') +
         '</div>' +
       '</div>' +
       '<div class="fld">' +
@@ -6450,27 +6747,27 @@ function openSettings(initTab){
         '<input id="cUrl" value="' + esc(CFG.url || "") + '" placeholder="https://script.google.com/macros/s/.../exec">' +
       '</div>' +
       '<div class="fld">' +
-        '<label>Mã bảo mật / Mật khẩu tài khoản (Key)</label>' +
+        '<label>' + t("Mã bảo mật / Mật khẩu tài khoản (Key)") + '</label>' +
         '<div class="fld-pass-wrap">' +
-          '<input id="cKey" type="password" value="' + esc(CFG.key || "") + '" placeholder="Nhập mã bảo mật (Key) hoặc mật khẩu Admin">' +
+          '<input id="cKey" type="password" value="' + esc(CFG.key || "") + '" placeholder="' + t("Nhập mã bảo mật (Key) hoặc mật khẩu Admin") + '">' +
           '<button type="button" class="btn-eye" id="bTogglePass" title="Hiện/Ẩn mã bảo mật">👁️</button>' +
         '</div>' +
         '<div style="margin-top:7px;display:flex;align-items:center;justify-content:space-between;background:#f8fafc;padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;font-size:12.5px;">' +
-          '<span>Quyền hiện tại: <b style="color:' + (ROLE === "admin" ? "#047857" : "#0284c7") + ';">' + (ROLE === "admin" ? "🛡️ Quản trị viên (Admin)" : "⭐ Thành viên VIP") + '</b></span>' +
-          '<button type="button" class="btn mini-b" id="bExpandAdmin" style="background:#ecfdf5;color:#047857;border-color:#a7f3d0;font-weight:700;">' + (ROLE === "admin" ? "✓ Đã mở toàn quyền" : "🔓 Cấp toàn quyền Admin") + '</button>' +
+          '<span>' + t("Quyền hiện tại: ") + '<b style="color:' + (ROLE === "admin" ? "#047857" : "#0284c7") + ';">' + (ROLE === "admin" ? t("🛡️ Quản trị viên (Admin)") : t("⭐ Thành viên VIP")) + '</b></span>' +
+          '<button type="button" class="btn mini-b" id="bExpandAdmin" style="background:#ecfdf5;color:#047857;border-color:#a7f3d0;font-weight:700;">' + (ROLE === "admin" ? t("✓ Đã mở toàn quyền") : t("🔓 Cấp toàn quyền Admin")) + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="fld">' +
-        '<label>Tên người dùng / Mã nhân sự</label>' +
-        '<input id="cUser" value="' + esc(CFG.user || "") + '" placeholder="Ví dụ: Tony, QuanLy_01, ToTruong_1">' +
+        '<label>' + t("Tên ngườ​i dùng / Mã nhân sự") + '</label>' +
+        '<input id="cUser" value="' + esc(CFG.user || "") + '" placeholder="' + t("Ví dụ: Tony, QuanLy_01, ToTruong_1") + '">' +
       '</div>' +
       '<div id="cfgDiagBox" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:12.5px;line-height:1.4;"></div>' +
       '<div class="cfg-actions-grid">' +
-        '<button class="btn primary" id="bSaveCfg">💾 Lưu cấu hình & Kết nối</button>' +
-        '<button class="btn" id="bTestCfg">🔍 Kiểm tra kết nối</button>' +
-        '<button class="btn" id="bSyncFromSettings">☁️ Đồng bộ ngay</button>' +
+        '<button class="btn primary" id="bSaveCfg">💾 ' + t("Lưu cấu hình & Kết nối") + '</button>' +
+        '<button class="btn" id="bTestCfg">🔍 ' + t("Kiểm tra kết nối") + '</button>' +
+        '<button class="btn" id="bSyncFromSettings">☁️ ' + t("Đồng bộ ngay") + '</button>' +
       '</div>' +
-      (q.length > 0 ? '<div style="margin-top:10px;text-align:right"><button class="btn del mini-b" id="bClearQueue">🧹 Xóa hàng đợi (' + q.length + ')</button></div>' : '') +
+      (q.length > 0 ? '<div style="margin-top:10px;text-align:right"><button class="btn del mini-b" id="bClearQueue">🧹 ' + t("Xóa hàng đợi (") + q.length + ')</button></div>' : '') +
       '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
         '<button class="btn mini-b" id="bCopyGasScript" style="flex:1" title="Sao chép toàn bộ mã Google Apps Script Code.gs chuẩn">📋 Sao chép mã Apps Script chuẩn (Code.gs)</button>' +
       '</div>' +
@@ -6642,19 +6939,19 @@ function openSettings(initTab){
 
   s.innerHTML =
     '<div class="sheet-h">' +
-      '<h2>' + (curSettingsTab === "about" ? "📖 Giới thiệu App Quản lý Công nhân" : "⚙️ Cài đặt & Quản lý hệ thống") + '</h2>' +
+      '<h2>' + (curSettingsTab === "about" ? "📖 Giới thiệu App Quản lý Công nhân" : t("⚙️ Cài đặt & Quản lý hệ thống")) + '</h2>' +
       '<button class="x" id="bClose">×</button>' +
     '</div>' +
     '<div class="cfg-nav-tabs">' +
-      '<button class="cnt-btn ' + (curSettingsTab === "about" ? "on" : "") + '" data-tab="about">📖 Giới thiệu</button>' +
-      '<button class="cnt-btn ' + (curSettingsTab === "sync" ? "on" : "") + '" data-tab="sync">☁️ Đồng bộ</button>' +
-      '<button class="cnt-btn ' + (curSettingsTab === "data" ? "on" : "") + '" data-tab="data">💾 Dữ liệu</button>' +
-      '<button class="cnt-btn ' + (curSettingsTab === "prefs" ? "on" : "") + '" data-tab="prefs">🎨 Tùy chọn</button>' +
-      '<button class="cnt-btn ' + (curSettingsTab === "logs" ? "on" : "") + '" data-tab="logs">📜 Nhật ký</button>' +
+      '<button class="cnt-btn ' + (curSettingsTab === "about" ? "on" : "") + '" data-tab="about">' + t("📖 Giới thiệu") + '</button>' +
+      '<button class="cnt-btn ' + (curSettingsTab === "sync" ? "on" : "") + '" data-tab="sync">' + t("☁️ Đồng bộ") + '</button>' +
+      '<button class="cnt-btn ' + (curSettingsTab === "data" ? "on" : "") + '" data-tab="data">' + t("💾 Dữ liệu") + '</button>' +
+      '<button class="cnt-btn ' + (curSettingsTab === "prefs" ? "on" : "") + '" data-tab="prefs">' + t("🎨 Tùy chọn") + '</button>' +
+      '<button class="cnt-btn ' + (curSettingsTab === "logs" ? "on" : "") + '" data-tab="logs">' + t("📜 Nhật ký") + '</button>' +
     '</div>' +
     '<div class="sheet-b" style="padding-top:14px;">' + tabContent + '</div>' +
     '<div class="sheet-f">' +
-      '<button class="btn primary" id="bDoneSettings">Đóng</button>' +
+      '<button class="btn primary" id="bDoneSettings">' + t("Đóng") + '</button>' +
     '</div>';
 
   document.getElementById("overlay").classList.add("show");
@@ -6771,7 +7068,7 @@ function openSettings(initTab){
             diagBox.style.color = "#166534";
             diagBox.style.border = "1px solid #bbf7d0";
             diagBox.innerHTML = "✅ <b>Kết nối máy chủ Google Sheets & Drive thành công!</b><br>" +
-              "• Quyền hạn: <b>" + (ROLE === "admin" ? "🛡️ Quản trị viên (Admin) - Toàn quyền quản trị & đồng bộ" : "⭐ Thành viên VIP") + "</b><br>" +
+              "• Quyền hạn: <b>" + (ROLE === "admin" ? t("🛡️ Quản trị viên (Admin) - Toàn quyền quản trị & đồng bộ") : t("⭐ Thành viên VIP")) + "</b><br>" +
               "• Dữ liệu trên Google Sheets: <b>" + rowsCount + " hồ sơ nhân sự</b><br>" +
               "• Ảnh nhận diện Google Drive: <b>" + imgCount + " hồ sơ có ảnh</b><br>" +
               "• Nhấn <b>💾 Lưu cấu hình & Kết nối</b> để bắt đầu sử dụng.";
@@ -7630,3 +7927,11 @@ document.getElementById("bReset").onclick = () => {
 initFilterOptions();
 render();
 updateDisciplineBadge();
+
+// Nút chuyển ngữ VI/KM + áp dụng ngôn ngữ đã lưu cho giao diện tĩnh
+const bLangEl = document.getElementById("bLang");
+if(bLangEl){
+  bLangEl.textContent = UI_LANG === "km" ? "🌐 KM" : "🌐 VI";
+  bLangEl.onclick = () => setLang(UI_LANG === "km" ? "vi" : "km");
+}
+applyLang();
