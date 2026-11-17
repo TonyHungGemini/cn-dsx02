@@ -1677,6 +1677,18 @@ function hideSugg(){
 }
 
 /* ---------- Render List Người (People View) ---------- */
+const _cardCache = new Map(); // id -> {sig, html}: chỉ dựng lại thẻ có nội dung thay đổi
+let _lastPeopleHtml = null;   // bỏ qua ghi DOM khi danh sách không đổi (đồng bộ 4s, focus…)
+
+function personCardSig(p, phone, blood, skill, ethics, av){
+  const disc = (p.ghi_chu_ky_luat || "").trim();
+  return [p.ten_that, p.ten_ho_so, p.ten_muon || "", p.loai, p.chu_phong ? 1 : 0, p._edited ? 1 : 0,
+    isValidCmnd(p.cmnd) ? p.cmnd : "", phone || "", blood || "",
+    skill == null ? "" : skill, ethics == null ? "" : ethics, disc,
+    p.to || "", p.phong_o || "", p.phan_cay || "", p.quan_he || "",
+    av ? (av.length + ":" + av.slice(0, 48)) : ""].join("");
+}
+
 function renderPeople(){
   const rows = filtered();
   document.getElementById("count").textContent = rows.length + " / " + DATA.length;
@@ -1685,17 +1697,28 @@ function renderPeople(){
   const list = document.getElementById("list");
   if(!rows.length){
     list.innerHTML = '<div class="empty">Không tìm thấy ai khớp với bộ lọc.</div>';
+    _cardCache.clear();
+    _lastPeopleHtml = null;
     return;
   }
 
   let html = "";
+  const seen = new Set();
   for(const p of rows){
     const muon = isMuon(p);
     const phone = getPhone(p);
-    const sub = [];
     const blood = getBloodType(p);
     const skill = getSkillRating(p);
     const ethics = getEthicsRating(p);
+    const av = avatar(p);
+    seen.add(String(p.id));
+
+    const sig = personCardSig(p, phone, blood, skill, ethics, av);
+    let card = _cardCache.get(p.id);
+    if(card && card.sig !== sig) card = null;
+    if(card){ html += card.html; continue; }
+
+    const sub = [];
 
     if(isValidCmnd(p.cmnd)){
       sub.push('<span class="pill">CMND: '+esc(p.cmnd)+'</span>');
@@ -1726,10 +1749,9 @@ function renderPeople(){
     if(p.phan_cay) sub.push('<span class="pill">🌳 '+esc(p.phan_cay)+'</span>');
     if(p.quan_he) sub.push('<span class="pill">'+esc(p.quan_he)+'</span>');
 
-    const av = avatar(p);
     const avHtml = av ? '<img class="avatar" src="'+av+'" onerror="handleAvatarError(this, \''+esc(p.ten_that||p.ten_ho_so||'')+'\')">' : '<div class="avatar" style="display:flex;align-items:center;justify-content:center;color:#9bb0a5;font-size:18px;">🧑</div>';
 
-    html += '<div class="card" data-id="'+p.id+'"><div class="cardrow">'+avHtml+'<div class="cbody">'+
+    const cardHtml = '<div class="card" data-id="'+p.id+'"><div class="cardrow">'+avHtml+'<div class="cbody">'+
       '<div class="nm">'+esc(p.ten_that||"(chưa có tên)")+verifiedBadgeHtml(p)+
       (p.loai==="Lao động"?' <span class="tag">Lao động</span>':(p.loai==="Gia thuộc"?' <span class="tag gt">Gia thuộc</span>':' <span class="tag kh">Khác</span>'))+
       (p.chu_phong?' <span class="tag chu">👑 Chủ phòng</span>':'')+
@@ -1738,8 +1760,20 @@ function renderPeople(){
       '</div>'+
       '<div class="sub">'+sub.join(" ")+'</div>'+
       '</div></div></div>';
+
+    _cardCache.set(p.id, { sig, html: cardHtml });
+    html += cardHtml;
   }
-  list.innerHTML = html;
+
+  // Dọn thẻ của hồ sơ đã biến mất khỏi danh sách
+  for(const id of _cardCache.keys()){
+    if(!seen.has(String(id))) _cardCache.delete(id);
+  }
+
+  if(html !== _lastPeopleHtml){
+    list.innerHTML = html;
+    _lastPeopleHtml = html;
+  }
 }
 
 /* ---------- Render List Phòng Ở (Room Categorization View) ---------- */
@@ -1813,6 +1847,7 @@ function renderRooms(){
       '<div class="sub" style="margin-top:6px">'+memberChips+'</div>'+
       '</div>';
   }
+  _lastPeopleHtml = null; // view Phòng chiếm cùng phần tử list — vô hiệu bộ đệm People
   list.innerHTML = html;
 }
 
@@ -4931,13 +4966,15 @@ function setView(v){
 function initFilterOptions(){
   const fTo = document.getElementById("fTo");
   if(fTo){
-    fTo.innerHTML = '<option value="">Tất cả tổ</option>' + TO_LIST.map(t => '<option value="'+t+'">'+t+'</option>').join("");
+    const cur = state.to || "";
+    fTo.innerHTML = '<option value="">Tất cả tổ</option>' + TO_LIST.map(t => '<option value="'+t+'"'+(t===cur?' selected':'')+'>'+t+'</option>').join("");
   }
 
   const fRoomBlock = document.getElementById("fRoomBlock");
   if(fRoomBlock){
     const blocks = allRoomBlocks();
-    fRoomBlock.innerHTML = '<option value="">Tất cả Dãy phòng</option>' + blocks.map(b => '<option value="'+b+'">'+b+'</option>').join("");
+    const curB = state.roomBlock || "";
+    fRoomBlock.innerHTML = '<option value="">Tất cả Dãy phòng</option>' + blocks.map(b => '<option value="'+b+'"'+(b===curB?' selected':'')+'>'+b+'</option>').join("");
   }
 }
 
