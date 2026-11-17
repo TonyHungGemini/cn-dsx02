@@ -298,7 +298,7 @@ function setLang(l){
   UI_LANG = (l === "km") ? "km" : "vi";
   try { localStorage.setItem("cn_lang_v1", UI_LANG); } catch(e){}
   const b = document.getElementById("bLang");
-  if(b) b.textContent = UI_LANG === "km" ? "🌐 KM" : "🌐 VI";
+  if(b) b.textContent = UI_LANG === "km" ? "🌐 VI" : "🌐 ខ្មែរ";
   applyLang();
   initFilterOptions();
   // Card đã vẽ cất HTML theo ngôn ngữ cũ — buộc dựng lại
@@ -7931,7 +7931,7 @@ updateDisciplineBadge();
 // Nút chuyển ngữ VI/KM + áp dụng ngôn ngữ đã lưu cho giao diện tĩnh
 const bLangEl = document.getElementById("bLang");
 if(bLangEl){
-  bLangEl.textContent = UI_LANG === "km" ? "🌐 KM" : "🌐 VI";
+  bLangEl.textContent = UI_LANG === "km" ? "🌐 VI" : "🌐 ខ្មែរ";
   bLangEl.onclick = () => setLang(UI_LANG === "km" ? "vi" : "km");
 }
 applyLang();
