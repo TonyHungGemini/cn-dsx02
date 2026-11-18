@@ -220,6 +220,30 @@ const KM = {
   "2★ Vi phạm nhắc nhở": "2★ រំលះការរំលឹក",
   "4★ Gương mẫu, trách nhiệm": "4★ គំរូ និងទទួលខុសត្រូវ",
   "5★ Rất tốt": "5★ ល្អណាស់",
+  "Ảnh chân dung": "រូបថតមុខ",
+  "Ảnh CMND / Thẻ căn cước": "រូបថតអត្តសញ្ញាណប័ណ្ណ / កាតសម្គាល់ខ្លួន",
+  "Bấm để xem ảnh gốc / phóng to": "ចុចដើម្បីមើលរូបភាពដើម / ពង្រីក",
+  "🔍 Xem lớn": "🔍 មើលធំ",
+  "⚡ Đọc CMND & Dịch": "⚡ អានអត្តសញ្ញាណប័ណ្ណ & បកប្រែ",
+  "⚙️ Công cụ ▾": "⚙️ ឧបករណ៍ ▾",
+  "✂️ AI Cắt viền CMND": "✂️ AI កាត់ស៊ុមអត្តសញ្ញាណប័ណ្ណ",
+  "📐 Cắt viền thủ công": "📐 កាត់ស៊ុមដោយដៃ",
+  "🔄 Xoay 90°": "🔄 បង្វិល 90°",
+  "↔️ Lật ảnh": "↔️ ត្រឡប់រូបភាព",
+  "📷 Đổi ảnh mới": "📷 ប្តូររូបភាពថ្មី",
+  "⬇ Tải ảnh về máy": "⬇ ទាញរូបភាពចូលទូរសព្ទ",
+  "🗑 Xóa ảnh này": "🗑 លុបរូបភាពនេះ",
+  "📷 Đổi ảnh": "📷 ប្តូររូបភាព",
+  "⬇ Tải về": "⬇ ទាញយក",
+  "Đang yêu cầu bổ sung ảnh CMND / Thẻ căn cước": "កំពុងស្នើបន្ថែមរូបថតអត្តសញ្ញាណប័ណ្ណ",
+  "Hồ sơ này chưa có ảnh chụp thẻ CMND. Bấm nút bên dưới để tải ảnh lên.": "ឯកសារនេះមិនទាន់មានរូបថតអត្តសញ្ញាណប័ណ្ណ។ ចុចប៊ូតុងខាងក្រោមដើម្បីដំឡើងរូបភាព។",
+  "📷 Tải ảnh CMND lên": "📷 ដំឡើងរូបថតអត្តសញ្ញាណប័ណ្ណ",
+  "Chưa có ảnh": "មិនទាន់មានរូបភាព",
+  "📷 Tải ảnh lên": "📷 ដំឡើងរូបភាព",
+  "Xem ảnh trực tiếp · Thu phóng & Xoay tiện lợi": "មើលរូបថតផ្ទាល់ · ពង្រីក & បង្វិល",
+  "🔄 Xoay": "🔄 បង្វិល",
+  "☁️ Mở Drive": "☁️ បើក Drive",
+  "Chưa có ảnh để xem": "មិនទាន់មានរូបភាពដើម្បីមើល",
 };
 
 function t(vi){
@@ -1353,17 +1377,17 @@ function getDriveFileUrl(id, t){
 let currentViewerZoom = 1;
 let currentViewerRotation = 0;
 
-function openImageViewer(id, t){
-  const uri = getImg(id, t);
+function openImageViewer(id, type){
+  const uri = getImg(id, type);
   if(!uri){
-    toast("Chưa có ảnh để xem");
+    toast(t("Chưa có ảnh để xem"));
     return;
   }
   const p = (id !== "__new__") ? DATA.find(x => x.id === id) : null;
   const workerName = p ? (p.ten_that || p.ten_ho_so || "") : "";
-  const typeLabel = t === "photo" ? "Ảnh chân dung" : "Ảnh CMND / Thẻ căn cước";
-  const fid = imgFileId(id, t);
-  const driveUrl = getDriveFileUrl(id, t);
+  const typeLabel = type === "photo" ? t("Ảnh chân dung") : t("Ảnh CMND / Thẻ căn cước");
+  const fid = imgFileId(id, type);
+  const driveUrl = getDriveFileUrl(id, type);
 
   const oldModal = document.getElementById("imgLightboxModal");
   if(oldModal) oldModal.remove();
@@ -1379,7 +1403,7 @@ function openImageViewer(id, t){
     '<div style="width:100%;max-width:680px;display:flex;align-items:center;justify-content:space-between;color:#fff;padding:4px 6px;">' +
       '<div style="min-width:0;flex:1;">' +
         '<div style="font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(typeLabel) + (workerName ? (' · ' + esc(workerName)) : '') + '</div>' +
-        '<div style="font-size:11.5px;color:#94a3b8;margin-top:2px;">Xem ảnh trực tiếp · Thu phóng & Xoay tiện lợi</div>' +
+        '<div style="font-size:11.5px;color:#94a3b8;margin-top:2px;">' + esc(t("Xem ảnh trực tiếp · Thu phóng & Xoay tiện lợi")) + '</div>' +
       '</div>' +
       '<button id="bCloseLightbox" style="background:rgba(255,255,255,0.18);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
     '</div>' +
@@ -1393,11 +1417,11 @@ function openImageViewer(id, t){
         '<button id="bZoomIn" class="btn mini-b" style="background:rgba(255,255,255,0.15);color:#fff;border:none;">🔍 +</button>' +
         '<button id="bZoomOut" class="btn mini-b" style="background:rgba(255,255,255,0.15);color:#fff;border:none;">🔍 -</button>' +
         '<button id="bResetZoom" class="btn mini-b" style="background:rgba(255,255,255,0.15);color:#fff;border:none;">↺ 100%</button>' +
-        '<button id="bRotateImg" class="btn mini-b" style="background:rgba(255,255,255,0.15);color:#fff;border:none;">🔄 Xoay</button>' +
+        '<button id="bRotateImg" class="btn mini-b" style="background:rgba(255,255,255,0.15);color:#fff;border:none;">' + esc(t("🔄 Xoay")) + '</button>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<button id="bDownloadLightbox" class="btn mini-b primary" style="font-weight:700;">⬇ Tải về</button>' +
-        (fid && driveUrl ? ('<a href="' + driveUrl + '" target="_blank" rel="noopener noreferrer" class="btn mini-b" style="background:rgba(255,255,255,0.12);color:#93c5fd;border:1px solid rgba(147,197,253,0.3);text-decoration:none;">☁️ Mở Drive</a>') : '') +
+        '<button id="bDownloadLightbox" class="btn mini-b primary" style="font-weight:700;">' + esc(t("⬇ Tải về")) + '</button>' +
+        (fid && driveUrl ? ('<a href="' + driveUrl + '" target="_blank" rel="noopener noreferrer" class="btn mini-b" style="background:rgba(255,255,255,0.12);color:#93c5fd;border:1px solid rgba(147,197,253,0.3);text-decoration:none;">' + esc(t("☁️ Mở Drive")) + '</a>') : '') +
       '</div>' +
     '</div>';
 
@@ -1413,7 +1437,7 @@ function openImageViewer(id, t){
   modal.querySelector("#bZoomOut").onclick = () => { currentViewerZoom = Math.max(currentViewerZoom - 0.25, 0.5); updateTransform(); };
   modal.querySelector("#bResetZoom").onclick = () => { currentViewerZoom = 1; currentViewerRotation = 0; updateTransform(); };
   modal.querySelector("#bRotateImg").onclick = () => { currentViewerRotation = (currentViewerRotation + 90) % 360; updateTransform(); };
-  modal.querySelector("#bDownloadLightbox").onclick = () => downloadImg(id, t, typeLabel);
+  modal.querySelector("#bDownloadLightbox").onclick = () => downloadImg(id, type, typeLabel);
   modal.querySelector("#lightboxImgContainer").onclick = (e) => {
     if(e.target.id === "lightboxImgContainer") modal.remove();
   };
@@ -2800,68 +2824,68 @@ function renderImgSlot(id, type, label) {
 
   let h = '<div class="islot">';
   h += '<div class="ilabel" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
-  h += '<span style="font-weight:700;color:var(--text);font-size:13px;">' + esc(label) + '</span>';
+  h += '<span style="font-weight:700;color:var(--text);font-size:13px;">' + esc(t(label)) + '</span>';
   if (fid && driveUrl) {
     h += renderDriveBadge(driveUrl);
   }
   h += '</div>';
 
   if (uri) {
-    h += '<div class="thumbwrap" style="position:relative;cursor:pointer;border-radius:10px;overflow:hidden;background:#f7f9f8;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;min-height:140px;" title="Bấm để xem ảnh gốc / phóng to" data-img-act="preview" data-img-type="' + type + '">';
-    h += '<img class="thumbimg" src="' + uri + '" alt="' + esc(label) + '" onerror="handleImgSlotError(this, \'' + type + '\')" style="max-height:240px;width:100%;object-fit:contain;border:none;background:transparent;">';
-    h += '<div class="thumb-overlay" style="position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,0.68);color:#fff;font-size:11.5px;padding:3px 9px;border-radius:6px;backdrop-filter:blur(2px);font-weight:600;">🔍 Xem lớn</div>';
+    h += '<div class="thumbwrap" style="position:relative;cursor:pointer;border-radius:10px;overflow:hidden;background:#f7f9f8;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;min-height:140px;" title="' + esc(t("Bấm để xem ảnh gốc / phóng to")) + '" data-img-act="preview" data-img-type="' + type + '">';
+    h += '<img class="thumbimg" src="' + uri + '" alt="' + esc(t(label)) + '" onerror="handleImgSlotError(this, \'' + type + '\')" style="max-height:240px;width:100%;object-fit:contain;border:none;background:transparent;">';
+    h += '<div class="thumb-overlay" style="position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,0.68);color:#fff;font-size:11.5px;padding:3px 9px;border-radius:6px;backdrop-filter:blur(2px);font-weight:600;">' + esc(t("🔍 Xem lớn")) + '</div>';
     h += '</div>';
 
     h += '<div class="ibtns">';
     if (type === "cmnd") {
-      h += '<button type="button" class="btn mini-b btn-ocr" data-img-act="ocr" title="Đọc thông tin CMND & Dịch địa chỉ">⚡ Đọc CMND & Dịch</button>';
+      h += '<button type="button" class="btn mini-b btn-ocr" data-img-act="ocr" title="Đọc thông tin CMND & Dịch địa chỉ">' + esc(t("⚡ Đọc CMND & Dịch")) + '</button>';
       h += '<div class="img-dropdown-wrap">';
-      h += '<button type="button" class="btn mini-b btn-tool-secondary" data-dropdown-toggle title="Danh sách công cụ xử lý ảnh">⚙️ Công cụ ▾</button>';
+      h += '<button type="button" class="btn mini-b btn-tool-secondary" data-dropdown-toggle title="Danh sách công cụ xử lý ảnh">' + esc(t("⚙️ Công cụ ▾")) + '</button>';
       h += '<div class="img-dropdown-menu">';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="ai-crop" data-img-type="cmnd" title="AI tự động nhận diện khung viền CMND và cắt bỏ chi tiết thừa">✂️ AI Cắt viền CMND</button>';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="manual-crop" data-img-type="cmnd" title="Cắt viền và căn chỉnh kích thước thủ công">📐 Cắt viền thủ công</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="ai-crop" data-img-type="cmnd" title="AI tự động nhận diện khung viền CMND và cắt bỏ chi tiết thừa">' + esc(t("✂️ AI Cắt viền CMND")) + '</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="manual-crop" data-img-type="cmnd" title="Cắt viền và căn chỉnh kích thước thủ công">' + esc(t("📐 Cắt viền thủ công")) + '</button>';
       h += '<div class="img-dropdown-divider"></div>';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="rotate" data-img-type="cmnd">🔄 Xoay 90°</button>';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="flip" data-img-type="cmnd">↔️ Lật ảnh</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="rotate" data-img-type="cmnd">' + esc(t("🔄 Xoay 90°")) + '</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="flip" data-img-type="cmnd">' + esc(t("↔️ Lật ảnh")) + '</button>';
       h += '<div class="img-dropdown-divider"></div>';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="change" data-img-type="cmnd">📷 Đổi ảnh mới</button>';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="download" data-img-type="cmnd" data-img-label="Ảnh CMND">⬇ Tải ảnh về máy</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="change" data-img-type="cmnd">' + esc(t("📷 Đổi ảnh mới")) + '</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="download" data-img-type="cmnd" data-img-label="Ảnh CMND">' + esc(t("⬇ Tải ảnh về máy")) + '</button>';
       h += '<div class="img-dropdown-divider"></div>';
-      h += '<button type="button" class="img-dropdown-item del-item" data-img-act="del" data-img-type="cmnd">🗑 Xóa ảnh này</button>';
+      h += '<button type="button" class="img-dropdown-item del-item" data-img-act="del" data-img-type="cmnd">' + esc(t("🗑 Xóa ảnh này")) + '</button>';
       h += '</div>';
       h += '</div>';
     } else {
       h += '<div class="img-dropdown-wrap">';
-      h += '<button type="button" class="btn mini-b btn-tool-secondary" data-dropdown-toggle title="Danh sách công cụ chỉnh sửa">⚙️ Công cụ ▾</button>';
+      h += '<button type="button" class="btn mini-b btn-tool-secondary" data-dropdown-toggle title="Danh sách công cụ chỉnh sửa">' + esc(t("⚙️ Công cụ ▾")) + '</button>';
       h += '<div class="img-dropdown-menu">';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="rotate" data-img-type="photo">🔄 Xoay 90°</button>';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="flip" data-img-type="photo">↔️ Lật ảnh</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="rotate" data-img-type="photo">' + esc(t("🔄 Xoay 90°")) + '</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="flip" data-img-type="photo">' + esc(t("↔️ Lật ảnh")) + '</button>';
       h += '<div class="img-dropdown-divider"></div>';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="change" data-img-type="photo">📷 Đổi ảnh mới</button>';
-      h += '<button type="button" class="img-dropdown-item" data-img-act="download" data-img-type="photo" data-img-label="Ảnh chân dung">⬇ Tải ảnh về máy</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="change" data-img-type="photo">' + esc(t("📷 Đổi ảnh mới")) + '</button>';
+      h += '<button type="button" class="img-dropdown-item" data-img-act="download" data-img-type="photo" data-img-label="Ảnh chân dung">' + esc(t("⬇ Tải ảnh về máy")) + '</button>';
       h += '<div class="img-dropdown-divider"></div>';
-      h += '<button type="button" class="img-dropdown-item del-item" data-img-act="del" data-img-type="photo">🗑 Xóa ảnh này</button>';
+      h += '<button type="button" class="img-dropdown-item del-item" data-img-act="del" data-img-type="photo">' + esc(t("🗑 Xóa ảnh này")) + '</button>';
       h += '</div>';
       h += '</div>';
     }
-    h += '<button type="button" class="btn mini-b" data-img-act="change" data-img-type="' + type + '" title="Tải ảnh khác thay thế">📷 Đổi ảnh</button>';
-    h += '<button type="button" class="btn mini-b" data-img-act="download" data-img-type="' + type + '" data-img-label="' + esc(label) + '" style="font-weight:700;color:#047857;background:#ecfdf5;border-color:#a7f3d0;" title="Tải ảnh này về máy">⬇ Tải về</button>';
+    h += '<button type="button" class="btn mini-b" data-img-act="change" data-img-type="' + type + '" title="Tải ảnh khác thay thế">' + esc(t("📷 Đổi ảnh")) + '</button>';
+    h += '<button type="button" class="btn mini-b" data-img-act="download" data-img-type="' + type + '" data-img-label="' + esc(label) + '" style="font-weight:700;color:#047857;background:#ecfdf5;border-color:#a7f3d0;" title="Tải ảnh này về máy">' + esc(t("⬇ Tải về")) + '</button>';
     h += '<button type="button" class="btn mini-b del" data-img-act="del" data-img-type="' + type + '" title="Xóa ảnh này">🗑 ' + t("Xóa") + '</button>';
     h += '</div>';
   } else {
     if (type === "cmnd") {
       h += '<div class="noimg-cmnd-notice" style="border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 10px; padding: 16px 14px; text-align: center; margin-bottom: 8px;">';
       h += '  <div style="font-size: 24px; line-height: 1; margin-bottom: 5px;">🪪</div>';
-      h += '  <div style="font-weight: 700; color: #334155; font-size: 13px; margin-bottom: 3px;">Đang yêu cầu bổ sung ảnh CMND / Thẻ căn cước</div>';
-      h += '  <div style="font-size: 12px; color: #64748b; max-width: 340px; margin: 0 auto 12px; line-height: 1.4;">Hồ sơ này chưa có ảnh chụp thẻ CMND. Bấm nút bên dưới để tải ảnh lên.</div>';
+      h += '  <div style="font-weight: 700; color: #334155; font-size: 13px; margin-bottom: 3px;">' + esc(t("Đang yêu cầu bổ sung ảnh CMND / Thẻ căn cước")) + '</div>';
+      h += '  <div style="font-size: 12px; color: #64748b; max-width: 340px; margin: 0 auto 12px; line-height: 1.4;">' + esc(t("Hồ sơ này chưa có ảnh chụp thẻ CMND. Bấm nút bên dưới để tải ảnh lên.")) + '</div>';
       h += '  <div class="ibtns" style="justify-content:center;margin-top:0;">';
-      h += '    <button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="cmnd" style="font-weight:600;padding:7px 16px;">📷 Tải ảnh CMND lên</button>';
+      h += '    <button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="cmnd" style="font-weight:600;padding:7px 16px;">' + esc(t("📷 Tải ảnh CMND lên")) + '</button>';
       h += '  </div>';
       h += '</div>';
     } else {
-      h += '<div class="noimg">Chưa có ' + esc(label.toLowerCase()) + '</div>';
+      h += '<div class="noimg">' + esc(t("Chưa có ảnh")) + '</div>';
       h += '<div class="ibtns">';
-      h += '<button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="' + type + '">📷 Tải ' + esc(label.toLowerCase()) + ' lên</button>';
+      h += '<button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="' + type + '">' + esc(t("📷 Tải ảnh lên")) + '</button>';
       h += '</div>';
     }
   }
@@ -6466,10 +6490,11 @@ async function fetchServerImages(imgs, deleted){
     for(const id in deleted){
       for(const t in deleted[id]){
         const key = t + ":" + id;
-        if(IMG_OVR[key] !== DEL){ IMG_OVR[key] = DEL; idbPut(key, DEL); }
-        if(window.__IMG_MAP && window.__IMG_MAP[id]) delete window.__IMG_MAP[id][t];
-        if(map[key]){ delete map[key]; mapChanged = true; }
-        delApplied = true;
+        let stateChanged = false;
+        if(IMG_OVR[key] !== DEL){ IMG_OVR[key] = DEL; idbPut(key, DEL); stateChanged = true; }
+        if(window.__IMG_MAP && window.__IMG_MAP[id] && window.__IMG_MAP[id][t] != null){ delete window.__IMG_MAP[id][t]; stateChanged = true; }
+        if(map[key]){ delete map[key]; mapChanged = true; stateChanged = true; }
+        if(stateChanged) delApplied = true;
       }
     }
   }
@@ -6486,6 +6511,7 @@ async function fetchServerImages(imgs, deleted){
   }
 }
 
+let _lastCloudSig = null; // dấu vân tay dữ liệu pull gần nhất, tránh merge/render lại mỗi 4 giây
 async function syncNow(silent){
   if(!silent) toast(t("Đang đồng bộ dữ liệu…"));
   if (API_OK === false && (!CFG.url || !CFG.key)) return;
@@ -6702,26 +6728,33 @@ async function syncNow(silent){
 
     const incomingData = (res && (res.data || res.rows || res.records)) || [];
     if(Array.isArray(incomingData) && incomingData.length > 0){
-      logIncomingChanges(incomingData);
-      DATA = mergeServerData(incomingData, q);
-      save();
-      initFilterOptions();
-      render();
-      updateDisciplineBadge();
+      let cloudSig = "";
+      try { cloudSig = JSON.stringify(incomingData); } catch(e){}
+      if(cloudSig && cloudSig === _lastCloudSig){
+        // Máy chủ không đổi: bỏ qua hợp nhất, ghi bộ nhớ và vẽ lại danh sách
+      } else {
+        if(cloudSig) _lastCloudSig = cloudSig;
+        logIncomingChanges(incomingData);
+        DATA = mergeServerData(incomingData, q);
+        save();
+        initFilterOptions();
+        render();
+        updateDisciplineBadge();
 
-      const isDiscBookOpen = document.getElementById("bCloseDiscBook");
-      if(isDiscBookOpen && typeof showDisciplineBook === "function"){
-        showDisciplineBook(currentDiscFilter, currentDiscSearch);
+        const isDiscBookOpen = document.getElementById("bCloseDiscBook");
+        if(isDiscBookOpen && typeof showDisciplineBook === "function"){
+          showDisciplineBook(currentDiscFilter, currentDiscSearch);
+        }
+
+        // Broadcast merged dataset back to server.js
+        try {
+          fetch("/api/sync-data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ records: DATA, phones: getPhoneCache(), config: CFG })
+          }).catch(e => {});
+        } catch(e){}
       }
-
-      // Broadcast merged dataset back to server.js
-      try {
-        fetch("/api/sync-data", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ records: DATA, phones: getPhoneCache(), config: CFG })
-        }).catch(e => {});
-      } catch(e){}
     }
     if(res.images) fetchServerImages(res.images, res.deletedImages || res.deleted);
     if(!silent) addLog("Đồng bộ đám mây", `Thành công (${incomingData.length} hồ sơ)`);
