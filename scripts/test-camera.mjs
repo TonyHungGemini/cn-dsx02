@@ -292,6 +292,38 @@ test('captured images persist and deduplicate the pending queue using memory-onl
   assert.equal(s.attached.size, 0);
 });
 
+const MRZ_HEADER = 'IDKHM9901234561<<<<<<<<<<<<<<<\n9001011F3001011KHM<<<<<<<<<<<';
+
+for (const [line, expected] of [
+  ['SOK<<CHANNA<KKKKKLKKLLLLLLLLL', 'SOK CHANNA'],
+  ['SOK<<CHANNA KKKKKLKKLLLLLLLLL', 'SOK CHANNA'],
+  ['SOK<<CHANNA<<K<K<L<K<L<L<L', 'SOK CHANNA'],
+  ['SOK<<CHANNA<<<<<<<<<<<<<<', 'SOK CHANNA'],
+  ['SOK<<CHANNA<LEAKHENA<<<<<<', 'SOK CHANNA LEAKHENA'],
+  ['LY<<KIM<LY<<<<<<', 'LY KIM LY'],
+  ['KOK<<KOL<<<<<<', 'KOK KOL'],
+  ['ERIKSSON<<ANNA<MARIA<<<<<<', 'ERIKSSON ANNA MARIA'],
+  ['SOK<<CHANNAKKKKKLLLLLL', undefined],
+  ['<<<<KKKKLLLLLLLL<<<<', undefined]
+]) {
+  test(`MRZ name cleanup: ${line}`, () => {
+    const c = vm.createContext({});
+    vm.runInContext(['cleanOcrName', 'parseMRZ'].map(functionSource).join('\n'), c);
+    const result = c.parseMRZ(MRZ_HEADER + '\n' + line);
+    assert.equal(result.ten_that, expected);
+    assert.equal(result.cmnd, '990123456');
+    assert.equal(result.ngay_sinh, '01/01/1990');
+    assert.equal(result.gioi_tinh, 'F');
+  });
+}
+
+test('MRZ parsing does not lose accented names from the printed label', () => {
+  const c = vm.createContext({});
+  vm.runInContext(['cleanOcrName', 'parseMRZ'].map(functionSource).join('\n'), c);
+  const result = c.parseMRZ('Họ và tên: NGUYỄN THỊ KIM LY\nSố: 990123456\nNgày sinh: 01/01/1990');
+  assert.equal(result.ten_that, 'NGUYỄN THỊ KIM LY');
+});
+
 const OCR_FIELDS = {
   ten_that: 'Synthetic Worker', cmnd: '123456789', ngay_sinh: '01/01/1990',
   tuoi: '36', gioi_tinh: 'F', noi_sinh: 'Synthetic birthplace', dia_chi: 'Synthetic address'
@@ -311,6 +343,7 @@ function ocrSandbox(t, id = ID) {
   const images = new Map();
   const forms = [];
   const networkCalls = [];
+  const completionCalls = [];
   const classList = () => {
     const values = new Set();
     return {
@@ -336,6 +369,7 @@ function ocrSandbox(t, id = ID) {
       return images.get(recordId) ?? null;
     },
     toast: message => messages.push(message),
+    updateEditCompletion: (_sheet, reveal) => { completionCalls.push({ form: forms.length - 1, reveal }); return []; },
     esc: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;'),
     setTimeout: (callback, delay) => { timers.push({ callback, delay }); },
     ocrCMND: (uri, progress) => new Promise(resolve => requests.push({ uri, progress, resolve })),
@@ -352,7 +386,7 @@ function ocrSandbox(t, id = ID) {
       }
     }
   });
-  vm.runInContext(functionSource('doOcrCMND'), c);
+  vm.runInContext(['cleanOcrName', 'formatDOB', 'ageFromDOB', 'doOcrCMND'].map(functionSource).join('\n'), c);
   const open = recordId => {
     const status = {
       html: '', style: { display: 'none' }, progress: null,
@@ -389,12 +423,125 @@ function ocrSandbox(t, id = ID) {
       html: form.status.innerHTML, display: form.status.style.display,
       progress: form.status.progress?.textContent
     })),
-    messages: [...messages], timers: timers.length
+    messages: [...messages], timers: timers.length, completionCalls: [...completionCalls]
   });
   const original = open(id);
   t.after(() => assert.deepEqual(networkCalls, [], 'no attempted network calls'));
   return { c, requests, messages, timers, images, original, open, close, snapshot,
     get current() { return current; } };
+}
+
+for (const [input, expected] of [
+  ['SOK CHANNA KKKKKLKKLLLLLLLLL', 'SOK CHANNA'],
+  ['SOK CHANNA K K L K L L L', 'SOK CHANNA'],
+  ['SOK<<CHANNA<<<<<<', 'SOK CHANNA'],
+  ['SOK««CHANNA‹KKKKLLLL', 'SOK CHANNA'],
+  ['  NGUYỄN THỊ KIM LY  ', 'NGUYỄN THỊ KIM LY'],
+  ['SOK KOL', 'SOK KOL'],
+  ["ANNE-MARIE O'NEILL", "ANNE-MARIE O'NEILL"],
+  ['SOK CHANNA LEAKHENA', 'SOK CHANNA LEAKHENA'],
+  ['ANNA K', 'ANNA K'],
+  ['MY CHANTHOL', 'MY CHANTHOL']
+]) {
+  test(`OCR cleans name before form and banner: ${input}`, async t => {
+    const s = ocrSandbox(t);
+    const pending = s.c.doOcrCMND(ID);
+    const parsed = { ...OCR_FIELDS, ten_that: input };
+    s.requests[0].resolve({ ok: true, source: 'ai', parsed });
+    await pending;
+    assert.equal(s.current.inputs.ten_that.value, expected);
+    assert.ok(s.current.status.innerHTML.includes(expected));
+    assert.doesNotMatch(s.current.status.innerHTML, /KKKK|LLLL|&lt;/);
+    assert.equal(parsed.ten_that, input, 'do not mutate provider output');
+    assert.equal(s.current.inputs.cmnd.value, OCR_FIELDS.cmnd);
+  });
+}
+
+for (const [input, expected] of [
+  ['1993-06-04T17:00:00.000Z', '05/06/1993'],
+  ['1993-06-05', '05/06/1993'],
+  ['5/6/1993', '05/06/1993'],
+  ['5.6.1993', '05/06/1993'],
+  ['05/06/1993', '05/06/1993']
+]) {
+  test(`OCR formats birth date before form and banner: ${input}`, async t => {
+    const s = ocrSandbox(t);
+    const pending = s.c.doOcrCMND(ID);
+    const parsed = { ...OCR_FIELDS, ngay_sinh: input };
+    s.requests[0].resolve({ ok: true, source: 'ai', parsed });
+    await pending;
+    assert.equal(s.current.inputs.ngay_sinh.value, expected);
+    assert.ok(s.current.status.innerHTML.includes(expected));
+    assert.doesNotMatch(s.current.status.innerHTML, /T17:00:00/);
+    assert.equal(parsed.ngay_sinh, input, 'do not mutate provider output');
+  });
+}
+
+for (const input of ['SOK CHANNAKKKKKLLLLLL', 'KKKKLLLLLLLL', null, { name: 'malformed' }]) {
+  test(`OCR uncertain name preserves existing input: ${JSON.stringify(input)}`, async t => {
+    const s = ocrSandbox(t);
+    const pending = s.c.doOcrCMND(ID);
+    s.requests[0].resolve({ ok: true, parsed: { ...OCR_FIELDS, ten_that: input } });
+    await pending;
+    assert.equal(s.current.inputs.ten_that.value, 'initial ten_that');
+    assert.equal(s.current.inputs.cmnd.value, OCR_FIELDS.cmnd);
+    assert.match(s.current.status.innerHTML, /Chưa đọc chắc chắn họ tên/);
+    assert.match(s.current.status.innerHTML, /Đã đọc một phần thông tin CMND/);
+    assert.doesNotMatch(s.current.status.innerHTML, /KKKK|LLLL|thành công/);
+  });
+}
+
+test('OCR untranslated address asks for review instead of claiming translation success', async t => {
+  const s = ocrSandbox(t);
+  const pending = s.c.doOcrCMND(ID);
+  s.requests[0].resolve({ ok: true, parsed: { ...OCR_FIELDS, noi_sinh: 'សាកល្បង', dia_chi: '' } });
+  await pending;
+  assert.equal(s.current.inputs.noi_sinh.value, 'សាកល្បង');
+  assert.match(s.current.status.innerHTML, /bổ sung các ô còn thiếu/);
+  assert.doesNotMatch(s.current.status.innerHTML, /chuyển đổi địa chỉ|thành công/);
+  assert.deepEqual(s.snapshot().completionCalls, [{ form: 0, reveal: true }]);
+});
+
+test('OCR filler-only response is not presented as a recognized name', async t => {
+  const s = ocrSandbox(t);
+  const pending = s.c.doOcrCMND(ID);
+  s.requests[0].resolve({ ok: true, parsed: { ten_that: 'KKKKLLLLLLLL' } });
+  await pending;
+  assert.equal(s.current.inputs.ten_that.value, 'initial ten_that');
+  assert.match(s.current.status.innerHTML, /Không nhận diện được/);
+  assert.doesNotMatch(s.current.status.innerHTML, /KKKK|LLLL/);
+});
+
+for (const secondPass of [false, true]) {
+  test(`offline OCR cleans cropped and full-card names, fallback=${secondPass}`, async () => {
+    const inputs = [];
+    const c = vm.createContext({
+      API_OK: false, setTimeout: () => {}, loadTesseract: async () => {},
+      cropBottom: async () => 'cropped',
+      fetch: () => assert.fail('No external OCR calls in test'),
+      window: { Tesseract: { recognize: async input => {
+        inputs.push(input);
+        const name = input === 'cropped' && secondPass ? 'SOK<<CHANNAKKKKLLLLLLLL' : 'SOK<<CHANNA<KKKKLLLLLLLL';
+        return { data: { text: MRZ_HEADER + '\n' + name } };
+      } } }
+    });
+    vm.runInContext(['cleanOcrName', 'parseMRZ', 'ocrCMND'].map(functionSource).join('\n'), c);
+    const result = await c.ocrCMND('full-card');
+    assert.equal(result.ok, true);
+    assert.equal(result.source, 'offline');
+    assert.equal(result.parsed.ten_that, 'SOK CHANNA');
+    assert.deepEqual(inputs, secondPass ? ['cropped', 'full-card'] : ['cropped']);
+  });
+}
+
+for (const outcome of OCR_OUTCOMES) {
+  test(`OCR ${outcome.label} prompts to complete missing profile information`, async t => {
+    const s = ocrSandbox(t);
+    const pending = s.c.doOcrCMND(ID, { auto: outcome.auto });
+    s.requests[0].resolve(outcome.result);
+    await pending;
+    assert.deepEqual(s.snapshot().completionCalls, [{ form: 0, reveal: true }]);
+  });
 }
 
 const OCR_TRANSITIONS = [

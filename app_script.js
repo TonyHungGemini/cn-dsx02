@@ -36,6 +36,17 @@ let UI_LANG = "vi";
 try { UI_LANG = localStorage.getItem("cn_lang_v1") || "vi"; } catch(e){}
 
 const KM = {
+  "Vui lòng bổ sung thông tin": "សូមបំពេញព័ត៌មានបន្ថែម",
+  "Thông tin bắt buộc đã đầy đủ": "ព័ត៌មានចាំបាច់បានបំពេញគ្រប់ហើយ",
+  "Vui lòng bổ sung thông tin trước khi lưu": "សូមបំពេញព័ត៌មានឱ្យគ្រប់មុនពេលរក្សាទុក",
+  "Bấm vào mục bên dưới để nhập bổ sung. Nếu CMND không đọc được, hãy kiểm tra giấy tờ hoặc hỏi lại người lao động.": "ចុចលើចំណុចខាងក្រោមដើម្បីបំពេញព័ត៌មាន។ បើមិនអាចអានអត្តសញ្ញាណប័ណ្ណបាន សូមពិនិត្យឯកសារ ឬសួរកម្មករម្តងទៀត។",
+  "Kiểm tra thông tin rồi bấm Lưu thay đổi.": "ពិនិត្យព័ត៌មាន រួចចុចរក្សាទុកការកែប្រែ។",
+  "Nhập ngày sinh hợp lệ (dd/mm/yyyy)": "បញ្ចូលថ្ងៃកំណើតត្រឹមត្រូវ (dd/mm/yyyy)",
+  "Địa chỉ chưa dịch đầy đủ. Hãy nhập bằng chữ Latin hoặc bổ sung một ô địa chỉ khác.": "អាសយដ្ឋានមិនទាន់បកប្រែពេញលេញទេ។ សូមបញ្ចូលជាអក្សរឡាតាំង ឬបំពេញប្រអប់អាសយដ្ឋានផ្សេងមួយ។",
+  "Nơi sinh hoặc địa chỉ (chỉ cần một ô)": "កន្លែងកំណើត ឬអាសយដ្ឋាន (បំពេញតែមួយប្រអប់)",
+  "Các ô có * là bắt buộc. Nhóm máu và kỷ luật không bắt buộc.": "ប្រអប់ដែលមាន * ត្រូវតែបំពេញ។ ក្រុមឈាម និងវិន័យមិនចាំបាច់បំពេញទេ។",
+  "Ví dụ: Phòng D2; Phần cây 19-KV1. Tuổi tự tính theo ngày sinh.": "ឧទាហរណ៍៖ បន្ទប់ D2; ផ្នែកឈើ 19-KV1។ អាយុគណនាស្វ័យប្រវត្តិតាមថ្ងៃកំណើត។",
+  "Chỉ cần nhập một trong ba ô: Nơi sinh, Địa chỉ thường trú hoặc Chi tiết nơi ở, bằng chữ Latin.": "បំពេញតែមួយក្នុងចំណោមបីប្រអប់៖ កន្លែងកំណើត អាសយដ្ឋានអចិន្ត្រៃយ៍ ឬព័ត៌មានលម្អិតកន្លែងស្នាក់នៅ ដោយអក្សរឡាតាំង។",
   "Tra cứu Công nhân – ĐSX 02": "ស្វែងរកកម្មករ – ĐSX 02",
   "☁️ Đồng bộ": "☁️ សមកាលកម្ម",
   "📲 Cài App": "📲 ដំឡើង App",
@@ -658,7 +669,7 @@ function findMatchingRecord(target, list){
 
   const targetName = cleanStr(target.ten_that);
   const targetRoom = cleanStr(target.phong_o);
-  const targetDob = String(target.ngay_sinh || "").trim();
+  const targetDob = formatDOB(target.ngay_sinh);
   const targetCmnd = isValidCmnd(target.cmnd) ? String(target.cmnd).trim().toLowerCase() : "";
 
   // 1. Valid CMND match (strictly requires valid CMND to prevent invalid CMND cross-match)
@@ -672,7 +683,7 @@ function findMatchingRecord(target, list){
     const byNameRoom = list.filter(x => cleanStr(x.ten_that) === targetName && cleanStr(x.phong_o) === targetRoom);
     if(byNameRoom.length === 1) return byNameRoom[0];
     if(byNameRoom.length > 1 && targetDob){
-      const byDob = byNameRoom.find(x => String(x.ngay_sinh || "").trim() === targetDob);
+      const byDob = byNameRoom.find(x => formatDOB(x.ngay_sinh) === targetDob);
       if(byDob) return byDob;
       return byNameRoom[0];
     }
@@ -680,7 +691,7 @@ function findMatchingRecord(target, list){
 
   // 3. Name + Ngày sinh match
   if(targetName && targetDob){
-    const byNameDob = list.find(x => cleanStr(x.ten_that) === targetName && String(x.ngay_sinh || "").trim() === targetDob);
+    const byNameDob = list.find(x => cleanStr(x.ten_that) === targetName && formatDOB(x.ngay_sinh) === targetDob);
     if(byNameDob) return byNameDob;
   }
 
@@ -1031,6 +1042,30 @@ let state = {
 let currentRoom = null;
 const NO_ROOM = "(chưa có phòng)";
 
+function normalizeRoom(value){
+  const text = String(value ?? "").trim().replace(/\s+/g, " ");
+  // Only collapse a recognizable letter-and-number code, not a named location.
+  const match = text.match(/^(?:ph[oò]ng\s+)?([a-z])\s*(\d+)$/i);
+  return match ? match[1].toUpperCase() + match[2] : text;
+}
+
+function normalizeTreeSection(value){
+  const text = String(value ?? "").trim().replace(/\s+/g, " ");
+  const normalized = noAccent(text);
+  const zone = "(?:kv|khu vuc)\\s*(\\d+)";
+  const section = "(?:(?:phan(?: cay)?|p)\\s*)?(\\d+)";
+  // Require a separator so a zone-only number can never be split into two numbers.
+  const separator = "(?:\\s*-\\s*|\\s+)";
+  const zoneFirst = normalized.match(new RegExp("^" + zone + separator + section + "$"));
+  if(zoneFirst) return zoneFirst[2] + "-KV" + zoneFirst[1];
+  const sectionFirst = normalized.match(new RegExp("^" + section + separator + zone + "$"));
+  if(sectionFirst) return sectionFirst[1] + "-KV" + sectionFirst[2];
+  const zoneOnly = normalized.match(new RegExp("^" + zone + "$"));
+  if(zoneOnly) return "KV" + zoneOnly[1];
+  // Lists and other ambiguous forms retain all their original numbers and punctuation.
+  return text;
+}
+
 function roomKey(p){
   return (p.phong_o||"").trim() || NO_ROOM;
 }
@@ -1360,9 +1395,31 @@ async function compress(file, max, q){
   }
 }
 
+function formatDOB(value) {
+  const raw = String(value == null ? "" : value).trim();
+  const dmy = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/i);
+  if (!dmy && !iso) return raw;
+  const year = dmy ? dmy[3] : iso[1];
+  const month = (dmy ? dmy[2] : iso[2]).padStart(2, "0");
+  const day = (dmy ? dmy[1] : iso[3]).padStart(2, "0");
+  const calendarDate = new Date(year + "-" + month + "-" + day + "T00:00:00Z");
+  if (!Number.isFinite(calendarDate.getTime()) || calendarDate.getUTCDate() !== +day) return raw;
+  if (iso && iso[4]) {
+    const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+    const timestamp = new Date(raw + (hasZone ? "" : "Z"));
+    if (!Number.isFinite(timestamp.getTime())) return raw;
+    // Ngày trong Sheet theo Asia/Bangkok (UTC+7), không theo múi giờ máy đang xem.
+    if (hasZone) return new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit", year: "numeric"
+    }).format(timestamp);
+  }
+  return day + "/" + month + "/" + year;
+}
+
 function ageFromDOB(ds){
   if(!ds) return "";
-  const m = String(ds).match(/(19|20)\d{2}/);
+  const m = formatDOB(ds).match(/(19|20)\d{2}/);
   if(!m) return "";
   const y = +m[0];
   const a = (new Date().getFullYear())-y;
@@ -1666,8 +1723,18 @@ function cropBottom(uri) {
   });
 }
 
+function cleanOcrName(value) {
+  if (typeof value !== "string") return "";
+  let name = value.normalize("NFC").replace(/[«‹＜]/g, "<").trim();
+  // OCR nhầm phần đệm MRZ thành K/L; chỉ cắt đuôi dài có ranh giới, không đoán phần dính vào tên.
+  name = name.replace(/(?:^|[\s<])(?:[KL][\s<]*){5,}$/i, "");
+  name = name.replace(/<+/g, " ").replace(/\s+/g, " ").trim();
+  return /[KL]{5,}$/i.test(name) ? "" : name;
+}
+
 function parseMRZ(text) {
-  const up = (text || "").toUpperCase();
+  text = String(text || "");
+  const up = text.toUpperCase().replace(/[«‹＜]/g, "<");
   const rawLines = up.split(/\r?\n/).map(l => l.replace(/[^A-Z0-9<]/g, "").trim()).filter(l => l.length >= 6);
   const out = {};
 
@@ -1689,14 +1756,12 @@ function parseMRZ(text) {
   }
 
   // 2. Line with Name (e.g. BOEURN<<YON<<<<<)
-  for (const l of rawLines) {
-    if (l.indexOf("<<") >= 0 && /^[A-Z<]+$/.test(l) && l.length >= 8) {
-      const segs = l.split(/<+/).filter(Boolean);
-      if (segs.length >= 2) {
-        out.ten_that = (segs[0] + " " + segs.slice(1).join(" ")).trim();
-        break;
-      } else if (segs.length === 1) {
-        out.ten_that = segs[0].trim();
+  for (const line of up.split(/\r?\n/)) {
+    const l = line.replace(/[^A-Z0-9<\s]/g, "").trim();
+    if (l.includes("<<") && /^[A-Z<\s]+$/.test(l) && l.length >= 8) {
+      const name = cleanOcrName(l);
+      if (name) {
+        out.ten_that = name;
         break;
       }
     }
@@ -1727,7 +1792,10 @@ function parseMRZ(text) {
   // 4. Fallback text parser (for Vietnamese CCCD or standard cards)
   if (!out.ten_that) {
     const mName = text.match(/(?:Họ và tên|Full name|Họ tên|Name)[:\s]+([^\r\n]+)/i);
-    if (mName) out.ten_that = mName[1].trim().toUpperCase();
+    if (mName) {
+      const name = cleanOcrName(mName[1].toUpperCase());
+      if (name) out.ten_that = name;
+    }
   }
   if (!out.cmnd) {
     const mNum = text.match(/(?:Số|No\.?|CCCD|CMND)[:\s]*([0-9]{9,12})/i);
@@ -1848,21 +1916,28 @@ async function doOcrCMND(id, opts) {
       if (ocrBox) {
         ocrBox.innerHTML = '<div style="font-size:12.5px;color:#64748b;padding:10px 12px;border:1px dashed #cbd5e1;background:#f8fafc;border-radius:8px;">📷 Ảnh CMND đã được lưu. Thiết bị này chưa đọc tự động được — bạn có thể nhập tay hoặc bấm "⚡ Đọc CMND &amp; Dịch" để thử lại.</div>';
       }
+      updateEditCompletion(sheet, true);
       return;
     }
     if (ocrBox) {
       ocrBox.innerHTML = '<div class="ocr-status-err">❌ Không thể nhận diện: ' + esc(res.err) + '</div>';
     }
+    updateEditCompletion(sheet, true);
     toast("Lỗi nhận diện ảnh CMND");
     return;
   }
 
-  const p = res.parsed || {};
+  const p = { ...res.parsed,
+    ten_that: cleanOcrName(res.parsed && res.parsed.ten_that),
+    ngay_sinh: formatDOB(res.parsed && res.parsed.ngay_sinh)
+  };
+  p.tuoi = ageFromDOB(p.ngay_sinh) || p.tuoi;
   const hasData = !!(p.ten_that || p.cmnd || p.ngay_sinh || p.gioi_tinh || p.dia_chi || p.noi_sinh);
   if (!hasData) {
     if (ocrBox) {
       ocrBox.innerHTML = '<div class="ocr-status-err">⚠️ Không nhận diện được thông tin thẻ. Hãy thử chụp góc thẻ rõ nét hơn.</div>';
     }
+    updateEditCompletion(sheet, true);
     toast("Không nhận diện được chữ trên CMND");
     return;
   }
@@ -1898,19 +1973,20 @@ async function doOcrCMND(id, opts) {
     if (p.noi_sinh) details.push("📍 <b>Nơi sinh:</b> " + esc(p.noi_sinh));
     if (p.dia_chi) details.push("🏠 <b>Địa chỉ:</b> " + esc(p.dia_chi));
 
-    const note = p.dia_chi || p.noi_sinh ?
-      "✓ Đã tự động đọc họ tên, số thẻ và chuyển đổi địa chỉ/nơi sinh sang tiếng Việt chuẩn." :
-      "✓ Đã tự động cập nhật vào các ô nhập liệu bên dưới.";
+    const note = !p.ten_that ? "Chưa đọc chắc chắn họ tên; vui lòng kiểm tra ảnh và nhập tên thủ công." :
+      "Đã cập nhật thông tin đọc được. Vui lòng kiểm tra và bổ sung các ô còn thiếu.";
 
     ocrBox.innerHTML =
       '<div class="ocr-status-ok">' +
-      '<div class="ocr-ok-title">⚡ <b>Đã nhận diện thông tin & dịch địa chỉ tiếng Việt thành công:</b></div>' +
+      '<div class="ocr-ok-title"><b>' + (p.ten_that ? 'Kết quả đọc thông tin CMND:' : 'Đã đọc một phần thông tin CMND:') + '</b></div>' +
       '<div class="ocr-ok-details">' + details.join(' &bull; ') + '</div>' +
       '<div class="ocr-ok-note">' + note + '</div>' +
       '</div>';
   }
 
-  toast("⚡ Đã đọc thông tin & chuyển đổi địa chỉ tiếng Việt thành công ✓");
+  updateEditCompletion(sheet, true);
+  toast(p.ten_that ? "Đã đọc thông tin CMND; hãy kiểm tra trước khi lưu." :
+    "Đã đọc một phần thông tin; vui lòng kiểm tra và nhập họ tên.");
 }
 
 function isMuon(p){
@@ -3076,6 +3152,90 @@ function wireImgEvents(id) {
 }
 
 
+function requiredEditFields(rec) {
+  const fields = [
+    ["ten_that", "Họ và tên (tên thật)*"], ["cmnd", "CMND / CCCD"],
+    ["ngay_sinh", "Ngày sinh (dd/mm/yyyy)"], ["gioi_tinh", "Giới tính"],
+    ["tuoi", "Tuổi"], ["loai", "Loại đối tượng"], ["to", "Tổ"],
+    ["phong_o", "Phòng ở"], ["phan_cay", "Phần cây hiện tại"],
+    ["so_dt", "Số điện thoại (SĐT / Zalo)"]
+  ];
+  return rec.loai === "Gia thuộc"
+    ? fields.filter(([key]) => !["cmnd", "so_dt", "to", "phan_cay"].includes(key)) : fields;
+}
+
+function readEditForm(sheet) {
+  const rec = {};
+  sheet.querySelectorAll("[data-k]").forEach(inp => { rec[inp.dataset.k] = inp.value.trim(); });
+  rec.ngay_sinh = formatDOB(rec.ngay_sinh);
+  rec.tuoi = ageFromDOB(rec.ngay_sinh) || rec.tuoi || "";
+  rec.phong_o = normalizeRoom(rec.phong_o);
+  rec.phan_cay = normalizeTreeSection(rec.phan_cay);
+  rec.so_dt = cleanPhone(rec.so_dt);
+  return rec;
+}
+
+function getEditIssues(rec) {
+  const issues = requiredEditFields(rec).filter(([key]) => !String(rec[key] ?? "").trim() ||
+    (key === "cmnd" && !isValidCmnd(rec.cmnd)) ||
+    (key === "so_dt" && !/\d/.test(rec.so_dt)))
+    .map(([key, label]) => ({ keys: [key], label }));
+  if (rec.ngay_sinh) {
+    const dob = formatDOB(rec.ngay_sinh);
+    const parts = dob.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const date = parts ? new Date(parts[3] + "-" + parts[2] + "-" + parts[1] + "T00:00:00Z") : null;
+    if (!date || !Number.isFinite(date.getTime()) || date.getUTCDate() !== +parts[1] ||
+      date.getTime() > Date.now() + 7 * 60 * 60 * 1000 || ageFromDOB(dob) === "") {
+      issues.push({ keys: ["ngay_sinh"], label: "Nhập ngày sinh hợp lệ (dd/mm/yyyy)" });
+    }
+  }
+  const addresses = ["noi_sinh", "dia_chi", "chi_tiet_noi_o"];
+  if (!addresses.some(key => String(rec[key] || "").trim() && !KHMER_TEST_RE.test(rec[key]))) {
+    issues.push({ keys: addresses, label: "Nơi sinh hoặc địa chỉ (chỉ cần một ô)" });
+  }
+  return issues;
+}
+
+function updateEditCompletion(sheet, reveal) {
+  const rec = readEditForm(sheet);
+  const issues = getEditIssues(rec);
+  const box = sheet.querySelector("#editCompletion");
+  if (!box) return issues;
+  const age = sheet.querySelector('[data-k="tuoi"]');
+  if (age && ageFromDOB(rec.ngay_sinh) !== "") age.value = rec.tuoi;
+  if (reveal) box.dataset.active = "true";
+  const active = box.dataset.active === "true";
+  const required = new Set(requiredEditFields(rec).map(([key]) => key));
+  const missing = new Set(issues.flatMap(issue => issue.keys));
+  sheet.querySelectorAll("[data-k]").forEach(inp => {
+    const key = inp.dataset.k;
+    inp.setAttribute("aria-required", String(required.has(key)));
+    inp.classList.toggle("field-invalid", active && missing.has(key));
+    if (active && missing.has(key)) inp.setAttribute("aria-invalid", "true");
+    else inp.removeAttribute("aria-invalid");
+    const label = inp.closest(".fld")?.querySelector("label");
+    if (label) label.classList.toggle("field-required", required.has(key) && key !== "ten_that");
+  });
+  box.hidden = !active;
+  if (!active) return issues;
+  box.classList.toggle("complete", issues.length === 0);
+  box.innerHTML = '<strong>' + esc(t(issues.length ? "Vui lòng bổ sung thông tin" : "Thông tin bắt buộc đã đầy đủ")) + '</strong>' +
+    '<p>' + esc(t(issues.length ? "Bấm vào mục bên dưới để nhập bổ sung. Nếu CMND không đọc được, hãy kiểm tra giấy tờ hoặc hỏi lại người lao động." : "Kiểm tra thông tin rồi bấm Lưu thay đổi.")) + '</p>' +
+    '<div class="completion-fields">' + issues.map(issue => '<button type="button" data-complete-field="' + issue.keys[0] + '">' + esc(t(issue.label)) + '</button>').join("") + '</div>';
+  box.querySelectorAll("[data-complete-field]").forEach(button => {
+    button.onclick = () => {
+      const input = sheet.querySelector('[data-k="' + button.dataset.completeField + '"]');
+      input.closest(".fld").scrollIntoView({ block: "center" });
+      input.focus({ preventScroll: true });
+    };
+  });
+  if (reveal && issues.length) {
+    box.scrollIntoView({ block: "start" });
+    box.focus({ preventScroll: true });
+  }
+  return issues;
+}
+
 function saveEdit(id) {
   const sheet = document.getElementById("sheet");
   if (!sheet) return;
@@ -3086,18 +3246,9 @@ function saveEdit(id) {
   const rec = isNew ? blank() : { ...existing };
   const auditBefore = isNew ? null : auditSnap(existing);
 
-  const inputs = sheet.querySelectorAll("[data-k]");
-  inputs.forEach(inp => {
-    const k = inp.dataset.k;
-    if (k) {
-      rec[k] = inp.value.trim();
-    }
-  });
-
-  if (!rec.ten_that) {
-    toast(t("Vui lòng nhập Họ và tên (tên thật)"));
-    const nameInp = sheet.querySelector('[data-k="ten_that"]');
-    if (nameInp) nameInp.focus();
+  Object.assign(rec, readEditForm(sheet));
+  if (updateEditCompletion(sheet, true).length) {
+    toast(t("Vui lòng bổ sung thông tin trước khi lưu"));
     return;
   }
 
@@ -3139,7 +3290,7 @@ function saveEdit(id) {
   const ckChu = sheet.querySelector("#ckChu");
   const isLeader = ckChu ? ckChu.checked : false;
   const formerLeaders = isLeader && rec.phong_o
-    ? DATA.filter(x => roomKey(x) === rec.phong_o && x.id !== rec.id && x.chu_phong)
+    ? DATA.filter(x => normalizeRoom(roomKey(x)) === rec.phong_o && x.id !== rec.id && x.chu_phong)
       .map(x => ({ ...x, chu_phong: false, _edited: true,
         _editedAt: Date.now(), _editedBy: auditUserName() }))
     : [];
@@ -3354,9 +3505,12 @@ function openEdit(id, prefillRoom, backRoom) {
   if (!p) { return; }
   const cur = clone(p);
   cur.so_dt = getPhone(cur);
-  let body = "";
+  cur.tuoi = ageFromDOB(cur.ngay_sinh) || cur.tuoi;
+  let body = '<div id="editCompletion" class="edit-completion" role="status" aria-live="polite" tabindex="-1" hidden></div>' +
+    '<p class="edit-guide">' + esc(t("Các ô có * là bắt buộc. Nhóm máu và kỷ luật không bắt buộc.")) + '</p>' +
+    '<p class="edit-guide">' + esc(t("Ví dụ: Phòng D2; Phần cây 19-KV1. Tuổi tự tính theo ngày sinh.")) + '</p>';
   const mkInput = (k, lbl, typ) => {
-    const v = esc(cur[k] || "");
+    const v = esc(k === "ngay_sinh" ? formatDOB(cur[k]) : (cur[k] || ""));
     if (typ === "textarea") return '<div class="fld"><label>' + lbl + '</label><textarea rows="2" data-k="' + k + '">' + v + '</textarea></div>';
     if (typ === "sel_gt") return selField(k, lbl, ["", "M", "F"], cur[k], { "": "—", "M": t("Nam (M)"), "F": t("Nữ (F)") });
     if (typ === "sel_loai") return selField(k, lbl, ["Lao động", "Gia thuộc", "Khác"], cur[k] || "Khác", { "Lao động": t("Lao động"), "Gia thuộc": t("Gia thuộc"), "Khác": t("Khác") });
@@ -3370,7 +3524,7 @@ function openEdit(id, prefillRoom, backRoom) {
         : '';
       return '<div class="fld"><label>' + lbl + '</label><div class="fld-phone-wrap"><input type="tel" data-k="' + k + '" value="' + v + '" placeholder="' + t("Ví dụ: 0912345678 hoặc +855...") + '"><a href="' + (cl ? ("tel:" + cl) : "#") + '" class="btn primary mini-b" style="' + (cl ? "" : "display:none") + '" id="bCallNow" title="Bấm gọi ngay">' + iconSvg + ' <span>' + t("Gọi ngay") + '</span></a></div>' + pendingNote + '</div>';
     }
-    if (k === "addr") {
+    if (typ === "addr") {
       return '<div class="fld"><label>' + lbl + '</label><div class="fld-addr-wrap"><input data-k="' + k + '" value="' + v + '" placeholder="' + t("Nhập địa chỉ hoặc quét từ CMND") + '"><button type="button" class="btn-trans" data-field="' + k + '" title="Dịch địa chỉ tiếng Khmer sang tiếng Việt chuẩn">🌐 ' + t("Dịch TV") + '</button></div></div>';
     }
     if (k === "cmnd") {
@@ -3392,6 +3546,7 @@ function openEdit(id, prefillRoom, backRoom) {
   body += renderRatingSection(cur);
   body += '<div class="row2">' + mkInput("khu_vuc", "" + t("Khu vực") + "", "input") + mkInput("quan_he", "" + t("Quan hệ") + "", "input") + '</div>';
   body += mkInput("so_bao_hiem", "" + t("Số bảo hiểm") + "", "input");
+  body += '<p class="edit-guide" id="addressRequirement">' + esc(t("Chỉ cần nhập một trong ba ô: Nơi sinh, Địa chỉ thường trú hoặc Chi tiết nơi ở, bằng chữ Latin.")) + '</p>';
   body += mkInput("noi_sinh", "" + t("Nơi sinh") + "", "addr");
   body += mkInput("dia_chi", "" + t("Địa chỉ thường trú") + "", "addr");
   body += mkInput("chi_tiet_noi_o", "" + t("Chi tiết nơi ở") + "", "input");
@@ -3416,6 +3571,13 @@ function openEdit(id, prefillRoom, backRoom) {
   document.getElementById("bClose").onclick = closeEdit;
   document.getElementById("bSave").onclick = () => saveEdit(id);
   if (id !== "__new__") document.getElementById("bDel").onclick = () => delRec(id);
+  for (const event of ["input", "change"]) {
+    sheet.querySelector(".sheet-b").addEventListener(event, () => updateEditCompletion(sheet));
+  }
+  for (const key of ["noi_sinh", "dia_chi", "chi_tiet_noi_o"]) {
+    sheet.querySelector('[data-k="' + key + '"]').setAttribute("aria-describedby", "addressRequirement");
+  }
+  updateEditCompletion(sheet);
 
   // Dynamically update title if worker name is edited in input
   const nameInput = sheet.querySelector("input[data-k='ten_that']");
@@ -3456,22 +3618,28 @@ function openEdit(id, prefillRoom, backRoom) {
       b.disabled = true;
       b.textContent = "⏳ Đang dịch…";
       try {
-        const trans = await translateAddress(inp.value);
-        if (trans && trans !== inp.value) {
+        const originalText = inp.value;
+        const trans = await translateAddress(originalText);
+        if (!inp.isConnected || inp.value !== originalText) return;
+        if (trans && trans !== originalText) {
           inp.value = trans;
           inp.classList.remove("field-pulse");
           void inp.offsetWidth; // reflow
           inp.classList.add("field-pulse");
           setTimeout(() => inp.classList.remove("field-pulse"), 2500);
-          toast(t("Đã chuyển đổi sang tiếng Việt ✓"));
-        } else {
-          toast(t("Địa chỉ đã ở dạng tiếng Việt chuẩn"));
         }
+        const incomplete = KHMER_TEST_RE.test(inp.value);
+        updateEditCompletion(sheet, incomplete);
+        toast(t(incomplete ? "Địa chỉ chưa dịch đầy đủ. Hãy nhập bằng chữ Latin hoặc bổ sung một ô địa chỉ khác." :
+          (inp.value !== originalText ? "Đã chuyển đổi sang tiếng Việt ✓" : "Địa chỉ đã ở dạng tiếng Việt chuẩn")));
       } catch (err) {
-        toast(t("Không thể dịch địa chỉ"));
+        if (inp.isConnected) {
+          updateEditCompletion(sheet, true);
+          toast(t("Không thể dịch địa chỉ"));
+        }
       } finally {
         b.disabled = false;
-        b.textContent = "🌐 Dịch TV";
+        b.textContent = "🌐 " + t("Dịch TV");
       }
     };
   });
@@ -6200,7 +6368,10 @@ function enrichRecordForServer(r){
     o["TÊN TRONG HỒ SƠ"] = o.ten_ho_so;
     o["Tên trong hồ sơ"] = o.ten_ho_so;
   }
-  if(o.ngay_sinh != null) o["Ngày sinh"] = o.ngay_sinh;
+  if(o.ngay_sinh != null) {
+    o.ngay_sinh = formatDOB(o.ngay_sinh);
+    o["Ngày sinh"] = o.ngay_sinh;
+  }
   if(o.tuoi != null) o["Tuổi"] = o.tuoi;
   if(o.noi_sinh != null) o["Nơi sinh"] = o.noi_sinh;
   if(o.gioi_tinh != null) o["Giới tính"] = o.gioi_tinh;
@@ -6366,7 +6537,7 @@ function normServerRec(o){
   r.cmnd = findVal("cmnd", "CMND / CCCD", "CMND", "CCCD", "Số CMND", "so_cmnd");
   r.ten_that = findVal("ten_that", "Họ và tên (tên thật)", "Họ và tên", "HỌ VÀ TÊN (Tên thật)", "Họ tên", "ho_ten", "ten");
   r.ten_ho_so = findVal("ten_ho_so", "Tên trong hồ sơ (tên mượn)", "TÊN TRONG HỒ SƠ", "Tên hồ sơ", "ten_muon");
-  r.ngay_sinh = findVal("ngay_sinh", "Ngày sinh", "Ngày sinh (dd/mm/yyyy)", "ngay sinh");
+  r.ngay_sinh = formatDOB(findVal("ngay_sinh", "Ngày sinh", "Ngày sinh (dd/mm/yyyy)", "ngay sinh"));
   r.tuoi = findVal("tuoi", "Tuổi");
   r.noi_sinh = findVal("noi_sinh", "Nơi sinh");
   r.gioi_tinh = findVal("gioi_tinh", "Giới tính", "Giới");

@@ -276,6 +276,16 @@ header{position:sticky;top:0;z-index:30;background:var(--green);color:#fff;paddi
 .fld label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:4px;}
 .fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:14.5px;outline:none;background:#fff;font-family:inherit;}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--green);}
+.fld .field-invalid{border-color:#dc2626;background:#fff7f7;}
+.fld .field-required::after{content:" *";color:#b91c1c;}
+.edit-guide{font-size:12px;line-height:1.6;color:var(--muted);margin:0 0 12px;}
+.edit-completion{padding:12px;margin-bottom:14px;border:1px solid #f0c36c;border-radius:10px;background:#fff8e8;color:#78350f;scroll-margin-top:64px;}
+.edit-completion:focus-visible{outline:2px solid #b45309;outline-offset:2px;}
+.edit-completion strong{font-size:14px;}
+.edit-completion p{font-size:12px;line-height:1.6;margin:7px 0;}
+.completion-fields{display:flex;flex-wrap:wrap;gap:7px;}
+.completion-fields button{font:inherit;font-size:12px;text-align:left;line-height:1.5;padding:8px 10px;border:1px solid #edc78d;background:#fff;border-radius:7px;color:#78350f;cursor:pointer;max-width:100%;}
+.edit-completion.complete{background:#ecfdf5;border-color:#86d9b2;color:#166534;}
 .row2{display:flex;gap:9px;}.row2>div{flex:1;}
 .muon-note{font-size:11.5px;color:var(--warn);margin-top:-4px;}
 .sheet-f{position:sticky;bottom:0;background:#fff;display:flex;gap:8px;padding:11px 14px calc(11px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--line);}
@@ -2613,7 +2623,7 @@ a[href^="tel:"]:hover .phone-icon-svg {
 <script src="images_catalog.js?v=57"></script>
 <script src="images_index.js?v=61"></script>
 <script src="pending_phones.js?v=61"></script>
-<script src="app_script.js?v=77"></script>
+<script src="app_script.js?v=78"></script>
 <script src="security_face.js?v=72"></script>
 <script>
 (function(){

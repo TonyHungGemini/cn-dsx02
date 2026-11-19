@@ -39,9 +39,11 @@ function sandbox() {
     confirm: () => true, prompt: () => 'QA2',
     closeEdit: () => {}, openRoom: () => {},
     removePhoneFromCache: () => {}, setTimeout: () => {}, syncNow: () => {},
-    roomKey: p => p.phong_o || ''
+    roomKey: p => p.phong_o || '',
+    KHMER_TEST_RE: /[\u1780-\u17FF\u19E0-\u19FF\u200C\u200D]/
   });
-  const names = ['blank', 'saveEdit', 'delRec', 'movePerson', 'queueChange', 'noAccent', 'cleanStr', 'isValidCmnd', 'cleanPhone', 'getPhone',
+  const names = ['requiredEditFields', 'readEditForm', 'getEditIssues', 'updateEditCompletion',
+    'normalizeRoom', 'normalizeTreeSection', 'formatDOB', 'ageFromDOB', 'blank', 'saveEdit', 'delRec', 'movePerson', 'queueChange', 'noAccent', 'cleanStr', 'isValidCmnd', 'cleanPhone', 'getPhone',
     'getSkillRating', 'getEthicsRating', 'isDisciplineResolved', 'isDisciplineCase', 'personCardSig',
     'findMatchingRecord', 'dedupeDataset', 'latestServerRows', 'findSyncRecord', 'normServerRec',
     'mergeServerData', 'safeSetStorage', 'enrichRecordForServer', 'acknowledgeChanges',
@@ -61,7 +63,16 @@ const discipline = { ...old, danh_gia_ky_nang: 3, danh_gia_dao_duc: 3,
   ghi_chu_ky_luat: 'Bỏ cạo - kiểm thử', trang_thai_ky_luat: 'Đang theo dõi' };
 const resolved = { ...discipline, trang_thai_ky_luat: 'Đã khắc phục xong (Đạt chuẩn)' };
 
+const completeForm = {
+  ten_that: 'SYNC TEST', cmnd: '990123456', ngay_sinh: '01/01/1990', gioi_tinh: 'F', tuoi: '36',
+  loai: 'Lao động', to: 'Tổ 8', phong_o: 'M6', phan_cay: '19-KV1', so_dt: '0123456789',
+  noi_sinh: 'QA birthplace', dia_chi: '', chi_tiet_noi_o: ''
+};
+
 function editForm(c, values, leader = false) {
+  const current = c.DATA[0] || {};
+  values = { ...completeForm, ...Object.fromEntries(Object.keys(completeForm)
+    .filter(key => key in current).map(key => [key, current[key]])), ...values };
   const inputs = Object.entries(values).map(([key, value]) => ({ dataset: { k: key }, value, focus() {} }));
   const sheet = {
     querySelectorAll: () => inputs,
@@ -74,6 +85,205 @@ function failStorage(c) {
   c.console = { warn() {}, log() {} };
   c.localStorage.setItem = () => { throw Object.assign(new Error('full'), { name: 'QuotaExceededError' }); };
 }
+
+for (const [name, cases] of [
+  ['normalizeRoom', [
+    ['D 2', 'D2'], ['d2', 'D2'], ['  d\t 002  ', 'D002'],
+    ['Phòng D 2', 'D2'], ['PHÒNG a 09', 'A09'], ['phong b 0001', 'B0001'],
+    ['Nhà tổ', 'Nhà tổ'], ['  Nhà   tổ  ', 'Nhà tổ'], ['Quán', 'Quán'],
+    ['Quán I10', 'Quán I10'], ['  Quán  I10  ', 'Quán I10'], ['Po Pok', 'Po Pok'],
+    ['D 2 3', 'D 2 3'], ['D2/D3', 'D2/D3'], ['D-2', 'D-2'],
+    ['Phòng Nhà tổ', 'Phòng Nhà tổ'], ['Phòng', 'Phòng'], ['Đ2', 'Đ2'],
+    ['Room 12', 'Room 12'], ['  chưa   rõ  ', 'chưa rõ'],
+    [0, '0'], ['', ''], [' \t ', ''], [null, ''], [undefined, '']
+  ]],
+  ['normalizeTreeSection', [
+    ['kV 1 p 19', '19-KV1'], ['KV1-19', '19-KV1'], ['19 kv 1', '19-KV1'],
+    ['p19 kv1', '19-KV1'], ['19-KV1', '19-KV1'], ['KV1-09', '09-KV1'],
+    ['  kv 001 - p 009  ', '009-KV001'], ['p009 - kv001', '009-KV001'],
+    ['khu vực 1 phần 19', '19-KV1'], ['KHU VỰC 01 - PHẦN CÂY 009', '009-KV01'],
+    ['phần 19 khu vực 1', '19-KV1'], ['phần cây 09 - khu vực 01', '09-KV01'],
+    ['KV1 phần cây 19', '19-KV1'], ['19 khu vực 1', '19-KV1'],
+    ['13, 28-KV5', '13, 28-KV5'], ['11.29-KV8', '11.29-KV8'],
+    ['  13,   28-KV5  ', '13, 28-KV5'], ['KV5-13, 28', 'KV5-13, 28'],
+    ['KV2', 'KV2'], [' kv 002 ', 'KV002'], ['KV219', 'KV219'],
+    ['khu vực 002', 'KV002'], ['09', '09'],
+    ['19 1', '19 1'], ['KV1-19-20', 'KV1-19-20'], ['19-KV1/KV2', '19-KV1/KV2'],
+    ['KV1.19', 'KV1.19'], ['KV1-19.5', 'KV1-19.5'], ['KV1-19 ghi chú', 'KV1-19 ghi chú'],
+    ['phần cây 19', 'phần cây 19'], ['KV', 'KV'], ['  chưa   rõ  ', 'chưa rõ'],
+    [0, '0'], ['', ''], [' \t ', ''], [null, ''], [undefined, '']
+  ]]
+]) {
+  for (const [input, expected] of cases) {
+    test(`normalization helper ${name}: ${JSON.stringify(input)}`, () => {
+      const context = vm.createContext({});
+      vm.runInContext(['noAccent', 'normalizeRoom', 'normalizeTreeSection'].map(functionSource).join('\n'), context);
+      assert.equal(context[name](input), expected);
+      assert.equal(context[name](expected), expected, 'normalization must be idempotent');
+    });
+  }
+}
+
+for (const [input, expected] of [
+  ['1993-06-04T17:00:00.000Z', '05/06/1993'],
+  ['1993-06-05T00:00:00+07:00', '05/06/1993'],
+  ['1993-06-05T00:00:00+0700', '05/06/1993'],
+  ['1993-06-05T00:00:00Z', '05/06/1993'],
+  ['1992-12-31T17:00:00.000Z', '01/01/1993'],
+  ['2000-02-28T17:00:00.000Z', '29/02/2000'],
+  ['1993-06-05', '05/06/1993'],
+  ['1993-06-05T00:00:00', '05/06/1993'],
+  ['05/06/1993', '05/06/1993'],
+  [' 5/6/1993 ', '05/06/1993'],
+  ['5-6-1993', '05/06/1993'],
+  ['5.6.1993', '05/06/1993'],
+  ['29/02/2000', '29/02/2000'],
+  ['31/02/1993', '31/02/1993'],
+  ['29/02/1900', '29/02/1900'],
+  ['1993-02-31T17:00:00.000Z', '1993-02-31T17:00:00.000Z'],
+  ['1993-06-05T25:00:00Z', '1993-06-05T25:00:00Z'],
+  ['1993-13-05', '1993-13-05'],
+  ['1993', '1993'],
+  ['', ''], [null, ''], [undefined, '']
+]) {
+  test(`birth date format preserves calendar day: ${JSON.stringify(input)}`, () => {
+    const { context: c } = sandbox();
+    assert.equal(c.formatDOB(input), expected);
+    assert.equal(c.formatDOB(expected), expected, 'formatting must be idempotent');
+  });
+}
+
+test('server birth date converts Sheet UTC timestamp to dd/mm/yyyy', () => {
+  const { context: c } = sandbox();
+  const record = { ...old, ngay_sinh: '1993-06-04T17:00:00.000Z' };
+  assert.equal(c.normServerRec(record).ngay_sinh, '05/06/1993');
+  assert.equal(record.ngay_sinh, '1993-06-04T17:00:00.000Z');
+});
+
+test('birth date normalization supports Sheet aliases and outgoing queues', () => {
+  const { context: c } = sandbox();
+  for (const field of ['Ngày sinh', 'Ngày sinh (dd/mm/yyyy)', 'ngay sinh']) {
+    assert.equal(c.normServerRec({ ...old, [field]: '1993-06-04T17:00:00.000Z' }).ngay_sinh, '05/06/1993');
+  }
+  const record = { ...old, ngay_sinh: '1993-06-04T17:00:00.000Z' };
+  const outgoing = c.enrichRecordForServer(record);
+  assert.equal(outgoing.ngay_sinh, '05/06/1993');
+  assert.equal(outgoing['Ngày sinh'], '05/06/1993');
+  assert.equal(record.ngay_sinh, '1993-06-04T17:00:00.000Z');
+});
+
+test('saving a birth date stores and queues dd/mm/yyyy', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old, ngay_sinh: '1993-06-04T17:00:00.000Z' }];
+  editForm(c, { ten_that: old.ten_that, ngay_sinh: '5/6/1993' });
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].ngay_sinh, '05/06/1993');
+  assert.equal(queue()[0].ngay_sinh, '05/06/1993');
+  assert.equal(queue()[0]['Ngày sinh'], '05/06/1993');
+});
+
+test('failed save preserves the original birth date', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old, ngay_sinh: '1993-06-04T17:00:00.000Z' }];
+  editForm(c, { ten_that: old.ten_that, ngay_sinh: '5/6/1993' });
+  failStorage(c);
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].ngay_sinh, '1993-06-04T17:00:00.000Z');
+  assert.equal(queue().length, 0);
+});
+
+test('birth date matching treats ISO and calendar strings as the same day', () => {
+  const { context: c } = sandbox();
+  const first = { id: 1, ten_that: 'TEST CHILD', phong_o: 'QA', ngay_sinh: '06/06/1993' };
+  const second = { id: 2, ten_that: 'TEST CHILD', phong_o: 'QA', ngay_sinh: '1993-06-04T17:00:00.000Z' };
+  const match = c.findMatchingRecord({ ten_that: 'TEST CHILD', phong_o: 'QA', ngay_sinh: '05/06/1993' }, [first, second]);
+  assert.equal(match.id, 2);
+  assert.equal(c.findMatchingRecord({ ten_that: 'TEST CHILD', ngay_sinh: '05/06/1993' }, [second]).id, 2);
+});
+
+test('birth year is calculated after timezone conversion', () => {
+  const { context: c } = sandbox();
+  assert.equal(c.ageFromDOB('1992-12-31T17:00:00.000Z'), c.ageFromDOB('01/01/1993'));
+});
+
+for (const key of ['ten_that', 'cmnd', 'ngay_sinh', 'gioi_tinh', 'tuoi', 'loai', 'to', 'phong_o', 'phan_cay', 'so_dt']) {
+  test(`completion requires worker field ${key}`, () => {
+    const { context: c } = sandbox();
+    const issues = c.getEditIssues({ ...completeForm, [key]: '' });
+    assert.ok(issues.some(issue => issue.keys.includes(key)));
+  });
+}
+
+for (const key of ['noi_sinh', 'dia_chi', 'chi_tiet_noi_o']) {
+  test(`completion accepts only address field ${key}`, () => {
+    const { context: c } = sandbox();
+    const record = { ...completeForm, noi_sinh: '', dia_chi: '', chi_tiet_noi_o: '', [key]: 'QA address' };
+    assert.equal(c.getEditIssues(record).length, 0);
+  });
+}
+
+test('completion requests one address if translation left only Khmer text', () => {
+  const { context: c } = sandbox();
+  const issues = c.getEditIssues({ ...completeForm, noi_sinh: 'ភ្នំពេញ' });
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].keys.join(','), 'noi_sinh,dia_chi,chi_tiet_noi_o');
+});
+
+test('completion exempts four work fields for dependents and keeps optional fields optional', () => {
+  const { context: c } = sandbox();
+  const record = { ...completeForm, loai: 'Gia thuộc', cmnd: '', so_dt: '', to: '', phan_cay: '',
+    nhom_mau: '', ghi_chu_ky_luat: '', chu_phong: false };
+  assert.equal(c.getEditIssues(record).length, 0);
+  assert.equal(c.getEditIssues({ ...record, loai: 'Lao động' }).length, 4);
+  assert.equal(c.getEditIssues({ ...record, phong_o: '' }).length, 1);
+});
+
+for (const dob of ['31/02/1993', '29/02/1993', 'not a date', '01/01/2999']) {
+  test(`completion rejects invalid birth date ${dob}`, () => {
+    const { context: c } = sandbox();
+    assert.ok(c.getEditIssues({ ...completeForm, ngay_sinh: dob }).some(issue => issue.keys.includes('ngay_sinh')));
+  });
+}
+
+test('incomplete save retains all draft fields and temporary images without queue writes', () => {
+  const { context: c, queue, logs } = sandbox();
+  c.DATA = [{ ...old }];
+  const before = JSON.stringify(c.DATA);
+  c.TEMP_NEW_IMGS = { cmnd: 'synthetic-image' };
+  editForm(c, { ...completeForm, to: '', so_dt: '', noi_sinh: '', dia_chi: '', chi_tiet_noi_o: '' });
+  const sheet = c.document.getElementById('sheet');
+  c.saveEdit('__new__');
+  assert.equal(JSON.stringify(c.DATA), before);
+  assert.equal(queue().length, 0);
+  assert.equal(logs.length, 0);
+  assert.equal(c.TEMP_NEW_IMGS.cmnd, 'synthetic-image');
+  assert.equal(sheet.querySelector('[data-k="ten_that"]').value, completeForm.ten_that);
+});
+
+test('save normalizes room and section before queueing and transferring room leadership', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old }, { ...old, id: 95002, phong_o: 'D 2', chu_phong: true }];
+  editForm(c, { ...completeForm, phong_o: 'D 2', phan_cay: 'kV 1 p 19', tuoi: '' }, true);
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].phong_o, 'D2');
+  assert.equal(c.DATA[0].phan_cay, '19-KV1');
+  assert.equal(c.DATA[0].tuoi, c.ageFromDOB(completeForm.ngay_sinh));
+  assert.equal(c.DATA[1].chu_phong, false);
+  const pending = queue().find(r => r.id === old.id);
+  assert.equal(pending['Phòng ở'], 'D2');
+  assert.equal(pending['Phần cây hiện tại'], '19-KV1');
+});
+
+test('dependent save succeeds without CMND phone team or tree section', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old }];
+  editForm(c, { ...completeForm, loai: 'Gia thuộc', cmnd: '', so_dt: '', to: '', phan_cay: '', nhom_mau: '' });
+  c.saveEdit(old.id);
+  assert.equal(queue().length, 1);
+  assert.equal(c.DATA[0].loai, 'Gia thuộc');
+  assert.equal(c.DATA[0].so_dt, '');
+  assert.equal(c.DATA[0].danh_gia_dao_duc, undefined);
+});
 
 test('invalid form does not mutate an existing record', () => {
   const { context: c, queue } = sandbox();
@@ -169,11 +379,20 @@ test('changing to dependent removes discipline fields from the applied draft', (
   assert.equal(c.DATA[0].danh_gia_ky_nang, undefined);
 });
 
-test('cleared pending phone is not refilled from cache or stale DATA', () => {
+test('clearing a required worker phone keeps the original record and does not queue', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old, so_dt: '0123456789' }];
+  editForm(c, { so_dt: '' });
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].so_dt, '0123456789');
+  assert.equal(queue().length, 0);
+});
+
+test('cleared dependent phone is not refilled from cache or stale DATA', () => {
   const { context: c, queue } = sandbox();
   c.DATA = [{ ...old, so_dt: '0123456789', sdt: '0123456789' }];
   c.lookupPhoneFromCache = () => '0123456789';
-  editForm(c, { ten_that: old.ten_that, so_dt: '' });
+  editForm(c, { ten_that: old.ten_that, loai: 'Gia thuộc', so_dt: '' });
   c.saveEdit(old.id);
   assert.equal(queue()[0].so_dt, '');
   c.DATA = [{ ...old, so_dt: '0123456789' }];
