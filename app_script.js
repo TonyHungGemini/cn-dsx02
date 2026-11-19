@@ -244,6 +244,8 @@ const KM = {
   "🔄 Xoay": "🔄 បង្វិល",
   "☁️ Mở Drive": "☁️ បើក Drive",
   "Chưa có ảnh để xem": "មិនទាន់មានរូបភាពដើម្បីមើល",
+  "Chụp ảnh": "ថតរូប",
+  "Chụp ảnh bằng camera điện thoại": "ថតរូបដោយកាមេរ៉ាទូរសព្ទ",
 };
 
 function t(vi){
@@ -2796,8 +2798,6 @@ function handleImgSlotError(img, type) {
   if (!wrap) return;
   const thumbWrap = wrap.querySelector(".thumbwrap");
   if (thumbWrap) thumbWrap.style.display = "none";
-  const ibtns = wrap.querySelector(".ibtns");
-  if (ibtns) ibtns.style.display = "none";
   if (!wrap.querySelector(".noimg-cmnd-notice") && !wrap.querySelector(".noimg")) {
     const errNotice = document.createElement("div");
     if (type === "cmnd") {
@@ -2805,15 +2805,12 @@ function handleImgSlotError(img, type) {
       errNotice.style.cssText = "border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 10px; padding: 16px 14px; text-align: center; margin-bottom: 8px;";
       errNotice.innerHTML = '<div style="font-size: 24px; line-height: 1; margin-bottom: 5px;">🪪</div>' +
         '<div style="font-weight: 700; color: #334155; font-size: 13px; margin-bottom: 3px;">Đang yêu cầu bổ sung ảnh CMND / Thẻ căn cước</div>' +
-        '<div style="font-size: 12px; color: #64748b; max-width: 340px; margin: 0 auto 12px; line-height: 1.4;">Chưa có ảnh chụp trên hệ thống. Bấm nút bên dưới để tải ảnh CMND lên hồ sơ.</div>' +
-        '<div class="ibtns" style="justify-content:center;margin-top:0;">' +
-        '  <button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="cmnd" style="font-weight:600;padding:7px 16px;">📷 Tải ảnh CMND lên</button>' +
-        '</div>';
+        '<div style="font-size: 12px; color: #64748b; max-width: 340px; margin: 0 auto 12px; line-height: 1.4;">' + esc(t("Hồ sơ này chưa có ảnh chụp thẻ CMND. Bấm nút bên dưới để tải ảnh lên.")) + '</div>';
     } else {
       errNotice.className = "noimg";
       errNotice.textContent = "Chưa có ảnh chân dung";
     }
-    wrap.appendChild(errNotice);
+    wrap.insertBefore(errNotice, wrap.querySelector(".ibtns"));
   }
 }
 
@@ -2821,6 +2818,7 @@ function renderImgSlot(id, type, label) {
   const uri = getImg(id, type);
   const fid = imgFileId(id, type);
   const driveUrl = getDriveFileUrl(id, type);
+  const cameraButton = '<button type="button" class="btn mini-b primary" data-img-act="capture" data-img-type="' + type + '" title="' + esc(t("Chụp ảnh bằng camera điện thoại")) + '">' + esc(t("Chụp ảnh")) + '</button>';
 
   let h = '<div class="islot">';
   h += '<div class="ilabel" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
@@ -2837,6 +2835,7 @@ function renderImgSlot(id, type, label) {
     h += '</div>';
 
     h += '<div class="ibtns">';
+    h += cameraButton;
     if (type === "cmnd") {
       h += '<button type="button" class="btn mini-b btn-ocr" data-img-act="ocr" title="Đọc thông tin CMND & Dịch địa chỉ">' + esc(t("⚡ Đọc CMND & Dịch")) + '</button>';
       h += '<div class="img-dropdown-wrap">';
@@ -2879,12 +2878,14 @@ function renderImgSlot(id, type, label) {
       h += '  <div style="font-weight: 700; color: #334155; font-size: 13px; margin-bottom: 3px;">' + esc(t("Đang yêu cầu bổ sung ảnh CMND / Thẻ căn cước")) + '</div>';
       h += '  <div style="font-size: 12px; color: #64748b; max-width: 340px; margin: 0 auto 12px; line-height: 1.4;">' + esc(t("Hồ sơ này chưa có ảnh chụp thẻ CMND. Bấm nút bên dưới để tải ảnh lên.")) + '</div>';
       h += '  <div class="ibtns" style="justify-content:center;margin-top:0;">';
+      h += cameraButton;
       h += '    <button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="cmnd" style="font-weight:600;padding:7px 16px;">' + esc(t("📷 Tải ảnh CMND lên")) + '</button>';
       h += '  </div>';
       h += '</div>';
     } else {
       h += '<div class="noimg">' + esc(t("Chưa có ảnh")) + '</div>';
       h += '<div class="ibtns">';
+      h += cameraButton;
       h += '<button type="button" class="btn mini-b primary" data-img-act="upload" data-img-type="' + type + '">' + esc(t("📷 Tải ảnh lên")) + '</button>';
       h += '</div>';
     }
@@ -2901,14 +2902,16 @@ function renderImgSection(id) {
   return h;
 }
 
-function pickImageFile(onPick) {
+function pickImageFile(onPick, useCamera = false) {
   const inp = document.createElement("input");
   inp.type = "file";
   inp.accept = "image/*";
+  if (useCamera) inp.setAttribute("capture", "environment");
   // iOS Safari / Zalo / Messenger chỉ mở bộ chọn ảnh khi input nằm trong DOM
   inp.setAttribute("style", "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;");
   document.body.appendChild(inp);
   const cleanup = () => { try { inp.remove(); } catch(e){} };
+  inp.oncancel = cleanup;
   inp.onchange = async e => {
     const file = e.target.files && e.target.files[0];
     cleanup();
@@ -2969,7 +2972,7 @@ function wireImgEvents(id) {
       const type = b.dataset.imgType || "cmnd";
       const label = b.dataset.imgLabel || (type === "photo" ? "Ảnh chân dung" : "Ảnh CMND");
 
-      if (act === "upload" || act === "change") {
+      if (act === "upload" || act === "change" || act === "capture") {
         pickImageFile(uri => {
           setImg(id, type, uri);
           container.innerHTML = renderImgSection(id);
@@ -2978,7 +2981,7 @@ function wireImgEvents(id) {
           if (type === "cmnd") {
             doOcrCMND(id, { auto: true });
           }
-        });
+        }, act === "capture");
       } else if (act === "rotate") {
         const curUri = getImg(id, type);
         if (!curUri) return;
@@ -5864,7 +5867,7 @@ function logIncomingChanges(list){
     const next = {};
     const found = [];
 
-    list.forEach(raw => {
+    latestServerRows(list).forEach(raw => {
       if(!raw || typeof raw !== "object") return;
       let srec;
       try{ srec = normServerRec(raw); }catch(e){ return; }
@@ -5875,7 +5878,7 @@ function logIncomingChanges(list){
       next[key] = hash;
       if(firstIndex) return;
       const prev = baseline[key];
-      const existing = findMatchingRecord(srec, DATA);
+      const existing = findSyncRecord(srec, DATA);
       let rawUser = String(raw._editedBy || raw.updatedBy || raw.updated_by || raw.nguoi_cap_nhat || raw.nguoi_sua || raw["Người cập nhật"] || raw["Người sửa"] || raw["Cập nhật bởi"] || "").trim();
       if(/^(guest)$/i.test(rawUser)) rawUser = "Thành viên";
       if(/^(admin)$/i.test(rawUser)) rawUser = "Admin";
@@ -5900,7 +5903,7 @@ function logIncomingChanges(list){
       }
       if(prev === hash){ if(own[key]) delete own[key]; return; }
       if(own[key] === hash){ delete own[key]; return; }
-      if(findMatchingRecord(srec, queued)) return;
+      if(findSyncRecord(srec, queued)) return;
 
       if(!prev){
         found.push({
@@ -6248,6 +6251,19 @@ function queueChange(p){
   }catch(e){}
 }
 
+function acknowledgeChanges(sent, response){
+  const rejected = new Set((response?.rejected || []).map(r => String(r.id)));
+  const accepted = new Set(response?.ok === true ? (response.accepted || []).map(String) : []);
+  const snapshots = new Map(sent.map(r => [String(r.id), JSON.stringify(r)]));
+  const current = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+  const remaining = current.filter(r => !accepted.has(String(r.id)) || rejected.has(String(r.id)) ||
+    snapshots.get(String(r.id)) !== JSON.stringify(r));
+  if(remaining.length !== current.length && !safeSetStorage("cn_queue_v1", JSON.stringify(remaining))){
+    throw new Error("Không lưu được hàng đợi đồng bộ. Hãy giữ app mở và sao lưu dữ liệu.");
+  }
+  return remaining;
+}
+
 function updateSyncBadge(){
   try{
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
@@ -6269,6 +6285,31 @@ function addPendImg(k){ const a=getPendImg(); if(!a.includes(k)){ a.push(k); set
 function getPendDel(){ try{ return JSON.parse(localStorage.getItem("cn_penddel_v1")||"[]"); }catch(e){ return []; } }
 function setPendDel(a){ try{ safeSetStorage("cn_penddel_v1", JSON.stringify(a)); }catch(e){} }
 function addPendDel(k){ const a=getPendDel(); if(!a.includes(k)){ a.push(k); setPendDel(a); } }
+
+function latestServerRows(rows){
+  const byId = new Map();
+  const withoutId = [];
+  for(const row of rows || []){
+    if(!row || typeof row !== "object") continue;
+    if(row.id == null || row.id === "" || String(row.id).startsWith("srv_")){
+      withoutId.push(row);
+      continue;
+    }
+    const key = String(row.id);
+    const previous = byId.get(key);
+    if(!previous || (Date.parse(row.updatedAt) || 0) >= (Date.parse(previous.updatedAt) || 0)){
+      byId.set(key, row);
+    }
+  }
+  return [...byId.values(), ...withoutId];
+}
+
+function findSyncRecord(record, list){
+  if(record.id != null && record.id !== "" && !String(record.id).startsWith("srv_")){
+    return (list || []).find(r => String(r.id) === String(record.id)) || null;
+  }
+  return findMatchingRecord(record, list);
+}
 
 function normServerRec(o){
   if(!o || typeof o !== "object") return blank();
@@ -6314,17 +6355,16 @@ function normServerRec(o){
   r.chu_phong = (o.chu_phong === true || o.chu_phong === "true" || o.chu_phong === "x" || normKeyMap["chuphong"] === "x" || normKeyMap["chuphong"] === true);
   r.deleted = (o.deleted === true || o.deleted === "true" || o.deleted === "x");
 
-  // Determine stable ID: match against local DATA or BASE_DATA first to preserve true person identity
-  const existing = findMatchingRecord(r, (typeof DATA !== "undefined" && Array.isArray(DATA)) ? DATA : getBaseData());
-  if(existing && existing.id != null){
-    r.id = existing.id;
-  } else if(isValidCmnd(r.cmnd) && +r.cmnd){
-    r.id = +r.cmnd;
-  } else if(o.id != null && o.id !== "" && !String(o.id).startsWith("srv_")){
-    r.id = +o.id || o.id;
-  } else {
-    r.id = "srv_" + Math.random().toString(36).slice(2, 8);
+  const hasServerId = o.id != null && o.id !== "" && !String(o.id).startsWith("srv_");
+  if(hasServerId) r.id = +o.id || o.id;
+  const existing = findSyncRecord(r, (typeof DATA !== "undefined" && Array.isArray(DATA)) ? DATA : getBaseData());
+  if(!hasServerId){
+    if(existing && existing.id != null) r.id = existing.id;
+    else if(isValidCmnd(r.cmnd) && +r.cmnd) r.id = +r.cmnd;
+    else r.id = "srv_" + Math.random().toString(36).slice(2, 8);
   }
+  if(o.updatedAt != null) r.updatedAt = o.updatedAt;
+  if(o.updatedBy != null) r.updatedBy = o.updatedBy;
 
   if(!r.nhom_mau && existing && existing.nhom_mau) r.nhom_mau = existing.nhom_mau;
 
@@ -6371,7 +6411,7 @@ function mergeServerData(serverList, queuedList){
   const deletedIds = new Set(); // hồ sơ đã bị xoá trên máy khác
   const queueArr = Array.isArray(queuedList) ? queuedList : [];
 
-  (serverList || []).forEach(rawRec => {
+  latestServerRows(serverList).forEach(rawRec => {
     if(!rawRec || typeof rawRec !== "object") return;
     const cleanN = cleanStr(rawRec.ten_that);
     const cleanC = isValidCmnd(rawRec.cmnd) ? String(rawRec.cmnd).trim() : "";
@@ -6380,41 +6420,25 @@ function mergeServerData(serverList, queuedList){
     if(!cleanN && !cleanC && !cleanR) return;
 
     const srec = normServerRec(rawRec);
-    if(srec.deleted){
-      const sid = String(srec.id == null ? "" : srec.id);
-      const byId = sid ? (DATA || []).find(x => String(x.id) === sid) : null;
-      const byCmnd = (!byId && isValidCmnd(srec.cmnd))
-        ? (DATA || []).find(x => isValidCmnd(x.cmnd) && String(x.cmnd).trim() === String(srec.cmnd).trim())
-        : null;
-      const gone = byId || byCmnd; // chỉ khớp ID/CMND, tránh xoá nhầm người trùng tên
-      if(gone) deletedIds.add(String(gone.id));
-      if(sid) deletedIds.add(sid);
+    const existing = findSyncRecord(srec, DATA);
+    const queued = findSyncRecord(srec, queueArr);
+    if(srec.deleted || (queued && queued.deleted)){
+      deletedIds.add(String(srec.id));
+      if(existing) deletedIds.add(String(existing.id));
+      return;
+    }
+    if(existing) matchedLocalIds.add(String(existing.id));
+    if(queued){
+      merged.push({ ...normServerRec(queued), _edited: true });
       return;
     }
 
-    // Find corresponding local record and queued record with 100% precision
-    const existing = findMatchingRecord(srec, DATA);
-    const queued = findMatchingRecord(srec, queueArr);
-
-    if(existing) {
-      matchedLocalIds.add(String(existing.id));
-      srec.id = existing.id; // Keep local stable id
-    }
-
-    // Determine phone with strict precedence:
-    // 1. Queued edit (local unsynced change)
-    // 2. Server's non-empty phone (if server has one)
-    // 3. Existing local record's phone (preserve local phone if server was empty!)
-    // 4. Phone cache lookup
     let phone = "";
-    const queuedPhone = queued ? getPhone(queued) : "";
     const serverPhone = getPhone(srec);
     const existingPhone = existing ? getPhone(existing) : "";
     const cachedPhone = lookupPhoneFromCache(srec) || (existing ? lookupPhoneFromCache(existing) : "");
 
-    if(queuedPhone){
-      phone = queuedPhone;
-    } else if(serverPhone){
+    if(serverPhone){
       phone = serverPhone;
     } else if(existingPhone){
       phone = existingPhone;
@@ -6434,36 +6458,6 @@ function mergeServerData(serverList, queuedList){
       srec.sdt = "";
     }
 
-    // Discipline & rating precedence:
-    // If queued edit exists locally, preserve queued ratings & discipline
-    // Else take server's incoming values directly!
-    if (queued) {
-      if (queued.ghi_chu_ky_luat != null) srec.ghi_chu_ky_luat = queued.ghi_chu_ky_luat;
-      if (queued.danh_gia_ky_nang != null) srec.danh_gia_ky_nang = queued.danh_gia_ky_nang;
-      if (queued.danh_gia_dao_duc != null) srec.danh_gia_dao_duc = queued.danh_gia_dao_duc;
-      if (queued.ngay_ky_luat != null) srec.ngay_ky_luat = queued.ngay_ky_luat;
-      if (queued.hinh_thuc_ky_luat != null) srec.hinh_thuc_ky_luat = queued.hinh_thuc_ky_luat;
-      if (queued.trang_thai_ky_luat != null) srec.trang_thai_ky_luat = queued.trang_thai_ky_luat;
-      if (queued.nguoi_lap_bien_ban != null) srec.nguoi_lap_bien_ban = queued.nguoi_lap_bien_ban;
-      if (queued._editedBy) srec._editedBy = queued._editedBy;
-      srec._edited = true;
-      srec._manuallyRated = true;
-    } else {
-      // Not in local queue: server's values are authoritative for discipline & ratings
-      if (rawRec.ghi_chu_ky_luat != null) srec.ghi_chu_ky_luat = String(rawRec.ghi_chu_ky_luat).trim();
-      if (rawRec.danh_gia_ky_nang != null) srec.danh_gia_ky_nang = parseInt(rawRec.danh_gia_ky_nang, 10) || 3;
-      if (rawRec.danh_gia_dao_duc != null) srec.danh_gia_dao_duc = parseInt(rawRec.danh_gia_dao_duc, 10) || 3;
-      if (rawRec.ngay_ky_luat != null) srec.ngay_ky_luat = String(rawRec.ngay_ky_luat).trim();
-      if (rawRec.hinh_thuc_ky_luat != null) srec.hinh_thuc_ky_luat = String(rawRec.hinh_thuc_ky_luat).trim();
-      if (rawRec.trang_thai_ky_luat != null) srec.trang_thai_ky_luat = String(rawRec.trang_thai_ky_luat).trim();
-      if (rawRec.nguoi_lap_bien_ban != null) srec.nguoi_lap_bien_ban = String(rawRec.nguoi_lap_bien_ban).trim();
-      if (rawRec._manuallyRated) srec._manuallyRated = true;
-    }
-
-    // Preserve edited badge if record was edited locally in queue
-    if(queued){
-      srec._edited = true;
-    }
 
     merged.push(srec);
   });
@@ -6471,11 +6465,11 @@ function mergeServerData(serverList, queuedList){
   // Preserve local records that were added locally and not yet in server
   (DATA || []).forEach(p => {
     if(!p || typeof p !== "object") return;
-    if(deletedIds.has(String(p.id))) return; // đã xoá trên máy khác — bỏ khỏi máy này
-    const isMatched = matchedLocalIds.has(String(p.id)) || findMatchingRecord(p, merged);
-    if(!isMatched){
-      merged.push(p);
-    }
+    if(deletedIds.has(String(p.id)) || p.deleted) return;
+    const queued = findSyncRecord(p, queueArr);
+    if(queued && queued.deleted) return;
+    const isMatched = matchedLocalIds.has(String(p.id)) || findSyncRecord(p, merged);
+    if(!isMatched) merged.push(queued ? { ...normServerRec(queued), _edited: true } : p);
   });
 
   return dedupeDataset(merged);
@@ -6751,16 +6745,14 @@ async function syncNowCore(silent, force){
     const enrichedQ = q.map(enrichRecordForServer);
 
     // Push local changes to Google Apps Script if there are any pending edits
-    let pushOk = true;
+    let pushRes = null;
     if(enrichedQ.length > 0){
       try {
-        const pushRes = await api("push", {
+        pushRes = await api("push", {
           changes: enrichedQ.map(r => ({ rec: r, deleted: r.deleted === true })),
           records: enrichedQ
         });
-        if(!pushRes || pushRes.ok !== true) pushOk = false;
       } catch(pushErr){
-        pushOk = false;
         console.warn("GAS push error:", pushErr);
       }
     }
@@ -6788,25 +6780,21 @@ async function syncNowCore(silent, force){
 
     ROLE = res.role || "vip";
     applyRole();
-    if(res.rev != null) _lastCloudRev = res.rev;
-
-    // Chỉ xoá hàng đợi khi đã đẩy thay đổi lên máy chủ thành công (tránh mất thay đổi)
-    if(pushOk){
-      localStorage.removeItem("cn_queue_v1");
-    }
+    const incomingData = res.data || res.rows || res.records;
+    if(!Array.isArray(incomingData)) throw new Error("Máy chủ chưa trả về danh sách hồ sơ hợp lệ.");
+    const remaining = acknowledgeChanges(q, pushRes);
     updateSyncBadge();
 
-    const incomingData = (res && (res.data || res.rows || res.records)) || [];
-    if(Array.isArray(incomingData) && incomingData.length > 0){
+    if(Array.isArray(incomingData)){
       let cloudSig = "";
       try { cloudSig = JSON.stringify(incomingData); } catch(e){}
-      if(cloudSig && cloudSig === _lastCloudSig){
+      if(cloudSig && cloudSig === _lastCloudSig && !q.length && !remaining.length){
         // Máy chủ không đổi: bỏ qua hợp nhất, ghi bộ nhớ và vẽ lại danh sách
       } else {
-        if(cloudSig) _lastCloudSig = cloudSig;
         logIncomingChanges(incomingData);
-        DATA = mergeServerData(incomingData, q);
+        DATA = mergeServerData(incomingData, remaining);
         save();
+        if(cloudSig) _lastCloudSig = cloudSig;
         initFilterOptions();
         render();
         updateDisciplineBadge();
@@ -6826,7 +6814,12 @@ async function syncNowCore(silent, force){
         } catch(e){}
       }
     }
-    if(res.images) fetchServerImages(res.images, res.deletedImages || res.deleted);
+    if(res.images) await fetchServerImages(res.images, res.deletedImages || res.deleted);
+    if(res.rev != null) _lastCloudRev = res.rev;
+    if(remaining.length){
+      if(!silent) toast("Còn " + remaining.length + " hồ sơ chưa được máy chủ xác nhận. Thay đổi vẫn được giữ trên máy này.");
+      return;
+    }
     if(!silent) addLog("Đồng bộ đám mây", `Thành công (${incomingData.length} hồ sơ)`);
     if(!silent) toast(t("Đồng bộ đám mây thành công ✓"));
   }catch(e){
@@ -6857,7 +6850,7 @@ async function connect(silent = false){
       const rData = (r && (r.data || r.rows || r.records)) || [];
       if(Array.isArray(rData) && rData.length > 0){
         logIncomingChanges(rData);
-        DATA = mergeServerData(rData, []);
+        DATA = mergeServerData(rData, JSON.parse(localStorage.getItem("cn_queue_v1") || "[]"));
         save();
         initFilterOptions();
         render();
