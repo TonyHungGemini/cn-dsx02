@@ -3622,6 +3622,9 @@ function delRec(id){
     save();
     render();
     toast(t("Đã xóa"));
+    if(CFG.url && CFG.key){
+      setTimeout(() => { syncNow(true); }, 300);
+    }
     if(editBackRoom) openRoom(editBackRoom);
     else closeEdit();
   }
@@ -6365,6 +6368,7 @@ function normServerRec(o){
 function mergeServerData(serverList, queuedList){
   const merged = [];
   const matchedLocalIds = new Set();
+  const deletedIds = new Set(); // hồ sơ đã bị xoá trên máy khác
   const queueArr = Array.isArray(queuedList) ? queuedList : [];
 
   (serverList || []).forEach(rawRec => {
@@ -6376,7 +6380,17 @@ function mergeServerData(serverList, queuedList){
     if(!cleanN && !cleanC && !cleanR) return;
 
     const srec = normServerRec(rawRec);
-    if(srec.deleted) return; // Hồ sơ đã bị xóa trên máy chủ — không đưa vào danh sách
+    if(srec.deleted){
+      const sid = String(srec.id == null ? "" : srec.id);
+      const byId = sid ? (DATA || []).find(x => String(x.id) === sid) : null;
+      const byCmnd = (!byId && isValidCmnd(srec.cmnd))
+        ? (DATA || []).find(x => isValidCmnd(x.cmnd) && String(x.cmnd).trim() === String(srec.cmnd).trim())
+        : null;
+      const gone = byId || byCmnd; // chỉ khớp ID/CMND, tránh xoá nhầm người trùng tên
+      if(gone) deletedIds.add(String(gone.id));
+      if(sid) deletedIds.add(sid);
+      return;
+    }
 
     // Find corresponding local record and queued record with 100% precision
     const existing = findMatchingRecord(srec, DATA);
@@ -6457,6 +6471,7 @@ function mergeServerData(serverList, queuedList){
   // Preserve local records that were added locally and not yet in server
   (DATA || []).forEach(p => {
     if(!p || typeof p !== "object") return;
+    if(deletedIds.has(String(p.id))) return; // đã xoá trên máy khác — bỏ khỏi máy này
     const isMatched = matchedLocalIds.has(String(p.id)) || findMatchingRecord(p, merged);
     if(!isMatched){
       merged.push(p);
@@ -6490,11 +6505,29 @@ async function fetchServerImages(imgs, deleted){
     for(const id in deleted){
       for(const t in deleted[id]){
         const key = t + ":" + id;
+        const hadImage = (IMG_OVR[key] && IMG_OVR[key] !== DEL) ||
+          !!map[key] ||
+          !!(window.__IMG_MAP && window.__IMG_MAP[id] && window.__IMG_MAP[id][t] != null);
         let stateChanged = false;
         if(IMG_OVR[key] !== DEL){ IMG_OVR[key] = DEL; idbPut(key, DEL); stateChanged = true; }
         if(window.__IMG_MAP && window.__IMG_MAP[id] && window.__IMG_MAP[id][t] != null){ delete window.__IMG_MAP[id][t]; stateChanged = true; }
         if(map[key]){ delete map[key]; mapChanged = true; stateChanged = true; }
-        if(stateChanged) delApplied = true;
+        if(stateChanged){
+          delApplied = true;
+          if(hadImage){
+            const w = (DATA || []).find(x => String(x.id) === String(id)) || {};
+            const label = t === "cmnd" ? "ảnh CMND" : "ảnh chân dung";
+            logAudit({
+              action: "Xóa " + label + " từ thiết bị khác",
+              detail: [w.ten_that || w.ten_ho_so || "", label].filter(Boolean).join(" · "),
+              team: w.to || "",
+              workerId: id,
+              workerName: w.ten_that || w.ten_ho_so || "",
+              user: "Thiết bị khác",
+              source: "cloud"
+            });
+          }
+        }
       }
     }
   }
@@ -6512,7 +6545,26 @@ async function fetchServerImages(imgs, deleted){
 }
 
 let _lastCloudSig = null; // dấu vân tay dữ liệu pull gần nhất, tránh merge/render lại mỗi 4 giây
-async function syncNow(silent){
+let _lastCloudRev = null; // số bản sửa trên máy chủ, hỏi nhanh trước khi tải toàn bộ
+let _syncInFlight = false;
+let _syncQueued = false;
+let _syncQueuedForce = false;
+// Chỉ chạy 1 vòng đồng bộ tại một thời điểm: pull ~vài giây, nếu chồng nhau sẽ ghi đè dữ liệu cũ lên dữ liệu mới
+async function syncNow(silent, force){
+  if(_syncInFlight){ _syncQueued = true; _syncQueuedForce = _syncQueuedForce || !!force; return; }
+  _syncInFlight = true;
+  try{
+    await syncNowCore(silent, force || !silent);
+  } finally {
+    _syncInFlight = false;
+    if(_syncQueued){
+      const f = _syncQueuedForce;
+      _syncQueued = false; _syncQueuedForce = false;
+      setTimeout(() => syncNow(true, f), 250);
+    }
+  }
+}
+async function syncNowCore(silent, force){
   if(!silent) toast(t("Đang đồng bộ dữ liệu…"));
   if (API_OK === false && (!CFG.url || !CFG.key)) return;
 
@@ -6630,6 +6682,17 @@ async function syncNow(silent){
 
   // 3. STEP 3: Proceed with Google Apps Script cloud sync (Images & Sheet rows)
   try {
+    // Hỏi nhanh số bản sửa: nếu máy chủ không đổi và không có gì chờ gửi thì bỏ qua pull nặng
+    let qCheck = [];
+    try{ qCheck = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]"); }catch(e){}
+    const hasLocalWork = qCheck.length > 0 || getPendImg().length > 0 || getPendDel().length > 0;
+    if(!force && !hasLocalWork && _lastCloudRev != null){
+      try{
+        const rv = await api("rev", {});
+        if(rv && rv.ok && rv.rev === _lastCloudRev) return;
+      }catch(e){}
+    }
+
     let pend = getPendImg();
     const stillP = [];
     for(const k of pend){
@@ -6688,13 +6751,16 @@ async function syncNow(silent){
     const enrichedQ = q.map(enrichRecordForServer);
 
     // Push local changes to Google Apps Script if there are any pending edits
+    let pushOk = true;
     if(enrichedQ.length > 0){
       try {
-        await api("push", {
+        const pushRes = await api("push", {
           changes: enrichedQ.map(r => ({ rec: r, deleted: r.deleted === true })),
           records: enrichedQ
         });
+        if(!pushRes || pushRes.ok !== true) pushOk = false;
       } catch(pushErr){
+        pushOk = false;
         console.warn("GAS push error:", pushErr);
       }
     }
@@ -6722,8 +6788,12 @@ async function syncNow(silent){
 
     ROLE = res.role || "vip";
     applyRole();
+    if(res.rev != null) _lastCloudRev = res.rev;
 
-    localStorage.removeItem("cn_queue_v1");
+    // Chỉ xoá hàng đợi khi đã đẩy thay đổi lên máy chủ thành công (tránh mất thay đổi)
+    if(pushOk){
+      localStorage.removeItem("cn_queue_v1");
+    }
     updateSyncBadge();
 
     const incomingData = (res && (res.data || res.rows || res.records)) || [];
@@ -6783,6 +6853,7 @@ async function connect(silent = false){
       ROLE = r.role || (isKeyAdmin(CFG.key, CFG.user) ? "admin" : (ROLE || "vip"));
       try { localStorage.setItem("cn_role_v1", ROLE); } catch(e){}
       applyRole();
+      if(r.rev != null) _lastCloudRev = r.rev;
       const rData = (r && (r.data || r.rows || r.records)) || [];
       if(Array.isArray(rData) && rData.length > 0){
         logIncomingChanges(rData);
@@ -7510,12 +7581,13 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("focus", () => {
   syncNow(true);
 });
-// Periodic silent background sync every 4 seconds to keep devices (phone <-> computer) in lockstep
+// Mỗi 60 giây hỏi nhanh số bản sửa: chỉ pull toàn bộ khi máy khác có thay đổi
+// (Google Apps Script giới hạn thời gian chạy/ngày, gọi liên tục sẽ bị chặn đồng bộ)
 setInterval(() => {
   if(!document.hidden){
     syncNow(true);
   }
-}, 4000);
+}, 60000);
 
 // Search input
 const qEl = document.getElementById("q");
