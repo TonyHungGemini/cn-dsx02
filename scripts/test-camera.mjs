@@ -64,7 +64,7 @@ function sandbox(t, { hasImage = false, compression = async () => CAPTURED } = {
   };
   const c = vm.createContext({
     console,
-    window: {}, API_OK: false, IMG_OVR: {}, TEMP_NEW_IMGS: {},
+    window: {}, API_OK: false, IMG_OVR: {}, IMG_OP_TOKENS: {}, TEMP_NEW_IMGS: {},
     t: value => value,
     esc: value => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;'),
     getImg: (id, type) => c.IMG_OVR[`${type}:${id}`] || null,
@@ -291,3 +291,201 @@ test('captured images persist and deduplicate the pending queue using memory-onl
   assert.equal(s.changes.length, 3);
   assert.equal(s.attached.size, 0);
 });
+
+const OCR_FIELDS = {
+  ten_that: 'Synthetic Worker', cmnd: '123456789', ngay_sinh: '01/01/1990',
+  tuoi: '36', gioi_tinh: 'F', noi_sinh: 'Synthetic birthplace', dia_chi: 'Synthetic address'
+};
+const OCR_OK = { ok: true, parsed: OCR_FIELDS };
+const OCR_OUTCOMES = [
+  { label: 'success', result: OCR_OK },
+  { label: 'empty result', result: { ok: true, parsed: {} } },
+  { label: 'manual failure', result: { ok: false, err: 'synthetic failure' } },
+  { label: 'automatic failure', result: { ok: false, err: 'synthetic failure' }, auto: true }
+];
+
+function ocrSandbox(t, id = ID) {
+  const requests = [];
+  const messages = [];
+  const timers = [];
+  const images = new Map();
+  const forms = [];
+  const networkCalls = [];
+  const classList = () => {
+    const values = new Set();
+    return {
+      add: value => values.add(value), remove: value => values.delete(value),
+      contains: value => values.has(value), snapshot: () => [...values]
+    };
+  };
+  const overlay = { classList: classList() };
+  let current;
+  const sheet = {
+    querySelector(selector) {
+      if (selector === '#ocrStatusBox') return current?.status ?? null;
+      if (selector === '#ocrProgText') return current?.status.progress ?? null;
+      const key = /^\[data-k="([^"]+)"\]$/.exec(selector)?.[1];
+      assert.ok(key, `Unexpected selector ${selector}`);
+      return current?.inputs[key] ?? null;
+    }
+  };
+  const c = vm.createContext({
+    editingId: null,
+    getImg: (recordId, type) => {
+      assert.equal(type, 'cmnd');
+      return images.get(recordId) ?? null;
+    },
+    toast: message => messages.push(message),
+    esc: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;'),
+    setTimeout: (callback, delay) => { timers.push({ callback, delay }); },
+    ocrCMND: (uri, progress) => new Promise(resolve => requests.push({ uri, progress, resolve })),
+    fetch: (...args) => {
+      networkCalls.push(args);
+      throw new Error('Network is forbidden in OCR tests');
+    },
+    document: {
+      getElementById: key => {
+        if (key === 'sheet') return sheet;
+        if (key === 'overlay') return overlay;
+        if (key === 'ocrProgText') return current?.status.progress ?? null;
+        return null;
+      }
+    }
+  });
+  vm.runInContext(functionSource('doOcrCMND'), c);
+  const open = recordId => {
+    const status = {
+      html: '', style: { display: 'none' }, progress: null,
+      get innerHTML() { return this.html; },
+      set innerHTML(value) {
+        this.html = value;
+        const text = /<span id="ocrProgText">([^<]*)<\/span>/.exec(value)?.[1];
+        this.progress = text === undefined ? null : { textContent: text };
+      },
+      querySelector(selector) {
+        assert.equal(selector, '#ocrProgText');
+        return this.progress;
+      }
+    };
+    const inputs = Object.fromEntries([...Object.keys(OCR_FIELDS), 'ten_ho_so'].map(key => [key, {
+      value: `initial ${key}`, classList: classList(), offsetWidth: 100
+    }]));
+    current = { inputs, status };
+    forms.push(current);
+    images.set(recordId, OLD);
+    c.editingId = recordId;
+    overlay.classList.add('show');
+    return current;
+  };
+  const close = () => {
+    overlay.classList.remove('show');
+    c.editingId = null;
+  };
+  const snapshot = () => ({
+    forms: forms.map(form => ({
+      fields: Object.fromEntries(Object.entries(form.inputs).map(([key, input]) => [key, {
+        value: input.value, classes: input.classList.snapshot()
+      }])),
+      html: form.status.innerHTML, display: form.status.style.display,
+      progress: form.status.progress?.textContent
+    })),
+    messages: [...messages], timers: timers.length
+  });
+  const original = open(id);
+  t.after(() => assert.deepEqual(networkCalls, [], 'no attempted network calls'));
+  return { c, requests, messages, timers, images, original, open, close, snapshot,
+    get current() { return current; } };
+}
+
+const OCR_TRANSITIONS = [
+  { label: 'switch records', change: s => s.open('other-camera-test-record') },
+  { label: 'close form', change: s => s.close() },
+  { label: 'close and reopen same record', change: s => { s.close(); s.open(ID); } },
+  { label: 'close and reopen new form', id: '__new__', change: s => { s.close(); s.open('__new__'); } },
+  { label: 'replace record image', change: s => s.images.set(ID, CAPTURED) },
+  { label: 'replace new form image', id: '__new__', change: s => s.images.set('__new__', CAPTURED) }
+];
+
+for (const transition of OCR_TRANSITIONS) {
+  for (const outcome of OCR_OUTCOMES) {
+    test(`OCR ${transition.label}: discard stale progress and ${outcome.label}`, async t => {
+      const id = transition.id || ID;
+      const s = ocrSandbox(t, id);
+      const pending = s.c.doOcrCMND(id, { auto: outcome.auto });
+      assert.equal(s.requests.length, 1);
+      assert.equal(s.requests[0].uri, OLD, 'capture the original image before awaiting');
+      s.requests[0].progress('current progress');
+      assert.equal(s.original.status.progress.textContent, 'current progress');
+      transition.change(s);
+      const replacement = s.current !== s.original ? s.c.doOcrCMND(s.c.editingId) : null;
+      const before = s.snapshot();
+      s.requests[0].progress('stale progress');
+      assert.deepEqual(s.snapshot(), before, 'stale progress cannot touch either form');
+      s.requests[0].resolve(outcome.result);
+      await pending;
+      assert.deepEqual(s.snapshot(), before, 'stale results cannot fill, show banners, toast or schedule pulses');
+      if (replacement) {
+        s.requests[1].resolve(OCR_OK);
+        await replacement;
+        assert.equal(s.messages.length, 1, 'replacement form still accepts its own result');
+        assert.equal(s.current.inputs.ten_that.value, OCR_FIELDS.ten_that);
+      }
+    });
+  }
+}
+
+for (const id of [ID, '__new__']) {
+  for (const auto of [false, true]) {
+    test(`OCR current ${id} form, auto=${auto}: fills all fields`, async t => {
+      const s = ocrSandbox(t, id);
+      const pending = s.c.doOcrCMND(id, { auto });
+      assert.equal(s.original.status.style.display, 'block');
+      assert.match(s.original.status.innerHTML, /ocr-status-running/);
+      s.requests[0].progress('reading synthetic image');
+      assert.equal(s.original.status.progress.textContent, 'reading synthetic image');
+      s.requests[0].resolve(OCR_OK);
+      await pending;
+      for (const [key, value] of Object.entries(OCR_FIELDS)) {
+        assert.equal(s.original.inputs[key].value, value);
+        assert.ok(s.original.inputs[key].classList.contains('field-pulse'));
+      }
+      assert.equal(s.original.inputs.ten_ho_so.value, 'initial ten_ho_so');
+      assert.match(s.original.status.innerHTML, /ocr-status-ok/);
+      assert.equal(s.messages.length, 1);
+      assert.equal(s.timers.length, Object.keys(OCR_FIELDS).length);
+      for (const timer of s.timers) {
+        assert.equal(timer.delay, 2500);
+        timer.callback();
+      }
+      for (const key of Object.keys(OCR_FIELDS)) {
+        assert.equal(s.original.inputs[key].classList.contains('field-pulse'), false);
+      }
+    });
+  }
+}
+
+for (const outcome of OCR_OUTCOMES) {
+  for (const olderFirst of [true, false]) {
+    test(`OCR concurrent ${outcome.label}, older finishes ${olderFirst ? 'first' : 'last'}: newest request wins`, async t => {
+      const s = ocrSandbox(t);
+      const older = s.c.doOcrCMND(ID, { auto: outcome.auto });
+      const newer = s.c.doOcrCMND(ID);
+      assert.equal(s.requests.length, 2);
+      s.requests[1].progress('newest progress');
+      const finishOlder = async () => {
+        const before = s.snapshot();
+        s.requests[0].progress('older progress');
+        s.requests[0].resolve(outcome.result);
+        await older;
+        assert.deepEqual(s.snapshot(), before, 'superseded request cannot change the current output');
+      };
+      if (olderFirst) await finishOlder();
+      s.requests[1].resolve({ ok: true, parsed: { ten_that: 'Newest Synthetic Worker' } });
+      await newer;
+      if (!olderFirst) await finishOlder();
+      assert.equal(s.original.inputs.ten_that.value, 'Newest Synthetic Worker');
+      assert.equal(s.messages.length, 1);
+      assert.match(s.original.status.innerHTML, /Newest Synthetic Worker/);
+    });
+  }
+}

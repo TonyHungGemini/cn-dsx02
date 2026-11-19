@@ -15,7 +15,7 @@ function sandbox() {
   const storage = new Map();
   const logs = [];
   const context = vm.createContext({
-    console,
+    console, crypto,
     DATA: [], CFG: { url: 'mock', key: 'mock', user: 'TEST' }, ROLE: 'guest', API_OK: false,
     _lastCloudSig: null, _lastCloudRev: null,
     AUDIT_BASE_KEY: 'audit-base', AUDIT_OWN_KEY: 'audit-own',
@@ -33,9 +33,16 @@ function sandbox() {
     fetchServerImages: async () => {},
     toast: () => {}, t: value => value, addLog: () => {},
     logAudit: entry => logs.push(entry), auditDescribeWorker: () => '',
-    auditUserName: () => 'TEST'
+    auditUserName: () => 'TEST', auditMarkOwn: () => {},
+    logRecordChange: (...entry) => logs.push(entry),
+    TEMP_NEW_IMGS: {}, editBackRoom: null,
+    confirm: () => true, prompt: () => 'QA2',
+    closeEdit: () => {}, openRoom: () => {},
+    removePhoneFromCache: () => {}, setTimeout: () => {}, syncNow: () => {},
+    roomKey: p => p.phong_o || ''
   });
-  const names = ['noAccent', 'cleanStr', 'isValidCmnd', 'cleanPhone', 'getPhone',
+  const names = ['blank', 'saveEdit', 'delRec', 'movePerson', 'queueChange', 'noAccent', 'cleanStr', 'isValidCmnd', 'cleanPhone', 'getPhone',
+    'getSkillRating', 'getEthicsRating', 'isDisciplineResolved', 'isDisciplineCase', 'personCardSig',
     'findMatchingRecord', 'dedupeDataset', 'latestServerRows', 'findSyncRecord', 'normServerRec',
     'mergeServerData', 'safeSetStorage', 'enrichRecordForServer', 'acknowledgeChanges',
     'updateSyncBadge', 'getPendImg', 'setPendImg', 'getPendDel', 'setPendDel',
@@ -50,6 +57,257 @@ function sandbox() {
 
 const old = { id: 95001, cmnd: '990123456', ten_that: 'SYNC TEST', to: 'Tổ 8', phong_o: 'M6', phan_cay: 'OLD', updatedAt: '2026-11-19T02:34:00Z' };
 const latest = { ...old, to: 'Tổ 5', phong_o: 'E7', phan_cay: '17-KV5', updatedAt: '2026-11-19T02:37:56Z', updatedBy: 'TEST' };
+const discipline = { ...old, danh_gia_ky_nang: 3, danh_gia_dao_duc: 3,
+  ghi_chu_ky_luat: 'Bỏ cạo - kiểm thử', trang_thai_ky_luat: 'Đang theo dõi' };
+const resolved = { ...discipline, trang_thai_ky_luat: 'Đã khắc phục xong (Đạt chuẩn)' };
+
+function editForm(c, values, leader = false) {
+  const inputs = Object.entries(values).map(([key, value]) => ({ dataset: { k: key }, value, focus() {} }));
+  const sheet = {
+    querySelectorAll: () => inputs,
+    querySelector: selector => selector === '#ckChu' ? { checked: leader } : inputs.find(i => selector.includes(i.dataset.k))
+  };
+  c.document.getElementById = id => id === 'sheet' ? sheet : null;
+}
+
+function failStorage(c) {
+  c.console = { warn() {}, log() {} };
+  c.localStorage.setItem = () => { throw Object.assign(new Error('full'), { name: 'QuotaExceededError' }); };
+}
+
+test('invalid form does not mutate an existing record', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old }];
+  editForm(c, { ten_that: '', phong_o: 'QA2' });
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].ten_that, old.ten_that);
+  assert.equal(c.DATA[0].phong_o, old.phong_o);
+  assert.equal(queue().length, 0);
+});
+
+test('failed queue persistence cannot delete or modify a worker', () => {
+  const { context: c, queue, logs } = sandbox();
+  c.DATA = [{ ...old }];
+  failStorage(c);
+  c.delRec(old.id);
+  assert.equal(c.DATA.length, 1);
+  assert.equal(c.DATA[0].deleted, undefined);
+  editForm(c, { ten_that: 'CHANGED', phong_o: 'QA2' });
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].ten_that, old.ten_that);
+  c.movePerson(old.id);
+  assert.equal(c.DATA[0].phong_o, old.phong_o);
+  assert.equal(queue().length, 0);
+  assert.equal(logs.length, 0);
+});
+
+test('successful edit applies the draft and queues every room leader change atomically', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old }, { ...old, id: 95002, phong_o: 'QA2', chu_phong: true }];
+  let queueWrites = 0;
+  const write = c.localStorage.setItem;
+  c.localStorage.setItem = (key, value) => { if (key === 'cn_queue_v1') queueWrites++; write(key, value); };
+  editForm(c, { ten_that: 'CHANGED', phong_o: 'QA2', so_dt: '0123456789' }, true);
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].ten_that, 'CHANGED');
+  assert.equal(c.DATA[0].so_dt, '0123456789');
+  assert.equal(c.DATA[0].chu_phong, true);
+  assert.equal(c.DATA[1].chu_phong, false);
+  assert.equal(queueWrites, 1);
+  assert.equal(queue().length, 2);
+  assert.equal(queue().find(r => r.id === 95002)._editedBy, 'TEST');
+});
+
+test('failed leader edit cannot partially change another worker', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old }, { ...old, id: 95002, phong_o: 'QA2', chu_phong: true }];
+  failStorage(c);
+  editForm(c, { ten_that: 'CHANGED', phong_o: 'QA2' }, true);
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].ten_that, old.ten_that);
+  assert.equal(c.DATA[0].chu_phong, undefined);
+  assert.equal(c.DATA[1].chu_phong, true);
+  assert.equal(queue().length, 0);
+});
+
+test('new record and temporary images stay unsaved when queue persistence fails', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old }];
+  c.TEMP_NEW_IMGS = { photo: 'data:image/png;base64,QA' };
+  c.setImg = () => assert.fail('Images must not move before the record is queued');
+  failStorage(c);
+  editForm(c, { ten_that: 'QA NEW', phong_o: 'QA2' });
+  c.saveEdit('__new__');
+  assert.equal(c.DATA.length, 1);
+  assert.equal(queue().length, 0);
+  assert.equal(c.TEMP_NEW_IMGS.photo, 'data:image/png;base64,QA');
+});
+
+test('successful new record queues its numeric ID before moving temporary images', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old }];
+  c.TEMP_NEW_IMGS = { photo: 'data:image/png;base64,QA' };
+  const images = [];
+  c.setImg = (id, type, uri) => { assert.equal(queue()[0].id, id); images.push([id, type, uri]); };
+  editForm(c, { ten_that: 'QA NEW', phong_o: 'QA2' });
+  c.saveEdit('__new__');
+  assert.equal(c.DATA.length, 2);
+  assert.equal(c.DATA[0].ten_that, 'QA NEW');
+  assert.ok(Number.isSafeInteger(c.DATA[0].id));
+  assert.equal(queue()[0].id, c.DATA[0].id);
+  assert.equal(images[0][0], c.DATA[0].id);
+  assert.equal(Object.keys(c.TEMP_NEW_IMGS).length, 0);
+});
+
+test('changing to dependent removes discipline fields from the applied draft', () => {
+  const { context: c } = sandbox();
+  c.DATA = [{ ...discipline }];
+  editForm(c, { ten_that: old.ten_that, loai: 'Gia thuộc' });
+  c.saveEdit(old.id);
+  assert.equal(c.DATA[0].loai, 'Gia thuộc');
+  assert.equal(c.DATA[0].ghi_chu_ky_luat, undefined);
+  assert.equal(c.DATA[0].danh_gia_ky_nang, undefined);
+});
+
+test('cleared pending phone is not refilled from cache or stale DATA', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old, so_dt: '0123456789', sdt: '0123456789' }];
+  c.lookupPhoneFromCache = () => '0123456789';
+  editForm(c, { ten_that: old.ten_that, so_dt: '' });
+  c.saveEdit(old.id);
+  assert.equal(queue()[0].so_dt, '');
+  c.DATA = [{ ...old, so_dt: '0123456789' }];
+  assert.equal(c.mergeServerData([old], queue())[0].so_dt, '');
+});
+
+test('successful move and deletion persist and canceled deletion does nothing', () => {
+  const { context: c, queue, logs } = sandbox();
+  c.DATA = [{ ...old, chu_phong: true }];
+  let syncs = 0;
+  c.syncNow = () => syncs++;
+  c.movePerson(old.id);
+  assert.equal(c.DATA[0].phong_o, 'QA2');
+  assert.equal(c.DATA[0].chu_phong, false);
+  assert.equal(queue()[0].phong_o, 'QA2');
+  assert.equal(syncs, 1);
+  c.confirm = () => false;
+  c.delRec(old.id);
+  assert.equal(c.DATA.length, 1);
+  assert.equal(logs.length, 1);
+  c.confirm = () => true;
+  c.delRec(old.id);
+  assert.equal(c.DATA.length, 0);
+  assert.equal(queue()[0].deleted, true);
+  assert.equal(logs.length, 2);
+});
+
+test('startup recovers pending addition, edit and deletion without cloud access', () => {
+  const { context: c, setQueue } = sandbox();
+  c.load = () => [{ ...old }, { ...old, id: 95002 }];
+  setQueue([{ ...old, deleted: true }, { ...latest, id: 95002 },
+    { ...latest, id: 95003, ten_that: 'QA NEW', cmnd: '990654321' }]);
+  const start = source.indexOf('var DATA = load();');
+  const end = source.indexOf('window.DATA = DATA;', start) + 'window.DATA = DATA;'.length;
+  vm.runInContext(source.slice(start, end), c);
+  assert.deepEqual(Array.from(c.DATA, r => r.id).sort(), [95002, 95003]);
+  assert.equal(c.DATA.find(r => r.id === 95002).phong_o, latest.phong_o);
+  assert.equal(c.DATA.find(r => r.id === 95003)._edited, true);
+  assert.equal(c.window.DATA, c.DATA);
+});
+
+test('queue-only records recover while pending deletions stay deleted', () => {
+  const { context: c } = sandbox();
+  c.DATA = [{ ...old }];
+  const added = { ...latest, id: 95002, ten_that: 'QA NEW' };
+  const merged = c.mergeServerData([], [{ ...old, deleted: true }, added]);
+  assert.deepEqual(Array.from(merged, r => r.id), [added.id]);
+  assert.equal(merged[0]._edited, true);
+});
+
+test('quota cleanup never discards image operations or audit history', () => {
+  const { context: c } = sandbox();
+  c.localStorage.setItem('cn_pendimg_v1', '["photo:95001"]');
+  c.localStorage.setItem('cn_penddel_v1', '["cmnd:95001"]');
+  c.localStorage.setItem('cn_audit_logs_v1', '[{"action":"QA"}]');
+  failStorage(c);
+  assert.equal(c.safeSetStorage('cn_queue_v1', '[]'), false);
+  const start = source.indexOf('(function autoHealStorageQuota(){');
+  vm.runInContext(source.slice(start, source.indexOf('})();', start) + 5), c);
+  assert.equal(c.localStorage.getItem('cn_pendimg_v1'), '["photo:95001"]');
+  assert.equal(c.localStorage.getItem('cn_penddel_v1'), '["cmnd:95001"]');
+  assert.equal(c.localStorage.getItem('cn_audit_logs_v1'), '[{"action":"QA"}]');
+});
+
+test('offline devices allocate different numeric IDs from the same dataset', () => {
+  const { context: a } = sandbox();
+  const { context: b } = sandbox();
+  a.DATA = [{ id: 200147003 }];
+  b.DATA = [{ id: 200147003 }];
+  a.crypto = { getRandomValues: values => { values.set([12345, 67890]); return values; } };
+  b.crypto = { getRandomValues: values => { values.set([23456, 78901]); return values; } };
+  const first = a.blank('QA1');
+  const second = b.blank('QA2');
+  assert.notEqual(first.id, second.id);
+  for (const rec of [first, second]) {
+    assert.ok(Number.isSafeInteger(rec.id) && rec.id > 0);
+    assert.ok(String(rec.id).length <= 15);
+  }
+  assert.equal(first.phong_o, 'QA1');
+  assert.equal(second.phong_o, 'QA2');
+});
+
+test('new IDs skip existing IDs, zero, and pending deleted IDs', () => {
+  const { context: c, setQueue } = sandbox();
+  c.DATA = [{ id: 8 }];
+  setQueue([{ id: 9, deleted: true }]);
+  const draws = [[0, 0], [0, 8], [0, 9], [0, 10]];
+  c.crypto = { getRandomValues: values => { values.set(draws.shift()); return values; } };
+  assert.equal(c.blank().id, 10);
+  assert.equal(draws.length, 0);
+});
+
+test('resolved discipline retains history without treating low ratings as resolved', () => {
+  const { context: c } = sandbox();
+  assert.equal(c.isDisciplineResolved(resolved), true);
+  assert.equal(c.isDisciplineCase(resolved), true);
+  assert.equal(c.isDisciplineResolved(discipline), false);
+  assert.equal(c.isDisciplineResolved({ ...resolved, danh_gia_dao_duc: 2 }), false);
+  assert.equal(c.isDisciplineResolved({ ...resolved, danh_gia_ky_nang: 1 }), false);
+  assert.equal(c.isDisciplineResolved({ ...resolved, loai: 'Gia thuộc' }), false);
+});
+
+test('status-only discipline edit invalidates cached person card', () => {
+  const { context: c } = sandbox();
+  const signature = p => c.personCardSig(p, '', '', 3, 3, '');
+  assert.notEqual(signature(discipline), signature(resolved));
+  assert.equal(signature(resolved), signature({ ...resolved }));
+});
+
+test('server resolution replaces old discipline state and explicit empty clears note', () => {
+  const { context: c } = sandbox();
+  c.DATA = [{ ...discipline }];
+  const result = c.mergeServerData([resolved], []);
+  assert.equal(c.isDisciplineResolved(result[0]), true);
+  assert.equal(result[0].ghi_chu_ky_luat, discipline.ghi_chu_ky_luat);
+  const cleared = c.mergeServerData([{ ...resolved, ghi_chu_ky_luat: '',
+    ngay_ky_luat: '', hinh_thuc_ky_luat: '', trang_thai_ky_luat: '', nguoi_lap_bien_ban: '' }], []);
+  assert.equal(cleared[0].ghi_chu_ky_luat, '');
+  assert.equal(c.isDisciplineCase(cleared[0]), false);
+});
+
+test('pending discipline correction survives rejected push and stale pull', async () => {
+  const { context: c, setQueue, queue } = sandbox();
+  const corrected = { ...resolved, ghi_chu_ky_luat: 'Đã khắc phục - kiểm thử' };
+  c.DATA = [corrected];
+  setQueue([corrected]);
+  c.api = async action => action === 'push'
+    ? { ok: true, accepted: [old.id], rejected: [{ id: old.id, reason: 'guest_field_restricted' }] }
+    : { ok: true, rev: 1, rows: [discipline], images: {} };
+  await c.syncNowCore(true, true);
+  assert.equal(queue().length, 1);
+  assert.equal(c.DATA[0].ghi_chu_ky_luat, corrected.ghi_chu_ky_luat);
+  assert.equal(c.isDisciplineResolved(c.DATA[0]), true);
+});
 
 for (const rows of [[old, old, latest], [latest, old, old], [old, latest, old]]) {
   test('latest duplicate wins regardless of sheet order', () => {

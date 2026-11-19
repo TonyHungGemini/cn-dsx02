@@ -244,6 +244,9 @@ const KM = {
   "🔄 Xoay": "🔄 បង្វិល",
   "☁️ Mở Drive": "☁️ បើក Drive",
   "Chưa có ảnh để xem": "មិនទាន់មានរូបភាពដើម្បីមើល",
+  "Đã khắc phục": "បានដោះស្រាយរួច",
+  "Xem lịch sử kỷ luật đã khắc phục": "មើលប្រវត្តិវិន័យដែលបានដោះស្រាយរួច",
+  "Lịch sử biên bản đã khắc phục": "ប្រវត្តិកំណត់ហេតុដែលបានដោះស្រាយរួច",
   "Chụp ảnh": "ថតរូប",
   "Chụp ảnh bằng camera điện thoại": "ថតរូបដោយកាមេរ៉ាទូរសព្ទ",
 };
@@ -385,6 +388,11 @@ function getEthicsRating(p){
   return (!isNaN(num) && num >= 1 && num <= 5) ? num : 3;
 }
 
+function isDisciplineResolved(p){
+  return !!p && p.loai !== "Gia thuộc" && getSkillRating(p) >= 3 && getEthicsRating(p) >= 3 &&
+    String(p.trang_thai_ky_luat || "").startsWith("Đã khắc phục");
+}
+
 function isDisciplineCase(p){
   if(!p || p.loai === "Gia thuộc") return false;
   const sk = getSkillRating(p);
@@ -492,7 +500,6 @@ function safeSetStorage(key, val) {
   } catch (err) {
     console.warn("Storage write warning for key " + key + ":", err && err.message);
     if (err && (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED" || err.code === 22 || err.code === 1014)) {
-      try { localStorage.removeItem("cn_pendimg_v1"); } catch(e) {}
       if (key !== "cn_imgfiles_v1") {
         try { localStorage.removeItem("cn_imgfiles_v1"); } catch(e) {}
       }
@@ -515,9 +522,7 @@ function safeSetStorage(key, val) {
     localStorage.removeItem(testKey);
   } catch(e) {
     console.warn("Storage full on startup! Auto-healing by purging disposable caches...");
-    try { localStorage.removeItem("cn_audit_logs_v1"); } catch(ex) {}
     try { localStorage.removeItem("cn_imgfiles_v1"); } catch(ex) {}
-    try { localStorage.removeItem("cn_penddel_v1"); } catch(ex) {}
   }
 })();
 
@@ -939,6 +944,12 @@ if(!DATA || DATA.length === 0){
   });
   save();
 }
+try {
+  const pending = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+  if (pending.length) DATA = mergeServerData([], pending);
+} catch(e) {
+  console.warn("Chưa khôi phục được thay đổi đang chờ đồng bộ:", e);
+}
 window.DATA = DATA;
 
 // Apply 3-star standard to laborers in current list (KHÔNG xếp hạng cho Gia thuộc)
@@ -1070,6 +1081,7 @@ function esc(s){
 /* ===== Ảnh: PRELOAD (nhúng sẵn) + IndexedDB (thay đổi/chụp mới) ===== */
 const PRELOAD = (typeof PRELOAD_IMG!=="undefined") ? PRELOAD_IMG : {};
 let IMG_OVR = {}; let _db = null; const DEL="__DEL__";
+const IMG_OP_TOKENS = Object.create(null); // Chỉ đổi khi người dùng thay/xóa ảnh, kể cả thay lại cùng URI.
 
 // Ảnh tĩnh xuất từ máy quản trị (images_index.js) — dùng khi GitHub Pages không có backend /api
 const IMG_STATIC = (typeof window !== "undefined" && window.__IMG_STATIC) ? window.__IMG_STATIC : {};
@@ -1206,9 +1218,13 @@ function setImg(id, t, uri) {
     TEMP_NEW_IMGS[t] = uri;
     return;
   }
-  IMG_OVR[t + ":" + id] = uri;
-  idbPut(t + ":" + id, uri);
-  try { addPendImg(t + ":" + id); } catch(e) {}
+  const k = t + ":" + id;
+  IMG_OP_TOKENS[k] = (IMG_OP_TOKENS[k] || 0) + 1;
+  IMG_OVR[k] = uri;
+  idbPut(k, uri);
+  // Ảnh mới thay thế yêu cầu xóa cũ, không để vòng sync xóa ảnh vừa tải lên.
+  try { setPendDel(getPendDel().filter(key => key !== k)); } catch(e) {}
+  try { addPendImg(k); } catch(e) {}
 
   // Auto-sync image directly to central server for instant cross-device display (iPhone/PC/Guest accounts)
   if (API_OK !== false) {
@@ -1227,15 +1243,13 @@ function delImg(id, t) {
     delete TEMP_NEW_IMGS[t];
     return;
   }
-  IMG_OVR[t + ":" + id] = DEL;
-  idbPut(t + ":" + id, DEL);
+  const k = t + ":" + id;
+  IMG_OP_TOKENS[k] = (IMG_OP_TOKENS[k] || 0) + 1;
+  IMG_OVR[k] = DEL;
+  idbPut(k, DEL);
   // Bỏ khỏi hàng đợi upload để lần đồng bộ sau không tải ảnh lên lại
-  try {
-    const up = getPendImg();
-    const i = up.indexOf(t + ":" + id);
-    if (i >= 0) { up.splice(i, 1); setPendImg(up); }
-  } catch(e) {}
-  try { addPendDel(t + ":" + id); } catch(e) {}
+  try { setPendImg(getPendImg().filter(key => key !== k)); } catch(e) {}
+  try { addPendDel(k); } catch(e) {}
 }
 
 function rememberImgFid(id, t, fid){
@@ -1806,18 +1820,29 @@ async function doOcrCMND(id, opts) {
     return;
   }
   const sheet = document.getElementById("sheet");
-  const ocrBox = sheet ? sheet.querySelector("#ocrStatusBox") : null;
+  const nameInput = sheet ? sheet.querySelector('[data-k="ten_that"]') : null;
+  const overlay = document.getElementById("overlay");
+  if (!nameInput || !overlay || editingId !== id || !overlay.classList.contains("show")) return;
+  const requestToken = {};
+  nameInput._ocrRequestToken = requestToken;
+  const isCurrent = () => editingId === id && overlay.classList.contains("show") &&
+    document.getElementById("sheet") === sheet &&
+    sheet.querySelector('[data-k="ten_that"]') === nameInput &&
+    getImg(id, "cmnd") === uri && nameInput._ocrRequestToken === requestToken;
+  const ocrBox = sheet.querySelector("#ocrStatusBox");
   if (ocrBox) {
     ocrBox.style.display = "block";
     ocrBox.innerHTML = '<div class="ocr-status-running"><div class="ocr-spinner"></div> <span id="ocrProgText">Đang đọc thông tin & chuyển đổi địa chỉ sang tiếng Việt…</span></div>';
   }
 
   const progCb = text => {
-    const el = document.getElementById("ocrProgText");
+    if (!isCurrent()) return;
+    const el = ocrBox ? ocrBox.querySelector("#ocrProgText") : null;
     if (el) el.textContent = text;
   };
 
   const res = await ocrCMND(uri, progCb);
+  if (!isCurrent()) return;
   if (!res.ok) {
     if (auto) {
       if (ocrBox) {
@@ -1851,7 +1876,7 @@ async function doOcrCMND(id, opts) {
       inp.classList.remove("field-pulse");
       void inp.offsetWidth; // reflow
       inp.classList.add("field-pulse");
-      setTimeout(() => inp.classList.remove("field-pulse"), 2500);
+      setTimeout(() => { if (isCurrent()) inp.classList.remove("field-pulse"); }, 2500);
     }
   };
 
@@ -2045,7 +2070,7 @@ function personCardSig(p, phone, blood, skill, ethics, av){
   const disc = (p.ghi_chu_ky_luat || "").trim();
   return [p.ten_that, p.ten_ho_so, p.ten_muon || "", p.loai, p.chu_phong ? 1 : 0, p._edited ? 1 : 0,
     isValidCmnd(p.cmnd) ? p.cmnd : "", phone || "", blood || "",
-    skill == null ? "" : skill, ethics == null ? "" : ethics, disc,
+    skill == null ? "" : skill, ethics == null ? "" : ethics, disc, p.trang_thai_ky_luat || "",
     p.to || "", p.phong_o || "", p.phan_cay || "", p.quan_he || "",
     av ? (av.length + ":" + av.slice(0, 48)) : ""].join("");
 }
@@ -2098,11 +2123,12 @@ function renderPeople(){
     // Dedicated discipline note button for workers with 1-2 stars or discipline record
     if (p.loai !== "Gia thuộc" && isDisciplineCase(p)) {
       const discNote = (p.ghi_chu_ky_luat || "").trim();
-      const discTitle = discNote ? (t('Ghi chú kỷ luật: ') + esc(discNote)) : t('Công nhân có Kỹ năng hoặc Đạo đức 1-2★ - Quản lý bằng Sổ Kỷ luật');
-      const discText = discNote 
-        ? (t('📕 Sổ Kỷ luật: ') + esc(discNote.length > 22 ? (discNote.slice(0, 20) + '…') : discNote)) 
-        :t('📕 Ghi chú Sổ Kỷ luật (1-2★)');
-      sub.push('<button type="button" class="pill pill-discipline" data-disc-id="' + p.id + '" title="' + discTitle + '">' + discText + '</button>');
+      const resolved = isDisciplineResolved(p);
+      const discTitle = resolved ? esc(t("Xem lịch sử kỷ luật đã khắc phục")) : (discNote ? (t('Ghi chú kỷ luật: ') + esc(discNote)) : t('Công nhân có Kỹ năng hoặc Đạo đức 1-2★ - Quản lý bằng Sổ Kỷ luật'));
+      const discText = resolved ? esc(t("Đã khắc phục")) : (discNote
+        ? (t('📕 Sổ Kỷ luật: ') + esc(discNote.length > 22 ? (discNote.slice(0, 20) + '…') : discNote))
+        : t('📕 Ghi chú Sổ Kỷ luật (1-2★)'));
+      sub.push('<button type="button" class="pill pill-discipline' + (resolved ? ' pill-discipline-resolved' : '') + '" data-disc-id="' + p.id + '" title="' + discTitle + '">' + discText + '</button>');
     }
 
     if(p.to) sub.push('<span class="pill">'+esc(tTo(p.to))+'</span>');
@@ -2241,7 +2267,8 @@ function openRoom(room){
       extraBadges += ' <span class="pill pill-rating' + (sk === 5 && et === 5 ? ' pill-rating-perfect' : '') + '" style="font-size:11px;padding:1px 6px;">⭐ KN ' + sk + '★ · ĐĐ ' + et + '★</span>';
     }
     if (p.loai !== "Gia thuộc" && isDisciplineCase(p)) {
-      extraBadges += ' <button type="button" class="pill pill-discipline" data-disc-id="' + p.id + '" style="font-size:10.5px;padding:1px 6px;cursor:pointer;" title="' + t("Xem/sửa ghi chú kỷ luật") + '">📕 ' + t("Sổ Kỷ luật (1-2★)") + '</button>';
+      const resolved = isDisciplineResolved(p);
+      extraBadges += ' <button type="button" class="pill pill-discipline' + (resolved ? ' pill-discipline-resolved' : '') + '" data-disc-id="' + p.id + '" style="font-size:10.5px;padding:1px 6px;cursor:pointer;" title="' + esc(t(resolved ? "Xem lịch sử kỷ luật đã khắc phục" : "Xem/sửa ghi chú kỷ luật")) + '">' + (resolved ? esc(t("Đã khắc phục")) : '📕 ' + t("Sổ Kỷ luật (1-2★)")) + '</button>';
     }
 
     rows += '<div class="occ" data-id="'+p.id+'">'+avHtml+
@@ -2305,20 +2332,14 @@ function openRoom(room){
     const act = b.dataset.act;
     if(act === "chu"){
       const makeLeader = !p.chu_phong;
-      DATA.forEach(x => {
-        if(roomKey(x) === room && x.chu_phong){
-          x.chu_phong = false;
-          x._edited = true;
-          queueChange(x);
-        }
-      });
-      p.chu_phong = makeLeader;
-      p._edited = true;
-      p._editedAt = Date.now();
-      p._editedBy = auditUserName();
-      queueChange(p);
+      const changes = DATA.filter(x => x.id === id || (roomKey(x) === room && x.chu_phong))
+        .map(x => ({ ...x, chu_phong: x.id === id && makeLeader, _edited: true,
+          _editedAt: Date.now(), _editedBy: auditUserName() }));
+      if (!queueChange(...changes)) return;
+      changes.forEach(x => Object.assign(DATA.find(rec => rec.id === x.id), x));
       logRecordChange(makeLeader ? "Đặt chủ phòng" : "Bỏ chủ phòng", p, "Phòng " + room);
       save();
+      if (CFG.url && CFG.key) syncNow(true);
       openRoom(room);
       render();
       toast(makeLeader ? ("Đã đặt " + p.ten_that + " làm chủ phòng 👑") : "Đã hủy chủ phòng");
@@ -2337,14 +2358,13 @@ function movePerson(id, fromRoom){
   if(target === null) return;
   const newR = target.trim();
   const oldR = p.phong_o || "";
-  p.phong_o = newR;
-  p._edited = true;
-  p.chu_phong = false;
-  p._editedAt = Date.now();
-  p._editedBy = auditUserName();
-  queueChange(p);
+  const changed = { ...p, phong_o: newR, _edited: true, chu_phong: false,
+    _editedAt: Date.now(), _editedBy: auditUserName() };
+  if (!queueChange(changed)) return;
+  Object.assign(p, changed);
   logRecordChange("Chuyển phòng", p, (oldR || "(chưa có)") + " → " + (newR || "(chưa có)"));
   save();
+  if (CFG.url && CFG.key) syncNow(true);
   render();
   toast(t("Đã chuyển sang phòng ") + (newR || "(chưa có phòng)"));
   if(fromRoom) openRoom(fromRoom);
@@ -2355,9 +2375,16 @@ let editingId = null;
 let editBackRoom = null;
 
 function blank(prefillRoom) {
-  const maxId = DATA.reduce((m, x) => Math.max(m, +x.id || 0), 0);
+  const queued = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+  const usedIds = new Set([...DATA, ...queued].map(p => String(p.id)));
+  let id;
+  do {
+    const random = crypto.getRandomValues(new Uint32Array(2));
+    // ID ngẫu nhiên 48-bit tránh trùng giữa các máy và giữ tối đa 15 chữ số cho Sheet.
+    id = (random[0] & 0xffff) * 0x100000000 + random[1];
+  } while (!id || usedIds.has(String(id)));
   return {
-    id: maxId + 1,
+    id,
     cmnd: "",
     ten_that: "",
     ten_ho_so: "",
@@ -3054,9 +3081,10 @@ function saveEdit(id) {
   if (!sheet) return;
 
   const isNew = id === "__new__";
-  let rec = isNew ? blank() : DATA.find(x => x.id === id);
-  if (!rec) return;
-  const auditBefore = isNew ? null : auditSnap(rec);
+  const existing = isNew ? null : DATA.find(x => x.id === id);
+  if (!isNew && !existing) return;
+  const rec = isNew ? blank() : { ...existing };
+  const auditBefore = isNew ? null : auditSnap(existing);
 
   const inputs = sheet.querySelectorAll("[data-k]");
   inputs.forEach(inp => {
@@ -3084,11 +3112,6 @@ function saveEdit(id) {
   rec["SĐT"] = ph;
   rec["SDT"] = ph;
   rec["Điện thoại"] = ph;
-  if (ph) {
-    savePhoneToCache(rec, ph);
-  } else {
-    removePhoneFromCache(rec);
-  }
 
   // Normalize blood type and ratings (default to 3 stars if not specified, KHÔNG xếp hạng cho Gia thuộc)
   rec.nhom_mau = (rec.nhom_mau || "").trim().toUpperCase();
@@ -3115,30 +3138,28 @@ function saveEdit(id) {
 
   const ckChu = sheet.querySelector("#ckChu");
   const isLeader = ckChu ? ckChu.checked : false;
-  if (isLeader && rec.phong_o) {
-    DATA.forEach(x => {
-      if (roomKey(x) === rec.phong_o && x.id !== rec.id && x.chu_phong) {
-        x.chu_phong = false;
-        x._edited = true;
-        queueChange(x);
-      }
-    });
-  }
+  const formerLeaders = isLeader && rec.phong_o
+    ? DATA.filter(x => roomKey(x) === rec.phong_o && x.id !== rec.id && x.chu_phong)
+      .map(x => ({ ...x, chu_phong: false, _edited: true,
+        _editedAt: Date.now(), _editedBy: auditUserName() }))
+    : [];
   rec.chu_phong = isLeader;
+  rec._edited = true;
+  rec._editedAt = Date.now();
+  rec._editedBy = auditUserName();
+  if (!queueChange(rec, ...formerLeaders)) return;
 
+  formerLeaders.forEach(x => Object.assign(DATA.find(p => p.id === x.id), x));
   if (isNew) {
+    DATA.unshift(rec);
     if (TEMP_NEW_IMGS.photo) setImg(rec.id, "photo", TEMP_NEW_IMGS.photo);
     if (TEMP_NEW_IMGS.cmnd) setImg(rec.id, "cmnd", TEMP_NEW_IMGS.cmnd);
     TEMP_NEW_IMGS = {};
-    rec._edited = true;
-    DATA.unshift(rec);
   } else {
-    rec._edited = true;
+    DATA[DATA.indexOf(existing)] = rec;
   }
-
-  rec._editedAt = Date.now();
-  rec._editedBy = auditUserName();
-  queueChange(rec);
+  if (ph) savePhoneToCache(rec, ph);
+  else removePhoneFromCache(rec);
   if(isNew){
     logRecordChange("Thêm hồ sơ", rec, [rec.ten_that, auditDescribeWorker(rec)].filter(Boolean).join(" · "));
   } else {
@@ -3149,8 +3170,7 @@ function saveEdit(id) {
   updateDisciplineBadge();
   render();
 
-  // Instant server persistence for cross-device synchronization (Admin Phone <-> Computer)
-  try {
+  if (API_OK) {
     fetch("/api/sync-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3161,7 +3181,7 @@ function saveEdit(id) {
         config: CFG
       })
     }).catch(e => console.warn("Server save error:", e));
-  } catch(e){}
+  }
 
   toast(isNew ? "Đã thêm hồ sơ mới ✓" : "Đã lưu thay đổi hồ sơ ✓");
 
@@ -3615,11 +3635,8 @@ function delRec(id){
   if(!confirm(t("Xác nhận xóa người này?"))){ return; }
   const i = DATA.findIndex(x => x.id === id);
   if(i >= 0){
-    const p = DATA[i];
-    p.deleted = true;
-    p._editedAt = Date.now();
-    p._editedBy = auditUserName();
-    queueChange(p);
+    const p = { ...DATA[i], deleted: true, _editedAt: Date.now(), _editedBy: auditUserName() };
+    if (!queueChange(p)) return;
     logRecordChange("Xóa hồ sơ", p, [p.ten_that || p.ten_ho_so, auditDescribeWorker(p)].filter(Boolean).join(" · "));
     DATA.splice(i, 1);
     save();
@@ -3817,35 +3834,26 @@ function openDisciplineQuickEdit(id) {
     const newNote = sheet.querySelector("#quickGhiChu").value.trim();
 
     const auditBefore = auditSnap(p);
-    p.danh_gia_ky_nang = newSkill;
-    p.danh_gia_dao_duc = newEthics;
-    p.ngay_ky_luat = newDate;
-    p.hinh_thuc_ky_luat = newHinhThuc;
-    p.trang_thai_ky_luat = newTrangThai;
-    p.nguoi_lap_bien_ban = newNguoiLap;
-    p.ghi_chu_ky_luat = newNote;
-    p._edited = true;
-    p._manuallyRated = true;
-    p._editedAt = Date.now();
-    p._editedBy = auditUserName();
-
-    queueChange(p);
+    const changed = { ...p, danh_gia_ky_nang: newSkill, danh_gia_dao_duc: newEthics,
+      ngay_ky_luat: newDate, hinh_thuc_ky_luat: newHinhThuc, trang_thai_ky_luat: newTrangThai,
+      nguoi_lap_bien_ban: newNguoiLap, ghi_chu_ky_luat: newNote, _edited: true, _manuallyRated: true,
+      _editedAt: Date.now(), _editedBy: auditUserName() };
+    if (!queueChange(changed)) return;
+    Object.assign(p, changed);
     const parts = auditDiffParts(auditBefore, p);
     if(parts.length) logRecordChange("Cập nhật kỷ luật", p, auditDiffText(parts));
     save();
     render();
     updateDisciplineBadge();
 
-    // Instant server persistence for cross-device synchronization (Admin Phone <-> Computer)
-    try {
+    if (API_OK) {
       fetch("/api/save-record", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ record: p })
-      }).then(() => {
-        if (typeof syncNow === "function") syncNow(true);
       }).catch(e => console.warn("Save discipline error:", e));
-    } catch(e) {}
+    }
+    if (CFG.url && CFG.key) syncNow(true);
 
     toast("Đã lưu ghi chú Sổ Kỷ luật cho " + (p.ten_that || "công nhân") + " ✓");
     closeFn();
@@ -3984,7 +3992,7 @@ function showDisciplineBook(initFilter, initSearch) {
       const isUrgent = (sk === 1 || et === 1);
       const isWarning = (!isUrgent && (sk === 2 || et === 2));
       const curStatus = p.trang_thai_ky_luat || "Đang theo dõi";
-      const isResolved = curStatus.includes("Đã khắc phục");
+      const isResolved = isDisciplineResolved(p);
 
       let cardStatusClass = "status-normal";
       if (isResolved) cardStatusClass = "status-resolved";
@@ -4036,7 +4044,7 @@ function showDisciplineBook(initFilter, initSearch) {
       // Note content box
       html += '  <div class="disc-note-box">';
       if ((p.ghi_chu_ky_luat || "").trim()) {
-        html += '    <div class="disc-note-title"><span>📝</span> Nội dung biên bản vi phạm & kế hoạch rèn luyện:</div>';
+        html += '    <div class="disc-note-title">' + (isResolved ? esc(t("Lịch sử biên bản đã khắc phục")) : 'Nội dung biên bản vi phạm & kế hoạch rèn luyện') + ':</div>';
         html += '    <div class="disc-note-body">' + esc(p.ghi_chu_ky_luat) + '</div>';
         if (p.nguoi_lap_bien_ban) {
           html += '    <div class="disc-note-author">— Cán bộ phụ trách: ' + esc(p.nguoi_lap_bien_ban) + '</div>';
@@ -4106,27 +4114,23 @@ function showDisciplineBook(initFilter, initSearch) {
       if (!worker) return;
       if (confirm("Nâng công nhân '" + (worker.ten_that || "này") + "' lên 3★ Đạt chuẩn và đánh dấu Đã khắc phục?")) {
         const auditBefore = auditSnap(worker);
-        worker.danh_gia_ky_nang = 3;
-        worker.danh_gia_dao_duc = 3;
-        worker.trang_thai_ky_luat = "Đã khắc phục xong (Đạt chuẩn)";
-        worker._manuallyRated = true;
-        worker._edited = true;
-        worker._editedAt = Date.now();
-        worker._editedBy = auditUserName();
-        queueChange(worker);
+        const changed = { ...worker, danh_gia_ky_nang: 3, danh_gia_dao_duc: 3,
+          trang_thai_ky_luat: "Đã khắc phục xong (Đạt chuẩn)", _manuallyRated: true, _edited: true,
+          _editedAt: Date.now(), _editedBy: auditUserName() };
+        if (!queueChange(changed)) return;
+        Object.assign(worker, changed);
         logRecordChange("Nâng 3★ Đạt chuẩn", worker, auditDiffText(auditDiffParts(auditBefore, worker)) || "Đặt lại đánh giá đạt chuẩn");
         save();
         render();
         updateDisciplineBadge();
-        try {
+        if (API_OK) {
           fetch("/api/save-record", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ record: worker })
-          }).then(() => {
-            if (typeof syncNow === "function") syncNow(true);
           }).catch(() => {});
-        } catch(e) {}
+        }
+        if (CFG.url && CFG.key) syncNow(true);
         toast("Đã nâng 3★ Đạt chuẩn cho " + (worker.ten_that || "công nhân"));
         showDisciplineBook(currentDiscFilter, currentDiscSearch);
       }
@@ -6170,7 +6174,7 @@ async function api(act, data){
 function enrichRecordForServer(r){
   if(!r || typeof r !== "object") return r;
   const o = Object.assign({}, r);
-  const ph = getPhone(o) || lookupPhoneFromCache(o);
+  const ph = o.so_dt === "" ? "" : getPhone(o) || lookupPhoneFromCache(o);
   if(ph){
     o.so_dt = ph;
     o.sdt = ph;
@@ -6239,16 +6243,22 @@ function enrichRecordForServer(r){
   return o;
 }
 
-function queueChange(p){
+function queueChange(...records){
   try{
-    const enriched = enrichRecordForServer(p);
+    const changes = records.map(enrichRecordForServer);
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
-    const i = q.findIndex(x => String(x.id) === String(enriched.id));
-    if(i >= 0) q[i] = enriched; else q.push(enriched);
-    safeSetStorage("cn_queue_v1", JSON.stringify(q));
-    auditMarkOwn(enriched);
+    for(const enriched of changes){
+      const i = q.findIndex(x => String(x.id) === String(enriched.id));
+      if(i >= 0) q[i] = enriched; else q.push(enriched);
+    }
+    if(!safeSetStorage("cn_queue_v1", JSON.stringify(q))) throw new Error("Không lưu được hàng đợi");
+    changes.forEach(auditMarkOwn);
     updateSyncBadge();
-  }catch(e){}
+    return true;
+  }catch(e){
+    toast("Chưa lưu được thay đổi. Bộ nhớ thiết bị có thể đã đầy; hãy giữ biểu mẫu mở và thử lại.");
+    return false;
+  }
 }
 
 function acknowledgeChanges(sent, response){
@@ -6285,6 +6295,26 @@ function addPendImg(k){ const a=getPendImg(); if(!a.includes(k)){ a.push(k); set
 function getPendDel(){ try{ return JSON.parse(localStorage.getItem("cn_penddel_v1")||"[]"); }catch(e){ return []; } }
 function setPendDel(a){ try{ safeSetStorage("cn_penddel_v1", JSON.stringify(a)); }catch(e){} }
 function addPendDel(k){ const a=getPendDel(); if(!a.includes(k)){ a.push(k); setPendDel(a); } }
+
+function snapshotImgOp(k){
+  const [t, id] = k.split(":");
+  return { k, t, id, token: IMG_OP_TOKENS[k] || 0, value: IMG_OVR[k], uri: getImg(id, t) };
+}
+
+function isCurrentImgOp(op, deleting){
+  return (IMG_OP_TOKENS[op.k] || 0) === op.token && IMG_OVR[op.k] === op.value &&
+    getImg(op.id, op.t) === op.uri &&
+    (deleting ? getPendDel() : getPendImg()).includes(op.k) &&
+    !(deleting ? getPendImg() : getPendDel()).includes(op.k);
+}
+
+function acknowledgeImgOp(op, deleting){
+  if(!isCurrentImgOp(op, deleting)) return false;
+  // Chỉ bỏ thao tác đã gửi thành công; giữ nguyên mọi việc mới thêm trong lúc await.
+  if(deleting) setPendDel(getPendDel().filter(k => k !== op.k));
+  else setPendImg(getPendImg().filter(k => k !== op.k));
+  return true;
+}
 
 function latestServerRows(rows){
   const byId = new Map();
@@ -6429,7 +6459,7 @@ function mergeServerData(serverList, queuedList){
     }
     if(existing) matchedLocalIds.add(String(existing.id));
     if(queued){
-      merged.push({ ...normServerRec(queued), _edited: true });
+      merged.push({ ...normServerRec(queued), ...queued, _edited: true });
       return;
     }
 
@@ -6469,7 +6499,12 @@ function mergeServerData(serverList, queuedList){
     const queued = findSyncRecord(p, queueArr);
     if(queued && queued.deleted) return;
     const isMatched = matchedLocalIds.has(String(p.id)) || findSyncRecord(p, merged);
-    if(!isMatched) merged.push(queued ? { ...normServerRec(queued), _edited: true } : p);
+    if(!isMatched) merged.push(queued ? { ...normServerRec(queued), ...queued, _edited: true } : p);
+  });
+
+  queueArr.forEach(p => {
+    if(!p || p.deleted || deletedIds.has(String(p.id)) || findSyncRecord(p, merged)) return;
+    merged.push({ ...normServerRec(p), ...p, _edited: true });
   });
 
   return dedupeDataset(merged);
@@ -6477,9 +6512,7 @@ function mergeServerData(serverList, queuedList){
 
 async function fetchServerImages(imgs, deleted){
   if (!window.__IMG_MAP) window.__IMG_MAP = {};
-  if (imgs && typeof imgs === "object") {
-    Object.assign(window.__IMG_MAP, imgs);
-  }
+  const pending = new Set([...getPendImg(), ...getPendDel()]);
   let map = {};
   try{ map = JSON.parse(localStorage.getItem("cn_imgfiles_v1") || "{}"); }catch(e){}
   let mapChanged = false;
@@ -6487,7 +6520,10 @@ async function fetchServerImages(imgs, deleted){
   for(const id in imgs){
     for(const t in imgs[id]){
       const key = t + ":" + id;
+      if(pending.has(key)) continue;
       const fid = imgs[id][t];
+      if(!window.__IMG_MAP[id]) window.__IMG_MAP[id] = {};
+      window.__IMG_MAP[id][t] = fid;
       if(fid && map[key] !== fid){
         map[key] = fid;
         mapChanged = true;
@@ -6499,6 +6535,7 @@ async function fetchServerImages(imgs, deleted){
     for(const id in deleted){
       for(const t in deleted[id]){
         const key = t + ":" + id;
+        if(pending.has(key)) continue;
         const hadImage = (IMG_OVR[key] && IMG_OVR[key] !== DEL) ||
           !!map[key] ||
           !!(window.__IMG_MAP && window.__IMG_MAP[id] && window.__IMG_MAP[id][t] != null);
@@ -6634,9 +6671,8 @@ async function syncNowCore(silent, force){
           if(pChanged) setPhoneCache(localCache);
         }
 
-        // Merge master images catalog from server
+        // Merge master images catalog from server without overwriting pending local images
         if(srvData.images && typeof srvData.images === "object"){
-          window.__IMG_MAP = Object.assign(window.__IMG_MAP || {}, srvData.images);
           fetchServerImages(srvData.images);
         }
 
@@ -6687,19 +6723,19 @@ async function syncNowCore(silent, force){
       }catch(e){}
     }
 
-    let pend = getPendImg();
-    const stillP = [];
-    for(const k of pend){
-      const [t, id] = k.split(":");
-      const uri = getImg(id, t);
-      if(!uri) continue;
+    const pend = getPendImg().map(snapshotImgOp);
+    for(const op of pend){
+      const { t: imgType, id, uri } = op;
+      // Bỏ qua snapshot đã bị thay/xóa; URI chưa sẵn sàng vẫn phải được giữ trong queue.
+      if(!uri || !isCurrentImgOp(op, false)) continue;
       try{
-        const r = await api("uploadImage", { id: id, type: t, dataUrl: uri });
+        const r = await api("uploadImage", { id: id, type: imgType, dataUrl: uri });
         if(r.ok){
+          if(!acknowledgeImgOp(op, false)) continue;
           const newFid = r.fid || r.fileId || r.file_id ||
             (r.data && (r.data.fid || r.data.fileId || r.data.file_id)) ||
             (r.file && (r.file.id || r.file.fileId));
-          if(newFid) rememberImgFid(id, t, newFid);
+          if(newFid) rememberImgFid(id, imgType, newFid);
         } else {
           if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
             if(!silent){
@@ -6708,18 +6744,16 @@ async function syncNowCore(silent, force){
             }
             return;
           }
-          stillP.push(k);
         }
-      }catch(e){ stillP.push(k); }
+      }catch(e){} // Lỗi không xác nhận: giữ nguyên thao tác trong queue hiện tại.
     }
-    setPendImg(stillP);
 
-    let pendD = getPendDel();
-    const stillD = [];
-    for(const k of pendD){
-      const [t, id] = k.split(":");
+    const pendD = getPendDel().map(snapshotImgOp);
+    for(const op of pendD){
+      const { k, t: imgType, id } = op;
+      if(!isCurrentImgOp(op, true)) continue;
       try{
-        const r = await api("deleteImage", { id: id, type: t });
+        const r = await api("deleteImage", { id: id, type: imgType });
         if(!r.ok){
           if(r.error === "unauthorized" || r.msg === "Sai khoá truy cập." || r.err === "unauthorized"){
             if(!silent){
@@ -6728,18 +6762,16 @@ async function syncNowCore(silent, force){
             }
             return;
           }
-          stillD.push(k);
-        } else {
-          // Đã xoá trên Drive: dọn fid cũ trong danh mục ảnh máy này
+        } else if(acknowledgeImgOp(op, true)) {
+          // Chỉ dọn fid khi yêu cầu xóa này vẫn là thao tác mới nhất của ảnh.
           try {
-            if(window.__IMG_MAP && window.__IMG_MAP[id]) delete window.__IMG_MAP[id][t];
+            if(window.__IMG_MAP && window.__IMG_MAP[id]) delete window.__IMG_MAP[id][imgType];
             const m = JSON.parse(localStorage.getItem("cn_imgfiles_v1") || "{}");
             if(m[k] != null){ delete m[k]; safeSetStorage("cn_imgfiles_v1", JSON.stringify(m)); }
           } catch(e) {}
         }
-      }catch(e){ stillD.push(k); }
+      }catch(e){} // Giữ lại yêu cầu chưa được máy chủ xác nhận.
     }
-    setPendDel(stillD);
 
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
     const enrichedQ = q.map(enrichRecordForServer);
