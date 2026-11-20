@@ -324,6 +324,475 @@ test('MRZ parsing does not lose accented names from the printed label', () => {
   assert.equal(result.ten_that, 'NGUYỄN THỊ KIM LY');
 });
 
+function constantSource(name) {
+  const match = new RegExp(`^const ${name} = `, 'm').exec(source);
+  assert.ok(match, `Missing constant ${name}`);
+  const end = source.indexOf(';\n', match.index);
+  assert.ok(end > match.index, `Missing end of constant ${name}`);
+  return source.slice(match.index, end + 1);
+}
+
+const LOCAL_OCR_SOURCE = [
+  constantSource('KHMER_DICT'), constantSource('KHMER_TEST_RE'),
+  ...['cleanOcrName', 'parseMRZ', 'parseCardAddresses', 'translateKhmerOffline',
+    'translateAddress', 'ocrCMND'].map(functionSource)
+].join('\n');
+const FULL_CARD = 'data:image/jpeg;base64,c3ludGhldGljLWZ1bGwtY2FyZA==';
+const CROPPED_CARD = 'data:image/jpeg;base64,c3ludGhldGljLWNyb3A=';
+const COMPLETE_MRZ = MRZ_HEADER + '\nSOK<<CHANNA<<<<';
+const RAW_BIRTH = 'ឃុំកំពង់ចិនជើង ស្រុកស្ទោង ខេត្តកំពង់ធំ';
+const RAW_ADDRESS = 'ភូមិចក ' + RAW_BIRTH;
+const VI_BIRTH = 'Xã Kampong Chen Cheung Huyện Stoung Tỉnh Kampong Thom';
+const VI_ADDRESS = 'Thôn Chork ' + VI_BIRTH;
+const KHMER_CARD = `ទីកន្លែងកំណើត៖ ${RAW_BIRTH}\nអាសយដ្ឋាន៖ ភូមិចក\n${RAW_BIRTH}\nសុពលភាព៖ 01/01/2030`;
+const AI_IDENTITY = Object.freeze({
+  ten_that: 'AI Worker', cmnd: '111222333', ngay_sinh: '02/03/1988', tuoi: '38', gioi_tinh: 'M'
+});
+
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+// Bound hung-worker regressions without waiting for the real 90-second deadline.
+async function settles(promise) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('OCR did not settle after worker failure/deadline')), 1000);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+const flushOcr = () => new Promise(resolve => setImmediate(resolve));
+
+function localOcrSandbox(t, options = {}) {
+  const calls = [], networkCalls = [], timers = [], progress = [];
+  let workerOptions, workersCreated = 0, terminations = 0;
+  const worker = {
+    recognize: async image => {
+      calls.push(['recognize', image]);
+      if (options.recognize) return options.recognize(image);
+      return { data: { text: image === CROPPED_CARD ?
+        (options.cropText ?? COMPLETE_MRZ) : (options.fullText ?? KHMER_CARD) } };
+    },
+    reinitialize: async (...args) => {
+      calls.push(['reinitialize', ...args]);
+      if (options.reinitialize) return options.reinitialize(workerOptions);
+    },
+    terminate: async () => { calls.push(['terminate']); terminations++; }
+  };
+  const c = vm.createContext({
+    API_OK: options.apiOK ?? false,
+    setTimeout: (callback, delay) => {
+      const timer = { callback, delay, cleared: false };
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeout: timer => {
+      assert.ok(timers.includes(timer), 'clear the actual deadline handle');
+      assert.equal(timer.cleared, false, 'clear the deadline once');
+      timer.cleared = true;
+    },
+    loadTesseract: async () => {
+      calls.push(['load']);
+      if (options.load) return options.load();
+    },
+    cropBottom: async uri => { calls.push(['crop', uri]); return CROPPED_CARD; },
+    fetch: async (...args) => {
+      networkCalls.push(args);
+      assert.equal(options.apiOK, true, 'Static OCR must not send images or addresses');
+      assert.equal(args[0], '/api/ocr-cmnd', 'Only the mocked AI endpoint is allowed');
+      if (options.aiFetch) return options.aiFetch(...args);
+      return { json: async () => ({ ok: true, data: options.aiData }) };
+    },
+    window: { Tesseract: { createWorker: async (language, mode, config) => {
+      calls.push(['createWorker', language, mode]);
+      workerOptions = config;
+      assert.equal(typeof config.logger, 'function');
+      assert.equal(typeof config.errorHandler, 'function');
+      config.logger({ progress: 0.5 });
+      if (options.createWorker) await options.createWorker(config);
+      workersCreated++;
+      return worker;
+    } } }
+  });
+  vm.runInContext(LOCAL_OCR_SOURCE, c);
+  t.after(() => {
+    assert.equal(terminations, workersCreated, 'every created worker is terminated exactly once');
+    for (const timer of timers) {
+      assert.equal(timer.delay, 90000, 'local deadline is 90 seconds');
+      assert.equal(timer.cleared, true, 'deadline is cleared on every exit');
+    }
+    if (options.apiOK !== true) assert.deepEqual(networkCalls, [], 'no external sends on static Pages');
+    else {
+      assert.equal(networkCalls.length, 1, 'AI is attempted once; translation stays local');
+      const [url, init] = networkCalls[0];
+      assert.equal(url, '/api/ocr-cmnd');
+      assert.equal(init.method, 'POST');
+      assert.equal(init.headers['Content-Type'], 'application/json');
+      assert.deepEqual(JSON.parse(init.body), { image: FULL_CARD });
+    }
+  });
+  return {
+    c, calls, networkCalls, timers, progress,
+    get workerOptions() { return workerOptions; },
+    run: () => c.ocrCMND(FULL_CARD, message => progress.push(message)),
+    expire: () => {
+      assert.equal(timers.length, 1, 'one deadline per local scan');
+      assert.equal(timers[0].cleared, false);
+      timers[0].callback();
+    }
+  };
+}
+
+function assertMrzIdentity(parsed) {
+  assert.equal(parsed.ten_that, 'SOK CHANNA');
+  assert.equal(parsed.cmnd, '990123456');
+  assert.equal(parsed.ngay_sinh, '01/01/1990');
+  assert.equal(parsed.gioi_tinh, 'F');
+}
+function assertIdentity(parsed, expected) {
+  for (const [key, value] of Object.entries(expected)) assert.equal(parsed[key], value, key);
+}
+function assertAddressWarning(result) {
+  assert.match(result.warning || '', /Chưa đọc được nơi sinh\/địa chỉ/);
+}
+
+const addressCases = [
+  ['Khmer multiline and expiry boundary', KHMER_CARD, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['label-only lines followed by values', `ទីកន្លែងកំណើត៖\n${RAW_BIRTH}\nអាសយដ្ឋាន៖\n${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['zero-width Khmer headers', `ទី\u200Bកន្លែង\u200Cកំណើត៖ ${RAW_BIRTH}\nអាសយ\u200Dដ្ឋាន\uFEFF៖ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['spaced Khmer headers', `${[...'ទីកន្លែងកំណើត'].join(' ')}៖ ${RAW_BIRTH}\n${[...'អាសយដ្ឋាន'].join('\t')}៖ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['numbered shorter Khmer birth header', `៣. កន្លែងកំណើត៖ ${RAW_BIRTH}\n4) អាសយដ្ឋាន៖ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['bilingual Khmer/English', `ទីកន្លែងកំណើត / Place of birth: ${RAW_BIRTH}\nអាសយដ្ឋាន - Address: ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['bilingual English/Khmer', `Place of birth / ទីកន្លែងកំណើត: ${RAW_BIRTH}\nAddress / អាសយដ្ឋាន: ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['Vietnamese labelled continuations', 'Nơi sinh: Xã A\r\nHuyện B\r\nĐịa chỉ thường trú: Thôn C\r\nTỉnh D\r\nNgày sinh: 01/01/1990', { noi_sinh: 'Xã A Huyện B', dia_chi: 'Thôn C Tỉnh D' }],
+  ['Vietnamese residence label', 'NƠI THƯỜNG TRÚ: Hà Nội\nQuốc tịch: Việt Nam', { dia_chi: 'Hà Nội' }],
+  ['English case-insensitive labels', 'PLACE OF BIRTH: Kampong Thom\nPermanent Address: Village A\nDistrict B\nNationality: Khmer', { noi_sinh: 'Kampong Thom', dia_chi: 'Village A District B' }],
+  ['English residence', 'Place of permanent residence: Phnom Penh', { dia_chi: 'Phnom Penh' }],
+  ['unknown labelled location stays raw', 'Place of birth: សាកល្បង\nAddress: Unknown Village', { noi_sinh: 'សាកល្បង', dia_chi: 'Unknown Village' }],
+  ['unlabelled known places are not guessed', `${RAW_BIRTH}\n${RAW_ADDRESS}\nKampong Thom\nPhnom Penh`, {}],
+  ['unknown field cannot introduce an address', `Office: ${RAW_BIRTH}\n${RAW_ADDRESS}`, {}],
+  ['blank OCR lines within labelled continuation', 'Address: Village A\n\nDistrict B\nExpiry: 01/01/2030', { dia_chi: 'Village A District B' }],
+  ['empty labels and numeric-only values', 'Place of birth:\n12345\nAddress:\n67890', {}],
+  ['empty input', '', {}],
+  ['null input', null, {}]
+];
+for (const [label, text, expected] of addressCases) {
+  test(`address parser: ${label}`, () => {
+    const c = vm.createContext({});
+    vm.runInContext(functionSource('parseCardAddresses'), c);
+    assert.deepEqual({ ...c.parseCardAddresses(text) }, expected);
+  });
+}
+
+for (const boundary of [
+  'Họ và tên: Other Person', 'Full name Other Person', 'Ngày sinh: 01/01/1990',
+  'Date of birth 01/01/1990', 'Giới tính: Nữ', 'Gender F', 'Nationality Khmer',
+  'Số CCCD: 123456789', 'ID number 123456789', 'Có giá trị đến 01/01/2030',
+  'Date of issue 01/01/2020', 'Date of expiry 01/01/2030', 'Expiry 01/01/2030',
+  'Valid until 01/01/2030', 'Signature Other Person', 'ឈ្មោះ៖ Other Person',
+  'ថ្ងៃ ខែ ឆ្នាំ កំណើត៖ 01/01/1990', 'ភេទ៖ ស្រី', 'សញ្ជាតិ៖ ខ្មែរ',
+  'សុពលភាព៖ 01/01/2030', 'ថ្ងៃផុតកំណត់៖ 01/01/2030', 'ហត្ថលេខា៖ Other Person',
+  'Unknown field: Other Value', 'IDKHM9901234561<<<<<<<<<<<<<<<',
+  '9001011F3001011KHM', 'SOK<<CHANNA<<<<', 'SOK««CHANNA‹‹‹‹'
+]) {
+  test(`address parser stops at ${boundary}`, () => {
+    const c = vm.createContext({});
+    vm.runInContext(functionSource('parseCardAddresses'), c);
+    for (const [label, key] of [['Place of birth', 'noi_sinh'], ['Address', 'dia_chi']]) {
+      assert.deepEqual({ ...c.parseCardAddresses(`${label}: Village A\nDistrict B\n${boundary}\nUnrelated Location`) },
+        { [key]: 'Village A District B' });
+    }
+    assert.deepEqual({ ...c.parseCardAddresses(`Place of birth: Village A\n${boundary}\nAddress: Village B`) },
+      { noi_sinh: 'Village A', dia_chi: 'Village B' }, 'a later explicit label resumes parsing');
+  });
+}
+
+const TWO_PASS_CALLS = [
+  ['load'], ['createWorker', 'eng', 1], ['crop', FULL_CARD], ['recognize', CROPPED_CARD],
+  ['reinitialize', 'khm+eng+vie', 1], ['recognize', FULL_CARD], ['terminate']
+];
+
+test('offline OCR reads Khmer addresses even when MRZ identity is complete', async t => {
+  const s = localOcrSandbox(t);
+  const result = await settles(s.run());
+  assert.equal(result.ok, true);
+  assert.equal(result.source, 'offline');
+  assertMrzIdentity(result.parsed);
+  assert.equal(result.parsed.noi_sinh, VI_BIRTH);
+  assert.equal(result.parsed.dia_chi, VI_ADDRESS);
+  assert.equal(result.parsed.noi_sinh_goc, RAW_BIRTH);
+  assert.equal(result.parsed.dia_chi_goc, RAW_ADDRESS);
+  assert.equal(result.warning, '');
+  assert.deepEqual(s.calls, TWO_PASS_CALLS);
+  assert.ok(s.progress.some(message => message.includes('50%')), 'worker logger reports progress');
+});
+
+for (const [raw, expected] of [
+  [RAW_ADDRESS, VI_ADDRESS],
+  ['ភូមិចកឃុំកំពង់ចិនជើងស្រុកស្ទោងខេត្តកំពង់ធំ', VI_ADDRESS],
+  ['ឃុំកំពង់ចិនត្បូង ស្រុកបារាយណ៍ ខេត្តកំពង់ចាម', 'Xã Kampong Chen Tboung Huyện Baray Tỉnh Kampong Cham'],
+  ['ភូមិសាកល្បង ខេត្តកំពង់ធំ', 'Thôn សាកល្បង Tỉnh Kampong Thom'],
+  ['សាកល្បង', 'សាកល្បង'], ['Hà Nội', 'Hà Nội'], ['', ''], ['  ', '  ']
+]) {
+  test(`static translateAddress stays offline: ${raw || '(empty)'}`, async t => {
+    const s = localOcrSandbox(t);
+    assert.equal(await s.c.translateAddress(raw), expected);
+    assert.deepEqual(s.calls, [], 'translation needs neither OCR nor an API');
+  });
+}
+
+test('offline full-card identity cannot overwrite cropped MRZ identity', async t => {
+  const s = localOcrSandbox(t, { fullText: 'Full name: Other Person\nNo: 123456789\nDate of birth: 02/02/1980\nGiới tính: Nam\n' + KHMER_CARD });
+  const result = await settles(s.run());
+  assertMrzIdentity(result.parsed);
+  assert.equal(result.parsed.tuoi, String(new Date().getFullYear() - 1990));
+  assert.equal(result.parsed.dia_chi, VI_ADDRESS);
+  assert.deepEqual(s.calls, TWO_PASS_CALLS);
+});
+
+for (const [label, fullText, expected, warning] of [
+  ['unknown Khmer is retained, not guessed', 'Place of birth: សាកល្បង\nAddress: ភូមិសាកល្បង', { noi_sinh: 'សាកល្បង', dia_chi: 'Thôn សាកល្បង' }, /Địa chỉ chưa dịch đầy đủ/],
+  ['unlabelled known locations stay absent', RAW_BIRTH + '\n' + RAW_ADDRESS, {}, /Chưa đọc được nơi sinh\/địa chỉ/],
+  ['identity-only card warns about missing addresses', COMPLETE_MRZ, {}, /Chưa đọc được nơi sinh\/địa chỉ/],
+  ['Vietnamese addresses are not changed', 'Nơi sinh: Hà Nội\nĐịa chỉ: Đà Nẵng', { noi_sinh: 'Hà Nội', dia_chi: 'Đà Nẵng' }, /^$/],
+  ['English addresses are not changed', 'Place of birth: Kampong Thom\nAddress: Phnom Penh', { noi_sinh: 'Kampong Thom', dia_chi: 'Phnom Penh' }, /^$/]
+]) {
+  test(`offline OCR ${label}`, async t => {
+    const s = localOcrSandbox(t, { fullText });
+    const result = await settles(s.run());
+    assert.equal(result.ok, true);
+    assertMrzIdentity(result.parsed);
+    assert.equal(result.parsed.noi_sinh, expected.noi_sinh);
+    assert.equal(result.parsed.dia_chi, expected.dia_chi);
+    assert.match(result.warning || '', warning);
+    assert.deepEqual(s.calls, TWO_PASS_CALLS);
+  });
+}
+
+for (const supplied of [{}, { noi_sinh: 'AI birthplace' }, { dia_chi: 'AI residence' }]) {
+  test(`partial AI supplements missing addresses: ${JSON.stringify(supplied)}`, async t => {
+    const aiData = Object.freeze({ ...AI_IDENTITY, ...supplied });
+    const s = localOcrSandbox(t, { apiOK: true, aiData, fullText: COMPLETE_MRZ + '\n' + KHMER_CARD });
+    const result = await settles(s.run());
+    assert.equal(result.ok, true);
+    assert.equal(result.source, 'ai');
+    assertIdentity(result.parsed, AI_IDENTITY);
+    assert.equal(result.parsed.noi_sinh, supplied.noi_sinh || VI_BIRTH);
+    assert.equal(result.parsed.dia_chi, supplied.dia_chi || VI_ADDRESS);
+    assert.deepEqual(s.calls, TWO_PASS_CALLS.filter(([call]) => call !== 'crop').filter(call => call[1] !== CROPPED_CARD));
+    assert.equal(result.warning, '');
+  });
+}
+
+test('partial AI merges only nonempty known fields without replacing existing identity', async t => {
+  const aiData = Object.freeze({ ten_that: '  AI Worker  ', cmnd: ' ', ngay_sinh: 123,
+    tuoi: null, gioi_tinh: {}, noi_sinh: [], dia_chi: false, ignored: 'do not copy' });
+  const s = localOcrSandbox(t, { apiOK: true, aiData });
+  const result = await settles(s.run());
+  assert.equal(result.ok, true);
+  assert.equal(result.source, 'ai');
+  assert.equal(result.parsed.ten_that, 'AI Worker');
+  assert.equal(result.parsed.cmnd, '990123456');
+  assert.equal(result.parsed.ngay_sinh, '01/01/1990');
+  assert.equal(result.parsed.gioi_tinh, 'F');
+  assert.equal(result.parsed.noi_sinh, VI_BIRTH);
+  assert.equal(result.parsed.dia_chi, VI_ADDRESS);
+  assert.equal(Object.hasOwn(result.parsed, 'ignored'), false);
+  assert.deepEqual(s.calls, TWO_PASS_CALLS);
+});
+
+for (const [label, addresses, raw] of [
+  ['translated', { noi_sinh: VI_BIRTH, dia_chi: VI_ADDRESS }, false],
+  ['Khmer', { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }, true],
+  ['raw *_goc only', { noi_sinh_goc: RAW_BIRTH, dia_chi_goc: RAW_ADDRESS }, true],
+  ['translated plus raw *_goc', { noi_sinh: VI_BIRTH, dia_chi: VI_ADDRESS, noi_sinh_goc: RAW_BIRTH, dia_chi_goc: RAW_ADDRESS }, true]
+]) {
+  test(`complete AI ${label} addresses skip local OCR`, async t => {
+    const aiData = Object.freeze({ ...AI_IDENTITY, ...addresses });
+    const s = localOcrSandbox(t, { apiOK: true, aiData });
+    const result = await settles(s.run());
+    assert.equal(result.ok, true);
+    assert.equal(result.source, 'ai');
+    assertIdentity(result.parsed, AI_IDENTITY);
+    assert.equal(result.parsed.noi_sinh, VI_BIRTH);
+    assert.equal(result.parsed.dia_chi, VI_ADDRESS);
+    if (raw) {
+      assert.equal(result.parsed.noi_sinh_goc, RAW_BIRTH);
+      assert.equal(result.parsed.dia_chi_goc, RAW_ADDRESS);
+    }
+    assert.deepEqual(s.calls, []);
+    assert.deepEqual(s.timers, []);
+  });
+}
+
+test('partial AI raw *_goc address is translated before local supplementation', async t => {
+  const s = localOcrSandbox(t, { apiOK: true, aiData: { ten_that: 'AI Worker', noi_sinh_goc: RAW_BIRTH } });
+  const result = await settles(s.run());
+  assert.equal(result.ok, true);
+  assert.equal(result.parsed.ten_that, 'AI Worker');
+  assert.equal(result.parsed.noi_sinh, VI_BIRTH);
+  assert.equal(result.parsed.noi_sinh_goc, RAW_BIRTH);
+  assert.equal(result.parsed.dia_chi, VI_ADDRESS);
+  assert.deepEqual(s.calls, TWO_PASS_CALLS);
+});
+
+for (const key of ['noi_sinh', 'dia_chi']) {
+  test(`partial AI preserves original ${key}_goc through repeated local merges`, async t => {
+    const raw = 'ភូមិសាកល្បង ខេត្តកំពង់ធំ';
+    const s = localOcrSandbox(t, { apiOK: true, aiData: { ten_that: 'AI Worker', [key + '_goc']: raw } });
+    const result = await settles(s.run());
+    assert.equal(result.ok, true);
+    assert.equal(result.parsed.ten_that, 'AI Worker');
+    assert.equal(result.parsed[key], 'Thôn សាកល្បង Tỉnh Kampong Thom');
+    assert.equal(result.parsed[key + '_goc'], raw, 'raw Khmer must not be replaced by a partially translated value');
+    assert.match(result.warning || '', /Địa chỉ chưa dịch đầy đủ/);
+    assert.deepEqual(s.calls, TWO_PASS_CALLS);
+  });
+}
+
+test('complete AI with untranslated Khmer addresses still warns for review', async t => {
+  const s = localOcrSandbox(t, { apiOK: true, aiData: { ...AI_IDENTITY, noi_sinh: 'សាកល្បង', dia_chi: 'សាកល្បង' } });
+  const result = await settles(s.run());
+  assert.equal(result.ok, true);
+  assert.equal(result.parsed.noi_sinh, 'សាកល្បង');
+  assert.match(result.warning || '', /Địa chỉ chưa dịch đầy đủ/);
+});
+
+for (const [label, aiFetch] of [
+  ['network rejection', async () => { throw new Error('synthetic AI unavailable'); }],
+  ['JSON rejection', async () => ({ json: async () => { throw new Error('synthetic bad JSON'); } })],
+  ['unsuccessful response', async () => ({ json: async () => ({ ok: false }) })]
+]) {
+  test(`AI ${label} falls back to local identity and addresses`, async t => {
+    const s = localOcrSandbox(t, { apiOK: true, aiFetch });
+    const result = await settles(s.run());
+    assert.equal(result.ok, true);
+    assert.equal(result.source, 'offline');
+    assertMrzIdentity(result.parsed);
+    assert.equal(result.parsed.dia_chi, VI_ADDRESS);
+    assert.deepEqual(s.calls, TWO_PASS_CALLS);
+  });
+}
+
+for (const stage of ['load', 'createWorker', 'reinitialize', 'recognize']) {
+  for (const ai of [false, true]) {
+    test(`${stage} rejection retains ${ai ? 'AI' : 'available MRZ'} and cleans up`, async t => {
+      const fail = async () => { throw new Error(`synthetic ${stage} failure`); };
+      const options = { apiOK: ai, aiData: AI_IDENTITY };
+      options[stage] = stage === 'recognize' ? async image => {
+        if (image === FULL_CARD) return fail();
+        return { data: { text: COMPLETE_MRZ } };
+      } : fail;
+      const s = localOcrSandbox(t, options);
+      const result = await settles(s.run());
+      const hasData = ai || ['reinitialize', 'recognize'].includes(stage);
+      assert.equal(result.ok, hasData);
+      if (hasData) {
+        if (ai) assertIdentity(result.parsed, AI_IDENTITY);
+        else assertMrzIdentity(result.parsed);
+        assertAddressWarning(result);
+      } else assert.match(result.err, new RegExp(`synthetic ${stage} failure`));
+      assert.equal(s.calls.filter(([call]) => call === 'terminate').length, ['load', 'createWorker'].includes(stage) ? 0 : 1);
+      if (stage === 'reinitialize') assert.equal(s.calls.some(call => call[0] === 'recognize' && call[1] === FULL_CARD), false);
+    });
+  }
+}
+
+test('cropped recognition rejection returns failure and terminates worker', async t => {
+  const s = localOcrSandbox(t, { recognize: async () => { throw new Error('synthetic crop failure'); } });
+  const result = await settles(s.run());
+  assert.equal(result.ok, false);
+  assert.match(result.err, /synthetic crop failure/);
+  assert.deepEqual(s.calls, TWO_PASS_CALLS.slice(0, 4).concat([['terminate']]));
+});
+
+for (const ai of [false, true]) {
+  test(`worker errorHandler interrupts never-resolving reinitialize and retains ${ai ? 'AI' : 'MRZ'}`, async t => {
+    const s = localOcrSandbox(t, { apiOK: ai, aiData: AI_IDENTITY, reinitialize: () => new Promise(() => {}) });
+    const pending = s.run();
+    await flushOcr();
+    assert.ok(s.calls.some(([call]) => call === 'reinitialize'));
+    s.workerOptions.errorHandler(new Error('synthetic language download failure'));
+    const result = await settles(pending);
+    assert.equal(result.ok, true);
+    if (ai) assertIdentity(result.parsed, AI_IDENTITY);
+    else assertMrzIdentity(result.parsed);
+    assertAddressWarning(result);
+    assert.equal(s.calls.at(-1)[0], 'terminate');
+    assert.equal(s.calls.some(call => call[0] === 'recognize' && call[1] === FULL_CARD), false);
+    const before = [...s.progress];
+    s.workerOptions.logger({ progress: 1 });
+    assert.deepEqual(s.progress, before, 'late worker messages cannot update progress');
+  });
+}
+
+for (const stage of ['reinitialize', 'recognize']) {
+  for (const ai of [false, true]) {
+    test(`deadline during ${stage} retains ${ai ? 'AI' : 'MRZ'} and ignores late results`, async t => {
+      const late = deferred();
+      const options = { apiOK: ai, aiData: AI_IDENTITY };
+      options[stage] = stage === 'recognize' ? image => image === FULL_CARD ? late.promise :
+        Promise.resolve({ data: { text: COMPLETE_MRZ } }) : () => late.promise;
+      const s = localOcrSandbox(t, options);
+      const pending = s.run();
+      await flushOcr();
+      assert.equal(s.calls.at(-1)[0], stage, 'deadline fires after identity was merged');
+      s.expire();
+      const result = await settles(pending);
+      assert.equal(result.ok, true);
+      if (ai) assertIdentity(result.parsed, AI_IDENTITY);
+      else assertMrzIdentity(result.parsed);
+      assertAddressWarning(result);
+      const before = JSON.stringify({ result, calls: s.calls, progress: s.progress });
+      late.resolve({ data: { text: KHMER_CARD } });
+      s.workerOptions.logger({ progress: 1 });
+      await flushOcr();
+      assert.equal(JSON.stringify({ result, calls: s.calls, progress: s.progress }), before,
+        'timed-out work must neither resume scanning nor mutate returned data');
+    });
+  }
+}
+
+for (const trigger of ['deadline', 'errorHandler']) {
+  test(`initial worker resolving after ${trigger} is terminated without scanning`, async t => {
+    const late = deferred();
+    const s = localOcrSandbox(t, { createWorker: () => late.promise });
+    const pending = s.run();
+    await flushOcr();
+    assert.equal(s.calls.at(-1)[0], 'createWorker');
+    if (trigger === 'deadline') s.expire();
+    else s.workerOptions.errorHandler('synthetic init worker error');
+    const result = await settles(pending);
+    assert.equal(result.ok, false);
+    assert.match(result.err, trigger === 'deadline' ? /Quá thời gian đọc thẻ/ : /synthetic init worker error/);
+    const before = [...s.progress];
+    late.resolve();
+    await flushOcr();
+    s.workerOptions.logger({ progress: 1 });
+    assert.deepEqual(s.calls, [['load'], ['createWorker', 'eng', 1], ['terminate']]);
+    assert.deepEqual(s.progress, before);
+  });
+}
+
+test('deadline before Tesseract loads does not create a late worker', async t => {
+  const late = deferred();
+  const s = localOcrSandbox(t, { load: () => late.promise });
+  const pending = s.run();
+  await flushOcr();
+  s.expire();
+  const result = await settles(pending);
+  assert.equal(result.ok, false);
+  assert.match(result.err, /Quá thời gian đọc thẻ/);
+  late.resolve();
+  await flushOcr();
+  assert.deepEqual(s.calls, [['load']]);
+});
+
 const OCR_FIELDS = {
   ten_that: 'Synthetic Worker', cmnd: '123456789', ngay_sinh: '01/01/1990',
   tuoi: '36', gioi_tinh: 'F', noi_sinh: 'Synthetic birthplace', dia_chi: 'Synthetic address'
@@ -513,24 +982,16 @@ test('OCR filler-only response is not presented as a recognized name', async t =
 });
 
 for (const secondPass of [false, true]) {
-  test(`offline OCR cleans cropped and full-card names, fallback=${secondPass}`, async () => {
-    const inputs = [];
-    const c = vm.createContext({
-      API_OK: false, setTimeout: () => {}, loadTesseract: async () => {},
-      cropBottom: async () => 'cropped',
-      fetch: () => assert.fail('No external OCR calls in test'),
-      window: { Tesseract: { recognize: async input => {
-        inputs.push(input);
-        const name = input === 'cropped' && secondPass ? 'SOK<<CHANNAKKKKLLLLLLLL' : 'SOK<<CHANNA<KKKKLLLLLLLL';
-        return { data: { text: MRZ_HEADER + '\n' + name } };
-      } } }
-    });
-    vm.runInContext(['cleanOcrName', 'parseMRZ', 'ocrCMND'].map(functionSource).join('\n'), c);
-    const result = await c.ocrCMND('full-card');
+  test(`offline OCR cleans cropped and full-card names, fallback=${secondPass}`, async t => {
+    const s = localOcrSandbox(t, { recognize: async input => {
+      const name = input === CROPPED_CARD && secondPass ? 'SOK<<CHANNAKKKKLLLLLLLL' : 'SOK<<CHANNA<KKKKLLLLLLLL';
+      return { data: { text: MRZ_HEADER + '\n' + name } };
+    } });
+    const result = await settles(s.run());
     assert.equal(result.ok, true);
     assert.equal(result.source, 'offline');
     assert.equal(result.parsed.ten_that, 'SOK CHANNA');
-    assert.deepEqual(inputs, secondPass ? ['cropped', 'full-card'] : ['cropped']);
+    assert.deepEqual(s.calls, TWO_PASS_CALLS, 'both passes run even when cropped identity is complete');
   });
 }
 

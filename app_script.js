@@ -1642,17 +1642,17 @@ const KHMER_DICT = {
 
 function translateKhmerOffline(raw) {
   if (!raw) return "";
-  let text = raw.trim();
+  let text = raw.normalize("NFC").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
   
-  // Replace administrative keywords
-  text = text.replace(/ភូមិ\s*/g, "Thôn ")
-             .replace(/ឃុំ\s*/g, "Xã ")
-             .replace(/សង្កាត់\s*/g, "Phường ")
-             .replace(/ស្រុក\s*/g, "Huyện ")
-             .replace(/ខណ្ឌ\s*/g, "Quận ")
-             .replace(/ក្រុង\s*/g, "Thị xã ")
-             .replace(/ខេត្ត\s*/g, "Tỉnh ")
-             .replace(/រាជធានី\s*/g, "Thành phố ");
+  // Chữ Khmer có thể không có khoảng trắng giữa các cấp địa chỉ.
+  text = text.replace(/ភូមិ\s*/g, " Thôn ")
+             .replace(/ឃុំ\s*/g, " Xã ")
+             .replace(/សង្កាត់\s*/g, " Phường ")
+             .replace(/ស្រុក\s*/g, " Huyện ")
+             .replace(/ខណ្ឌ\s*/g, " Quận ")
+             .replace(/ក្រុង\s*/g, " Thị xã ")
+             .replace(/ខេត្ត\s*/g, " Tỉnh ")
+             .replace(/រាជធានី\s*/g, " Thành phố ");
              
   for (const c of KHMER_DICT.communes) {
     text = text.replace(new RegExp(c.kh, "g"), c.en);
@@ -1674,6 +1674,7 @@ function translateKhmerOffline(raw) {
 async function translateAddress(text, progCb) {
   if (!text || !text.trim()) return text;
   if (progCb) progCb("Đang dịch địa chỉ sang tiếng Việt…");
+  if (API_OK === false) return translateKhmerOffline(text);
   try {
     const res = await fetch("/api/translate-address", {
       method: "POST",
@@ -1820,8 +1821,50 @@ function parseMRZ(text) {
   return out;
 }
 
+function parseCardAddresses(text) {
+  const khLabel = value => [...value].join("[ \\t]*");
+  const birth = "(?:" + khLabel("ទីកន្លែងកំណើត") + "|" + khLabel("កន្លែងកំណើត") + "|place\\s+of\\s+birth|nơi\\s+sinh)";
+  const address = "(?:" + khLabel("អាសយដ្ឋាន") + "|(?:place\\s+of\\s+)?(?:permanent\\s+)?residence|(?:permanent\\s+)?address|nơi\\s+thường\\s+trú|địa\\s+chỉ(?:\\s+thường\\s+trú)?)";
+  const label = new RegExp("^(?:[0-9០-៩]+[.)៖:]?\\s*)?(" + birth + "|" + address + ")(?:\\s*[/\\-]\\s*(?:" + birth + "|" + address + "))?\\s*[:៖.\\-]?\\s*", "i");
+  const isBirth = new RegExp("^" + birth + "$", "i");
+  const stop = /^(?:[0-9០-៩]+[.)៖:]?\s*)?(?:họ\s*(?:và)?\s*tên|full\s*name|name\b|ngày\s*sinh|date\s*of\s*birth|giới\s*tính|sex\b|gender\b|quốc\s*tịch|nationality\b|có\s*giá\s*trị|date\s*of\s*(?:issue|expiry)|issued?\b|expiry\b|valid\b|signature\b|số\s*(?:cmnd|cccd)|id\s*(?:no|number)|អត្តសញ្ញាណប័ណ្ណ|នាមត្រកូល|នាមខ្លួន|គោត្តនាម|ឈ្មោះ|ថ្ងៃ\s*ខែ\s*ឆ្នាំ\s*កំណើត|ភេទ|សញ្ជាតិ|សុពលភាព|ថ្ងៃផុតកំណត់|ហត្ថលេខា)/i;
+  const parts = { noi_sinh: [], dia_chi: [] };
+  let active = null;
+  for (const raw of String(text || "").normalize("NFC").replace(/[\u200B-\u200D\uFEFF]/g, "").split(/\r?\n/)) {
+    let line = raw.trim();
+    if (!line) continue;
+    const match = line.match(label);
+    if (match) {
+      active = isBirth.test(match[1]) ? "noi_sinh" : "dia_chi";
+      line = line.slice(match[0].length);
+    } else if (stop.test(line) || /[<«‹＜]{2}|^(?:ID|I<)?KHM\d|\d{6}\d?[MFX]\d{6}/i.test(line) || /^[^:៖]{1,35}[:៖]/.test(line)) {
+      active = null;
+    }
+    if (active && line && /\p{L}/u.test(line) && !/[<«‹＜]/.test(line)) parts[active].push(line);
+  }
+  const out = {};
+  for (const key of Object.keys(parts)) {
+    if (parts[key].length) out[key] = parts[key].join(" ").replace(/\s+/g, " ").trim();
+  }
+  return out;
+}
+
 async function ocrCMND(uri, progCb) {
-  // Method 1: Try Server-Side Smart Gemini Vision AI OCR with automatic Khmer-to-Vietnamese translation
+  const parsed = {};
+  let source = "offline";
+  const mergeMissing = data => {
+    for (const key of ["ten_that", "cmnd", "ngay_sinh", "tuoi", "gioi_tinh", "noi_sinh", "dia_chi", "noi_sinh_goc", "dia_chi_goc"]) {
+      const value = key === "ten_that" ? cleanOcrName(data[key]) : data[key];
+      if (!parsed[key] && typeof value === "string" && value.trim()) parsed[key] = value.trim();
+    }
+    for (const key of ["noi_sinh", "dia_chi"]) {
+      const value = parsed[key] || parsed[key + "_goc"];
+      if (value) {
+        if (!parsed[key + "_goc"] && KHMER_TEST_RE.test(value)) parsed[key + "_goc"] = value;
+        parsed[key] = translateKhmerOffline(value);
+      }
+    }
+  };
   try {
     if (API_OK !== false) {
       if (progCb) progCb("Đang kết nối AI nhận diện & dịch địa chỉ sang tiếng Việt…");
@@ -1831,53 +1874,71 @@ async function ocrCMND(uri, progCb) {
         body: JSON.stringify({ image: uri })
       });
       const aiJson = await aiRes.json();
-      if (aiJson.ok && aiJson.data && (aiJson.data.ten_that || aiJson.data.cmnd || aiJson.data.dia_chi)) {
-        return { ok: true, source: "ai", parsed: aiJson.data };
+      if (aiJson.ok && aiJson.data) {
+        mergeMissing(aiJson.data);
+        source = "ai";
       }
     }
-  } catch(e) {
-    // Fallback to offline / client-side Tesseract OCR
+  } catch(e) {}
+  if (parsed.ten_that && parsed.cmnd && parsed.ngay_sinh && parsed.noi_sinh && parsed.dia_chi) {
+    const warning = KHMER_TEST_RE.test(parsed.noi_sinh + parsed.dia_chi) ?
+      "Địa chỉ chưa dịch đầy đủ. Hãy nhập bằng chữ Latin hoặc bổ sung một ô địa chỉ khác." : "";
+    return { ok: true, source, parsed, warning };
   }
 
-  // Method 2: Client-side Tesseract OCR + MRZ parsing + Offline Khmer place translation fallback
-  try {
-    if (progCb) progCb("Đang tải công cụ quét cục bộ…");
-    await Promise.race([
-      loadTesseract(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("Không tải được công cụ quét trên thiết bị này")), 25000))
-    ]);
-    
-    // First pass: Crop bottom 46% (MRZ region)
-    const cropped = await cropBottom(uri);
-    if (progCb) progCb("Đang quét mã MRZ CMND…");
-    const res = await window.Tesseract.recognize(cropped, "eng", {
+  let worker, timer, finished = false, phase = "Đang tải công cụ quét cục bộ";
+  let failure;
+  const failed = new Promise((_, reject) => { failure = reject; });
+  const scan = async () => {
+    if (progCb) progCb(phase + "…");
+    await loadTesseract();
+    if (finished) return;
+    const ready = await window.Tesseract.createWorker("eng", 1, {
       logger: m => {
-        if (progCb && m.status === "recognizing text") {
-          progCb("Đang quét mã MRZ… " + Math.round(m.progress * 100) + "%");
-        }
-      }
+        if (!finished && progCb) progCb(phase + "… " + Math.round((m.progress || 0) * 100) + "%");
+      },
+      errorHandler: error => failure(new Error(String(error)))
     });
-    
-    let parsed = parseMRZ(res.data.text);
-    
-    // Second pass fallback: If MRZ didn't find key fields, try full image
+    if (finished) { await ready.terminate(); return; }
+    worker = ready;
     if (!parsed.ten_that || !parsed.cmnd || !parsed.ngay_sinh) {
-      if (progCb) progCb("Đang quét bổ sung toàn bộ thẻ CMND…");
-      const fullRes = await window.Tesseract.recognize(uri, "eng", {
-        logger: m => {
-          if (progCb && m.status === "recognizing text") {
-            progCb("Đang quét thẻ… " + Math.round(m.progress * 100) + "%");
-          }
-        }
-      });
-      const fullParsed = parseMRZ(fullRes.data.text);
-      parsed = Object.assign(fullParsed, parsed);
+      phase = "Đang quét mã MRZ CMND";
+      if (progCb) progCb(phase + "…");
+      const cropped = await cropBottom(uri);
+      if (finished) return;
+      const result = await worker.recognize(cropped);
+      if (finished) return;
+      mergeMissing(parseMRZ(result.data.text));
     }
-    
-    return { ok: true, source: "offline", text: res.data.text, parsed: parsed };
+    // MRZ không chứa địa chỉ; luôn đọc phần chữ trên thẻ bằng cả tiếng Khmer.
+    phase = "Đang tải bộ đọc Khmer/Việt để đọc địa chỉ";
+    if (progCb) progCb(phase + "…");
+    await worker.reinitialize("khm+eng+vie", 1);
+    if (finished) return;
+    phase = "Đang đọc nơi sinh và địa chỉ trên toàn bộ thẻ";
+    if (progCb) progCb(phase + "…");
+    const result = await worker.recognize(uri);
+    if (!finished) mergeMissing({ ...parseMRZ(result.data.text), ...parseCardAddresses(result.data.text) });
+  };
+  let scanError = "";
+  try {
+    await Promise.race([scan(), failed, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Quá thời gian đọc thẻ; hãy thử lại với ảnh rõ hơn.")), 90000);
+    })]);
   } catch(e) {
-    return { ok: false, err: e.message || String(e) };
+    scanError = e.message || String(e);
+  } finally {
+    finished = true;
+    clearTimeout(timer);
+    if (worker) await worker.terminate();
   }
+  const hasData = parsed.ten_that || parsed.cmnd || parsed.ngay_sinh || parsed.noi_sinh || parsed.dia_chi;
+  if (!hasData && scanError) return { ok: false, err: scanError };
+  const warning = !parsed.noi_sinh && !parsed.dia_chi ?
+    "Chưa đọc được nơi sinh/địa chỉ. Hãy chụp rõ phần địa chỉ trên thẻ (mặt sau nếu có), hoặc nhập bổ sung một ô địa chỉ." :
+    (KHMER_TEST_RE.test((parsed.noi_sinh || "") + (parsed.dia_chi || "")) ?
+      "Địa chỉ chưa dịch đầy đủ. Hãy nhập bằng chữ Latin hoặc bổ sung một ô địa chỉ khác." : "");
+  return { ok: true, source, parsed, warning };
 }
 
 async function doOcrCMND(id, opts) {
@@ -1980,7 +2041,7 @@ async function doOcrCMND(id, opts) {
       '<div class="ocr-status-ok">' +
       '<div class="ocr-ok-title"><b>' + (p.ten_that ? 'Kết quả đọc thông tin CMND:' : 'Đã đọc một phần thông tin CMND:') + '</b></div>' +
       '<div class="ocr-ok-details">' + details.join(' &bull; ') + '</div>' +
-      '<div class="ocr-ok-note">' + note + '</div>' +
+      '<div class="ocr-ok-note">' + note + (res.warning ? ' ' + esc(res.warning) : '') + '</div>' +
       '</div>';
   }
 
