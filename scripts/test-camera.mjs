@@ -343,7 +343,8 @@ const LOCAL_OCR_SOURCE = [
 ].join('\n');
 const KHMER_PLACES_STUB = [
   'សន្ទុក\tSantuk', 'សំរោង\tSamraong', 'ច្រក\tChrak',
-  'កំពង់ធំ\tKampong Thom', 'ឈូករដ្ឋ\tChhuk Roadth'
+  'កំពង់ធំ\tKampong Thom', 'ឈូករដ្ឋ\tChhuk Roadth',
+  'ញ៉ាង\tNhang', 'អូរធំ\tOu Thom'
 ].join('\n');
 const FULL_CARD = 'data:image/jpeg;base64,c3ludGhldGljLWZ1bGwtY2FyZA==';
 const CROPPED_CARD = 'data:image/jpeg;base64,c3ludGhldGljLWNyb3A=';
@@ -597,7 +598,10 @@ for (const [raw, expected] of [
 for (const [raw, expected] of [
   ['ភូមិច្រក ឃុំសំរោង ស្រុកសន្ទុក ខេត្តកំពង់ធំ', 'Thôn Chrak Xã Samraong Huyện Santuk Tỉnh Kampong Thom'],
   ['ភូមិច្រកសំរោង', 'Thôn Chrak Samraong'],
-  ['ភូមិឈរដ្ឋ', 'Thôn Chhuk Roadth']
+  ['ភូមិឈរដ្ឋ', 'Thôn Chhuk Roadth'],
+  ['Xã ញ៉ាង Huyện Santuk Kampong Thom', 'Xã Nhang Huyện Santuk Kampong Thom'],
+  ['ឃុំញ៉ាង ស្រុកសន្ទុក ខេត្តកំពង់ធំ', 'Xã Nhang Huyện Santuk Tỉnh Kampong Thom'],
+  ['ភូមិអូរធំ ឃុំសំរោង', 'Thôn Ou Thom Xã Samraong']
 ]) {
   test(`gazetteer translates Khmer village/commune names: ${raw}`, async t => {
     const s = localOcrSandbox(t);
@@ -621,8 +625,8 @@ for (const [label, fullText, expected, warning] of [
   ['noisy Khmer labels preserve blank multiline continuations', NOISY_MULTILINE_CARD,
     { noi_sinh: VI_BIRTH, dia_chi: VI_ADDRESS, noi_sinh_goc: RAW_BIRTH, dia_chi_goc: RAW_ADDRESS }, /^$/],
   ['noisy labels preserve inline and continuation house numbers', NUMBERED_ADDRESS_CARD,
-    { noi_sinh: VI_BIRTH, dia_chi: `12 ${VI_ADDRESS} ៣៤ ${VI_BIRTH}`,
-      noi_sinh_goc: RAW_BIRTH, dia_chi_goc: `12 ${RAW_ADDRESS} ៣៤ ${RAW_BIRTH}` }, /Địa chỉ chưa dịch đầy đủ/],
+    { noi_sinh: VI_BIRTH, dia_chi: `12 ${VI_ADDRESS} 34 ${VI_BIRTH}`,
+      noi_sinh_goc: RAW_BIRTH, dia_chi_goc: `12 ${RAW_ADDRESS} ៣៤ ${RAW_BIRTH}` }, /^$/],
   ['unknown Khmer is retained, not guessed', 'Place of birth: សាកល្បង\nAddress: ភូមិសាកល្បង',
     { noi_sinh: 'សាកល្បង', dia_chi: 'Thôn សាកល្បង', noi_sinh_goc: 'សាកល្បង', dia_chi_goc: 'ភូមិសាកល្បង' }, /Địa chỉ chưa dịch đầy đủ/],
   ['unknown Khmer under noisy labels retains original values', '4” ទីកន្លែងកំណើន: សាកល្បង\n+ អាសយដ្ឋានៈ ភូមិសាកល្បង\n+ សុពលភាពៈ 01/01/2030\nUnrelated Location',

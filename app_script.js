@@ -1693,6 +1693,8 @@ function khmerLookupWord(word, map) {
   const limit = chars.length >= 5 ? 2 : 1;
   let best = null;
   for (const [kh, en] of map) {
+    // Từ ngắn sai ngay ký tự đầu thường là tên khác hẳn, không phải lỗi đọc.
+    if (chars.length < 5 && kh[0] !== word[0]) continue;
     const distance = khmerEditDistance(kh, word, limit);
     if (distance > limit) continue;
     const score = distance * 100 - khmerCommonSuffix(kh, word) - (kh[0] === word[0] ? 1 : 0);
@@ -1704,7 +1706,10 @@ function khmerLookupWord(word, map) {
 function translateKhmerOffline(raw) {
   if (!raw) return "";
   let text = raw.normalize("NFC").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
-  
+
+  // Số Khmer (nhà, tổ...) đổi thẳng sang số Latin, không cần tra tên.
+  text = text.replace(/[០-៩]/g, ch => String("០១២៣៤៥៦៧៨៩".indexOf(ch)));
+
   // Chữ Khmer có thể không có khoảng trắng giữa các cấp địa chỉ.
   text = text.replace(/ភូមិ\s*/g, " Thôn ")
              .replace(/ឃុំ\s*/g, " Xã ")
@@ -3729,6 +3734,15 @@ function openEdit(id, prefillRoom, backRoom) {
   const cur = clone(p);
   cur.so_dt = getPhone(cur);
   cur.tuoi = ageFromDOB(cur.ngay_sinh) || cur.tuoi;
+  // Hồ sơ lưu từ bản cũ có thể còn địa chỉ Khmer: dịch lại ngay khi mở
+  // để hiển thị và lưu lại bằng tiếng Việt.
+  const khmerTranslated = [];
+  for (const key of ["noi_sinh", "dia_chi", "chi_tiet_noi_o"]) {
+    if (cur[key] && KHMER_TEST_RE.test(cur[key])) {
+      const vi = translateKhmerOffline(cur[key]);
+      if (vi && vi !== cur[key]) { cur[key] = vi; khmerTranslated.push(key); }
+    }
+  }
   let body = '<div id="editCompletion" class="edit-completion" role="status" aria-live="polite" tabindex="-1" hidden></div>' +
     (REQUIRE_COMPLETE_INFO ? '<p class="edit-guide">' + esc(t("Các ô có * là bắt buộc. Nhóm máu và kỷ luật không bắt buộc.")) + '</p>' : '') +
     '<p class="edit-guide">' + esc(t("Ví dụ: Phòng D2; Phần cây 19-KV1. Tuổi tự tính theo ngày sinh.")) + '</p>';
@@ -3800,6 +3814,12 @@ function openEdit(id, prefillRoom, backRoom) {
   }
   for (const key of ["noi_sinh", "dia_chi", "chi_tiet_noi_o"]) {
     sheet.querySelector('[data-k="' + key + '"]').setAttribute("aria-describedby", "addressRequirement");
+  }
+  for (const key of khmerTranslated) {
+    const inp = sheet.querySelector(`[data-k="${key}"]`);
+    if (!inp) continue;
+    inp.classList.add("field-pulse");
+    setTimeout(() => inp.classList.remove("field-pulse"), 2500);
   }
   updateEditCompletion(sheet);
 
