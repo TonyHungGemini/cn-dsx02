@@ -297,7 +297,10 @@ const MRZ_HEADER = 'IDKHM9901234561<<<<<<<<<<<<<<<\n9001011F3001011KHM<<<<<<<<<<
 for (const [line, expected] of [
   ['SOK<<CHANNA<KKKKKLKKLLLLLLLLL', 'SOK CHANNA'],
   ['SOK<<CHANNA KKKKKLKKLLLLLLLLL', 'SOK CHANNA'],
-  ['SOK<<CHANNA<<K<K<L<K<L<L<L', 'SOK CHANNA'],
+  ['SOK<<CHANNA<<K<K<L<K<L<L<L<L', 'SOK CHANNA'],
+  ['F MY<<CHANTHOL<<<<<<', 'MY CHANTHOL'],
+  ['F SOK<<CHANNA<<<<<<', 'SOK CHANNA'],
+  ['M DARA<<<<<<<<', 'M DARA'],
   ['SOK<<CHANNA<<<<<<<<<<<<<<', 'SOK CHANNA'],
   ['SOK<<CHANNA<LEAKHENA<<<<<<', 'SOK CHANNA LEAKHENA'],
   ['LY<<KIM<LY<<<<<<', 'LY KIM LY'],
@@ -411,7 +414,10 @@ function localOcrSandbox(t, options = {}) {
       calls.push(['load']);
       if (options.load) return options.load();
     },
-    prepareAddressOCR: async uri => { calls.push(['prepare', uri]); return ADDRESS_CANVAS; },
+    prepareAddressOCR: async uri => {
+      calls.push(['prepare', uri]);
+      return options.prepare ? options.prepare(uri) : ADDRESS_CANVAS;
+    },
     cropBottom: async uri => { calls.push(['crop', uri]); return CROPPED_CARD; },
     fetch: async (...args) => {
       networkCalls.push(args);
@@ -643,6 +649,40 @@ test('Khmer retry only fills missing addresses and keeps the first pass results'
   assert.equal(result.parsed.noi_sinh, VI_BIRTH);
   assert.equal(result.parsed.dia_chi, VI_ADDRESS, 'first pass address is not dropped');
   assert.deepEqual(s.calls, TWO_PASS_CALLS, 'complete addresses skip the retry');
+});
+
+test('unexportable (tainted) card image falls back to the original for the Khmer retry', async t => {
+  let fullPasses = 0;
+  const s = localOcrSandbox(t, {
+    prepare: uri => uri,
+    recognize: image => {
+      if (image === CROPPED_CARD) return { data: { text: COMPLETE_MRZ } };
+      fullPasses++;
+      return { data: { text: fullPasses === 1 ? `ទីកន្លែងកំណើត៖ ${RAW_BIRTH}` : `អាសយដ្ឋាន៖ ${RAW_ADDRESS}` } };
+    }
+  });
+  const result = await settles(s.run());
+  assert.equal(result.ok, true);
+  assert.equal(result.parsed.noi_sinh, VI_BIRTH);
+  assert.equal(result.parsed.dia_chi, VI_ADDRESS);
+  assert.deepEqual(s.calls, TWO_PASS_CALLS.slice(0, -1).concat([
+    ['reinitialize', 'khm', 1], ['setParameters', { tessedit_pageseg_mode: '11' }],
+    ['prepare', FULL_CARD], ['recognize', FULL_CARD], ['terminate']
+  ]));
+});
+
+test('tainted canvas errors never surface raw browser text to the user', async t => {
+  const taint = new Error("Failed to execute 'toBlob' on 'HTMLCanvasElement': Tainted canvases may not be exported.");
+  const s = localOcrSandbox(t, {
+    recognize: image => {
+      if (image === ADDRESS_CANVAS) throw taint;
+      return { data: { text: COMPLETE_MRZ } };
+    }
+  });
+  const result = await settles(s.run());
+  assert.equal(result.ok, true);
+  assert.match(result.warning, /Quét địa chỉ chưa hoàn tất/);
+  assert.doesNotMatch(result.warning, /toBlob|Tainted|HTMLCanvas|Failed to execute/);
 });
 
 for (const supplied of [{}, { noi_sinh: 'AI birthplace' }, { dia_chi: 'AI residence' }]) {

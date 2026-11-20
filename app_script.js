@@ -1712,6 +1712,7 @@ function loadTesseract() {
 function cropBottom(uri) {
   return new Promise(res => {
     const im = new Image();
+    im.crossOrigin = "anonymous";
     im.onload = () => {
       try {
         const h = Math.round(im.height * 0.46);
@@ -1761,10 +1762,18 @@ function parseMRZ(text) {
   }
 
   // 2. Line with Name (e.g. BOEURN<<YON<<<<<)
+  // OCR hay dính chữ giới tính ở dòng trên vào đầu tên (vd "F MY<<CHANTHOL").
+  const stripSexPrefix = value => {
+    if (!out.gioi_tinh) return value;
+    const prefix = out.gioi_tinh + " ";
+    if (!value.startsWith(prefix)) return value;
+    const rest = value.slice(prefix.length).trim();
+    return rest.split(" ").length >= 2 ? rest : value;
+  };
   for (const line of up.split(/\r?\n/)) {
     const l = line.replace(/[^A-Z0-9<\s]/g, "").trim();
     if (l.includes("<<") && /^[A-Z<\s]+$/.test(l) && l.length >= 8) {
-      const name = cleanOcrName(l);
+      const name = stripSexPrefix(cleanOcrName(l));
       if (name) {
         out.ten_that = name;
         break;
@@ -1798,7 +1807,7 @@ function parseMRZ(text) {
   if (!out.ten_that) {
     const mName = text.match(/(?:Họ và tên|Full name|Họ tên|Name)[:\s]+([^\r\n]+)/i);
     if (mName) {
-      const name = cleanOcrName(mName[1].toUpperCase());
+      const name = stripSexPrefix(cleanOcrName(mName[1].toUpperCase()));
       if (name) out.ten_that = name;
     }
   }
@@ -1826,19 +1835,24 @@ function parseMRZ(text) {
 }
 
 function prepareAddressOCR(uri) {
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     const image = new Image();
+    // Ảnh trong Drive là khác nguồn: thiếu crossOrigin thì canvas bị "nhiễm",
+    // tesseract không đọc/xuất được (lỗi toBlob tainted canvas).
+    image.crossOrigin = "anonymous";
     image.onload = () => {
       try {
         const scale = Math.min(2, 2000 / Math.max(image.width, image.height));
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(image.width * scale));
         canvas.height = Math.max(1, Math.round(image.height * scale));
-        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        ctx.getImageData(0, 0, 1, 1); // canvas nhiễm nguồn sẽ ném lỗi ở đây
         resolve(canvas);
-      } catch (error) { reject(error); }
+      } catch (error) { resolve(uri); }
     };
-    image.onerror = () => reject(new Error("Không mở được ảnh để đọc địa chỉ."));
+    image.onerror = () => resolve(uri);
     image.src = uri;
   });
 }
@@ -1999,7 +2013,7 @@ async function ocrCMND(uri, progCb) {
   if (!hasData && scanError) return { ok: false, err: scanError };
   const warning = !parsed.noi_sinh && !parsed.dia_chi ?
     (scanError ?
-      "Quét địa chỉ chưa hoàn tất: " + scanError + " Thông tin cá nhân đã được điền, hãy bấm quét lại ảnh CMND hoặc nhập bổ sung một ô địa chỉ." :
+      "Quét địa chỉ chưa hoàn tất. Thông tin cá nhân đã được điền, hãy bấm quét lại ảnh CMND hoặc nhập bổ sung một ô địa chỉ." :
       "Chưa đọc được nơi sinh/địa chỉ. Hãy chụp rõ phần địa chỉ trên thẻ (mặt sau nếu có), hoặc nhập bổ sung một ô địa chỉ.") :
     (KHMER_TEST_RE.test((parsed.noi_sinh || "") + (parsed.dia_chi || "")) ?
       "Địa chỉ chưa dịch đầy đủ. Hãy nhập bằng chữ Latin hoặc bổ sung một ô địa chỉ khác." : "");
