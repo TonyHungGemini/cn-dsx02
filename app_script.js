@@ -1743,7 +1743,10 @@ function translateKhmerOffline(raw) {
     });
   }
 
-  // Clean up formatting
+  // Ngăn cách các cấp địa chỉ bằng dấu phẩy: Thôn ..., Xã ..., Huyện ..., Tỉnh ...
+  text = text.replace(/\s*,\s*/g, ", ").replace(/\s+/g, " ").trim();
+  // Số nhà/tổ đứng ngay trước cấp địa chỉ thì giữ liền, không chèn phẩy.
+  text = text.replace(/([^\s,\d])(\s+)(?=(?:Thôn|Xã|Phường|Huyện|Quận|Thị xã|Thành phố|Tỉnh)(?=[\s,]|$))/g, "$1, ");
   return text.replace(/\s{2,}/g, " ").trim();
 }
 

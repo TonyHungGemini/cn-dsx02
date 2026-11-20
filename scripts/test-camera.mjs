@@ -352,8 +352,8 @@ const ADDRESS_CANVAS = Object.freeze({ tagName: 'CANVAS', width: 1600, height: 1
 const COMPLETE_MRZ = MRZ_HEADER + '\nSOK<<CHANNA<<<<';
 const RAW_BIRTH = 'ឃុំកំពង់ចិនជើង ស្រុកស្ទោង ខេត្តកំពង់ធំ';
 const RAW_ADDRESS = 'ភូមិចក ' + RAW_BIRTH;
-const VI_BIRTH = 'Xã Kampong Chen Cheung Huyện Stoung Tỉnh Kampong Thom';
-const VI_ADDRESS = 'Thôn Chork ' + VI_BIRTH;
+const VI_BIRTH = 'Xã Kampong Chen Cheung, Huyện Stoung, Tỉnh Kampong Thom';
+const VI_ADDRESS = 'Thôn Chork, ' + VI_BIRTH;
 const KHMER_CARD = `ទីកន្លែងកំណើត៖ ${RAW_BIRTH}\nអាសយដ្ឋាន៖ ភូមិចក\n${RAW_BIRTH}\nសុពលភាព៖ 01/01/2030`;
 // Synthetic text only: reproduce OCR label noise without a real card or personal data.
 const NOISY_KHMER_CARD = `4” ទីកន្លែងកំណើន: ${RAW_BIRTH}\n+ អាសយដ្ឋានៈ ${RAW_ADDRESS}\n+ ៥” សុពលភាពៈ 01/01/2030\nUnrelated Location`;
@@ -584,8 +584,8 @@ test('offline OCR reads Khmer addresses even when MRZ identity is complete', asy
 for (const [raw, expected] of [
   [RAW_ADDRESS, VI_ADDRESS],
   ['ភូមិចកឃុំកំពង់ចិនជើងស្រុកស្ទោងខេត្តកំពង់ធំ', VI_ADDRESS],
-  ['ឃុំកំពង់ចិនត្បូង ស្រុកបារាយណ៍ ខេត្តកំពង់ចាម', 'Xã Kampong Chen Tboung Huyện Baray Tỉnh Kampong Cham'],
-  ['ភូមិសាកល្បង ខេត្តកំពង់ធំ', 'Thôn សាកល្បង Tỉnh Kampong Thom'],
+  ['ឃុំកំពង់ចិនត្បូង ស្រុកបារាយណ៍ ខេត្តកំពង់ចាម', 'Xã Kampong Chen Tboung, Huyện Baray, Tỉnh Kampong Cham'],
+  ['ភូមិសាកល្បង ខេត្តកំពង់ធំ', 'Thôn សាកល្បង, Tỉnh Kampong Thom'],
   ['សាកល្បង', 'សាកល្បង'], ['Hà Nội', 'Hà Nội'], ['', ''], ['  ', '  ']
 ]) {
   test(`static translateAddress stays offline: ${raw || '(empty)'}`, async t => {
@@ -596,12 +596,12 @@ for (const [raw, expected] of [
 }
 
 for (const [raw, expected] of [
-  ['ភូមិច្រក ឃុំសំរោង ស្រុកសន្ទុក ខេត្តកំពង់ធំ', 'Thôn Chrak Xã Samraong Huyện Santuk Tỉnh Kampong Thom'],
+  ['ភូមិច្រក ឃុំសំរោង ស្រុកសន្ទុក ខេត្តកំពង់ធំ', 'Thôn Chrak, Xã Samraong, Huyện Santuk, Tỉnh Kampong Thom'],
   ['ភូមិច្រកសំរោង', 'Thôn Chrak Samraong'],
   ['ភូមិឈរដ្ឋ', 'Thôn Chhuk Roadth'],
-  ['Xã ញ៉ាង Huyện Santuk Kampong Thom', 'Xã Nhang Huyện Santuk Kampong Thom'],
-  ['ឃុំញ៉ាង ស្រុកសន្ទុក ខេត្តកំពង់ធំ', 'Xã Nhang Huyện Santuk Tỉnh Kampong Thom'],
-  ['ភូមិអូរធំ ឃុំសំរោង', 'Thôn Ou Thom Xã Samraong']
+  ['Xã ញ៉ាង Huyện Santuk Kampong Thom', 'Xã Nhang, Huyện Santuk Kampong Thom'],
+  ['ឃុំញ៉ាង ស្រុកសន្ទុក ខេត្តកំពង់ធំ', 'Xã Nhang, Huyện Santuk, Tỉnh Kampong Thom'],
+  ['ភូមិអូរធំ ឃុំសំរោង', 'Thôn Ou Thom, Xã Samraong']
 ]) {
   test(`gazetteer translates Khmer village/commune names: ${raw}`, async t => {
     const s = localOcrSandbox(t);
@@ -781,7 +781,7 @@ for (const key of ['noi_sinh', 'dia_chi']) {
     const result = await settles(s.run());
     assert.equal(result.ok, true);
     assert.equal(result.parsed.ten_that, 'AI Worker');
-    assert.equal(result.parsed[key], 'Thôn សាកល្បង Tỉnh Kampong Thom');
+    assert.equal(result.parsed[key], 'Thôn សាកល្បង, Tỉnh Kampong Thom');
     assert.equal(result.parsed[key + '_goc'], raw, 'raw Khmer must not be replaced by a partially translated value');
     assert.match(result.warning || '', /Địa chỉ chưa dịch đầy đủ/);
     assert.deepEqual(s.calls, TWO_PASS_CALLS);
