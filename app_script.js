@@ -1699,7 +1699,11 @@ function loadTesseract() {
     const s = document.createElement("script");
     s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js";
     s.onload = () => res();
-    s.onerror = rej;
+    s.onerror = () => {
+      _tessP = null;
+      s.remove();
+      rej(new Error("Không tải được công cụ OCR. Hãy kiểm tra kết nối mạng rồi thử lại."));
+    };
     document.head.appendChild(s);
   });
   return _tessP;
@@ -1821,6 +1825,46 @@ function parseMRZ(text) {
   return out;
 }
 
+function prepareAddressOCR(uri) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const scale = Math.min(2, 2000 / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas);
+      } catch (error) { reject(error); }
+    };
+    image.onerror = () => reject(new Error("Không mở được ảnh để đọc địa chỉ."));
+    image.src = uri;
+  });
+}
+
+function matchKhmerAddressLabel(line) {
+  const separator = line.search(/[:៖ៈ]/);
+  const raw = separator < 0 ? line : line.slice(0, separator);
+  const text = raw.replace(/[\s\p{P}\p{S}0-9០-៩]/gu, "");
+  if (!/^[\u1780-\u17FF]{7,16}$/.test(text)) return null;
+  let best = null;
+  for (const [label, key] of [["ទីកន្លែងកំណើត", "noi_sinh"], ["កន្លែងកំណើត", "noi_sinh"], ["អាសយដ្ឋាន", "dia_chi"]]) {
+    if (Math.abs(label.length - text.length) > 2) continue;
+    let row = Array.from({ length: label.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= text.length; i++) {
+      const next = [i];
+      for (let j = 1; j <= label.length; j++) {
+        next[j] = Math.min(next[j - 1] + 1, row[j] + 1, row[j - 1] + (text[i - 1] === label[j - 1] ? 0 : 1));
+      }
+      row = next;
+    }
+    const distance = row[label.length];
+    if (distance <= 2 && (!best || distance < best.distance)) best = { key, distance };
+  }
+  return best ? { key: best.key, length: separator < 0 ? line.length : separator + 1 } : null;
+}
+
 function parseCardAddresses(text) {
   const khLabel = value => [...value].join("[ \\t]*");
   const khBirth = khLabel("កន្លែងកំណើ") + "[ \\t]*[តន]";
@@ -1836,9 +1880,10 @@ function parseCardAddresses(text) {
     if (!line) continue;
     const candidate = line.replace(/^[\p{P}\p{S}\s0-9០-៩]+/u, "");
     const match = candidate.match(label);
-    if (match) {
-      active = isBirth.test(match[1]) ? "noi_sinh" : "dia_chi";
-      line = candidate.slice(match[0].length);
+    const fuzzy = match ? null : matchKhmerAddressLabel(candidate);
+    if (match || fuzzy) {
+      active = match ? (isBirth.test(match[1]) ? "noi_sinh" : "dia_chi") : fuzzy.key;
+      line = candidate.slice(match ? match[0].length : fuzzy.length);
     } else if (stop.test(candidate) || /[<«‹＜]{2}|^(?:ID|I<)?KHM\d|\d{6}\d?[MFX]\d{6}/i.test(line) || /^[^:៖ៈ]{1,35}[:៖ៈ]/.test(candidate)) {
       active = null;
     }
@@ -1903,6 +1948,7 @@ async function ocrCMND(uri, progCb) {
     });
     if (finished) { await ready.terminate(); return; }
     worker = ready;
+    let khmerCard = false;
     if (!parsed.ten_that || !parsed.cmnd || !parsed.ngay_sinh) {
       phase = "Đang quét mã MRZ CMND";
       if (progCb) progCb(phase + "…");
@@ -1911,6 +1957,7 @@ async function ocrCMND(uri, progCb) {
       const result = await worker.recognize(cropped);
       if (finished) return;
       mergeMissing(parseMRZ(result.data.text));
+      khmerCard = /KHM/i.test(result.data.text);
     }
     // MRZ không chứa địa chỉ; luôn đọc phần chữ trên thẻ bằng cả tiếng Khmer.
     phase = "Đang tải bộ đọc Khmer/Việt để đọc địa chỉ";
@@ -1920,7 +1967,21 @@ async function ocrCMND(uri, progCb) {
     phase = "Đang đọc nơi sinh và địa chỉ trên toàn bộ thẻ";
     if (progCb) progCb(phase + "…");
     const result = await worker.recognize(uri);
-    if (!finished) mergeMissing({ ...parseMRZ(result.data.text), ...parseCardAddresses(result.data.text) });
+    if (finished) return;
+    mergeMissing({ ...parseMRZ(result.data.text), ...parseCardAddresses(result.data.text) });
+    if (!khmerCard) khmerCard = KHMER_TEST_RE.test(result.data.text);
+    if (khmerCard && (!parsed.noi_sinh || !parsed.dia_chi)) {
+      phase = "Đang đọc lại địa chỉ Khmer trên thẻ";
+      if (progCb) progCb(phase + "…");
+      await worker.reinitialize("khm", 1);
+      if (finished) return;
+      await worker.setParameters({ tessedit_pageseg_mode: "11" });
+      if (finished) return;
+      const focused = await worker.recognize(await prepareAddressOCR(uri));
+      if (finished) return;
+      const found = parseCardAddresses(focused.data.text);
+      mergeMissing({ noi_sinh: found.noi_sinh, dia_chi: found.dia_chi });
+    }
   };
   let scanError = "";
   try {
@@ -1937,7 +1998,9 @@ async function ocrCMND(uri, progCb) {
   const hasData = parsed.ten_that || parsed.cmnd || parsed.ngay_sinh || parsed.noi_sinh || parsed.dia_chi;
   if (!hasData && scanError) return { ok: false, err: scanError };
   const warning = !parsed.noi_sinh && !parsed.dia_chi ?
-    "Chưa đọc được nơi sinh/địa chỉ. Hãy chụp rõ phần địa chỉ trên thẻ (mặt sau nếu có), hoặc nhập bổ sung một ô địa chỉ." :
+    (scanError ?
+      "Quét địa chỉ chưa hoàn tất: " + scanError + " Thông tin cá nhân đã được điền, hãy bấm quét lại ảnh CMND hoặc nhập bổ sung một ô địa chỉ." :
+      "Chưa đọc được nơi sinh/địa chỉ. Hãy chụp rõ phần địa chỉ trên thẻ (mặt sau nếu có), hoặc nhập bổ sung một ô địa chỉ.") :
     (KHMER_TEST_RE.test((parsed.noi_sinh || "") + (parsed.dia_chi || "")) ?
       "Địa chỉ chưa dịch đầy đủ. Hãy nhập bằng chữ Latin hoặc bổ sung một ô địa chỉ khác." : "");
   return { ok: true, source, parsed, warning };
@@ -3215,6 +3278,9 @@ function wireImgEvents(id) {
 }
 
 
+// Tạm ngưng bắt buộc đủ thông tin để rà soát code; đổi lại true khi đã ổn.
+var REQUIRE_COMPLETE_INFO = false;
+
 function requiredEditFields(rec) {
   const fields = [
     ["ten_that", "Họ và tên (tên thật)*"], ["cmnd", "CMND / CCCD"],
@@ -3259,11 +3325,22 @@ function getEditIssues(rec) {
 
 function updateEditCompletion(sheet, reveal) {
   const rec = readEditForm(sheet);
-  const issues = getEditIssues(rec);
-  const box = sheet.querySelector("#editCompletion");
-  if (!box) return issues;
   const age = sheet.querySelector('[data-k="tuoi"]');
   if (age && ageFromDOB(rec.ngay_sinh) !== "") age.value = rec.tuoi;
+  const box = sheet.querySelector("#editCompletion");
+  if (!REQUIRE_COMPLETE_INFO) {
+    if (box) {
+      box.hidden = true;
+      delete box.dataset.active;
+    }
+    sheet.querySelectorAll(".field-invalid").forEach(inp => {
+      inp.classList.remove("field-invalid");
+      inp.removeAttribute("aria-invalid");
+    });
+    return [];
+  }
+  const issues = getEditIssues(rec);
+  if (!box) return issues;
   if (reveal) box.dataset.active = "true";
   const active = box.dataset.active === "true";
   const required = new Set(requiredEditFields(rec).map(([key]) => key));
@@ -3308,7 +3385,7 @@ function saveEdit(id) {
   const auditBefore = isNew ? null : auditSnap(existing);
 
   Object.assign(rec, readEditForm(sheet));
-  if (updateEditCompletion(sheet, true).length) {
+  if (REQUIRE_COMPLETE_INFO && updateEditCompletion(sheet, true).length) {
     toast(t("Vui lòng bổ sung thông tin trước khi lưu"));
     return;
   }
@@ -3568,7 +3645,7 @@ function openEdit(id, prefillRoom, backRoom) {
   cur.so_dt = getPhone(cur);
   cur.tuoi = ageFromDOB(cur.ngay_sinh) || cur.tuoi;
   let body = '<div id="editCompletion" class="edit-completion" role="status" aria-live="polite" tabindex="-1" hidden></div>' +
-    '<p class="edit-guide">' + esc(t("Các ô có * là bắt buộc. Nhóm máu và kỷ luật không bắt buộc.")) + '</p>' +
+    (REQUIRE_COMPLETE_INFO ? '<p class="edit-guide">' + esc(t("Các ô có * là bắt buộc. Nhóm máu và kỷ luật không bắt buộc.")) + '</p>' : '') +
     '<p class="edit-guide">' + esc(t("Ví dụ: Phòng D2; Phần cây 19-KV1. Tuổi tự tính theo ngày sinh.")) + '</p>';
   const mkInput = (k, lbl, typ) => {
     const v = esc(k === "ngay_sinh" ? formatDOB(cur[k]) : (cur[k] || ""));
@@ -3595,7 +3672,8 @@ function openEdit(id, prefillRoom, backRoom) {
   };
   
   body += '<div id="imgSection">' + renderImgSection(id) + '</div>';
-  body += mkInput("ten_that", "" + t("Họ và tên (tên thật)*") + "", "input");
+  const nameLabel = t("Họ và tên (tên thật)*");
+  body += mkInput("ten_that", REQUIRE_COMPLETE_INFO ? nameLabel : nameLabel.replace("*", ""), "input");
   body += mkInput("ten_ho_so", "" + t("Tên trong hồ sơ (tên mượn)") + "", "input");
   body += '<div class="row2">' + mkInput("cmnd", "" + t("CMND / CCCD") + "", "input") + mkInput("ngay_sinh", "" + t("Ngày sinh (dd/mm/yyyy)") + "", "input") + '</div>';
   body += '<div class="row2">' + mkInput("gioi_tinh", "" + t("Giới tính") + "", "sel_gt") + mkInput("tuoi", "" + t("Tuổi") + "", "input") + '</div>';

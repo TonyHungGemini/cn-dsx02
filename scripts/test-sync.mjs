@@ -51,7 +51,7 @@ function sandbox() {
     'auditFieldVal', 'auditSnap', 'auditHash', 'auditDiffParts', 'auditDiffText',
     'auditLoadMap', 'auditSaveMap', 'auditMeaningfulServerRec', 'logIncomingChanges', 'syncNowCore'];
   const fields = source.slice(source.indexOf('const AUDIT_FIELDS = ['), source.indexOf('\n];', source.indexOf('const AUDIT_FIELDS = [')) + 3);
-  vm.runInContext(fields + '\n' + names.map(functionSource).join('\n'), context);
+  vm.runInContext('var REQUIRE_COMPLETE_INFO = false;\n' + fields + '\n' + names.map(functionSource).join('\n'), context);
   const setQueue = rows => storage.set('cn_queue_v1', JSON.stringify(rows));
   const queue = () => JSON.parse(storage.get('cn_queue_v1') || '[]');
   return { context, setQueue, queue, logs };
@@ -247,6 +247,7 @@ for (const dob of ['31/02/1993', '29/02/1993', 'not a date', '01/01/2999']) {
 
 test('incomplete save retains all draft fields and temporary images without queue writes', () => {
   const { context: c, queue, logs } = sandbox();
+  c.REQUIRE_COMPLETE_INFO = true;
   c.DATA = [{ ...old }];
   const before = JSON.stringify(c.DATA);
   c.TEMP_NEW_IMGS = { cmnd: 'synthetic-image' };
@@ -258,6 +259,19 @@ test('incomplete save retains all draft fields and temporary images without queu
   assert.equal(logs.length, 0);
   assert.equal(c.TEMP_NEW_IMGS.cmnd, 'synthetic-image');
   assert.equal(sheet.querySelector('[data-k="ten_that"]').value, completeForm.ten_that);
+});
+
+test('save is allowed while completeness enforcement is paused', () => {
+  const { context: c, queue } = sandbox();
+  c.DATA = [{ ...old }];
+  const draft = { ...completeForm, to: '', noi_sinh: '', dia_chi: '', chi_tiet_noi_o: '' };
+  assert.ok(c.getEditIssues(draft).length > 0, 'issues are still reported');
+  editForm(c, draft);
+  c.saveEdit(old.id);
+  assert.equal(queue().length, 1);
+  assert.equal(c.DATA[0].to, '');
+  assert.equal(c.DATA[0].noi_sinh, '');
+  assert.equal(queue()[0].to, '');
 });
 
 test('save normalizes room and section before queueing and transferring room leadership', () => {
@@ -287,6 +301,7 @@ test('dependent save succeeds without CMND phone team or tree section', () => {
 
 test('invalid form does not mutate an existing record', () => {
   const { context: c, queue } = sandbox();
+  c.REQUIRE_COMPLETE_INFO = true;
   c.DATA = [{ ...old }];
   editForm(c, { ten_that: '', phong_o: 'QA2' });
   c.saveEdit(old.id);

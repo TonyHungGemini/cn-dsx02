@@ -332,13 +332,14 @@ function constantSource(name) {
   return source.slice(match.index, end + 1);
 }
 
+const ADDRESS_PARSER_SOURCE = ['matchKhmerAddressLabel', 'parseCardAddresses'].map(functionSource).join('\n');
 const LOCAL_OCR_SOURCE = [
-  constantSource('KHMER_DICT'), constantSource('KHMER_TEST_RE'),
-  ...['cleanOcrName', 'parseMRZ', 'parseCardAddresses', 'translateKhmerOffline',
-    'translateAddress', 'ocrCMND'].map(functionSource)
+  constantSource('KHMER_DICT'), constantSource('KHMER_TEST_RE'), ADDRESS_PARSER_SOURCE,
+  ...['cleanOcrName', 'parseMRZ', 'translateKhmerOffline', 'translateAddress', 'ocrCMND'].map(functionSource)
 ].join('\n');
 const FULL_CARD = 'data:image/jpeg;base64,c3ludGhldGljLWZ1bGwtY2FyZA==';
 const CROPPED_CARD = 'data:image/jpeg;base64,c3ludGhldGljLWNyb3A=';
+const ADDRESS_CANVAS = Object.freeze({ tagName: 'CANVAS', width: 1600, height: 1000 });
 const COMPLETE_MRZ = MRZ_HEADER + '\nSOK<<CHANNA<<<<';
 const RAW_BIRTH = 'ឃុំកំពង់ចិនជើង ស្រុកស្ទោង ខេត្តកំពង់ធំ';
 const RAW_ADDRESS = 'ភូមិចក ' + RAW_BIRTH;
@@ -379,12 +380,18 @@ function localOcrSandbox(t, options = {}) {
     recognize: async image => {
       calls.push(['recognize', image]);
       if (options.recognize) return options.recognize(image);
-      return { data: { text: image === CROPPED_CARD ?
-        (options.cropText ?? COMPLETE_MRZ) : (options.fullText ?? KHMER_CARD) } };
+      assert.ok([CROPPED_CARD, FULL_CARD, ADDRESS_CANVAS].includes(image), 'recognize only synthetic inputs');
+      return { data: { text: image === CROPPED_CARD ? (options.cropText ?? COMPLETE_MRZ) :
+        image === ADDRESS_CANVAS ? (options.retryText ?? options.fullText ?? KHMER_CARD) :
+          (options.fullText ?? KHMER_CARD) } };
     },
     reinitialize: async (...args) => {
       calls.push(['reinitialize', ...args]);
-      if (options.reinitialize) return options.reinitialize(workerOptions);
+      if (options.reinitialize) return options.reinitialize(workerOptions, ...args);
+    },
+    setParameters: async parameters => {
+      calls.push(['setParameters', { ...parameters }]);
+      if (options.setParameters) return options.setParameters(parameters);
     },
     terminate: async () => { calls.push(['terminate']); terminations++; }
   };
@@ -404,6 +411,7 @@ function localOcrSandbox(t, options = {}) {
       calls.push(['load']);
       if (options.load) return options.load();
     },
+    prepareAddressOCR: async uri => { calls.push(['prepare', uri]); return ADDRESS_CANVAS; },
     cropBottom: async uri => { calls.push(['crop', uri]); return CROPPED_CARD; },
     fetch: async (...args) => {
       networkCalls.push(args);
@@ -462,7 +470,7 @@ function assertIdentity(parsed, expected) {
   for (const [key, value] of Object.entries(expected)) assert.equal(parsed[key], value, key);
 }
 function assertAddressWarning(result) {
-  assert.match(result.warning || '', /Chưa đọc được nơi sinh\/địa chỉ/);
+  assert.match(result.warning || '', /Quét địa chỉ chưa hoàn tất/);
 }
 
 const addressCases = [
@@ -484,7 +492,7 @@ const addressCases = [
   ['unknown Khmer under noisy labels stays raw', '4” ទីកន្លែងកំណើន: សាកល្បង\n+ អាសយដ្ឋានៈ ភូមិសាកល្បង', { noi_sinh: 'សាកល្បង', dia_chi: 'ភូមិសាកល្បង' }],
   ['noisy unlabelled places are not guessed', `+ ${RAW_BIRTH}\n4” ${RAW_ADDRESS}\n៥) Phnom Penh`, {}],
   ['labels embedded in prose are not field headers', `Notes about ទីកន្លែងកំណើន: ${RAW_BIRTH}\nNotes about អាសយដ្ឋានៈ ${RAW_ADDRESS}`, {}],
-  ['other birth-label glyph substitutions are not guessed', `4” ទីកន្លែងកំណើរ: ${RAW_BIRTH}`, {}],
+  ['birth-label last-glyph OCR variants are matched fuzzily', `4” ទីកន្លែងកំណើរ: ${RAW_BIRTH}`, { noi_sinh: RAW_BIRTH }],
   ['bilingual Khmer/English', `ទីកន្លែងកំណើត / Place of birth: ${RAW_BIRTH}\nអាសយដ្ឋាន - Address: ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
   ['bilingual English/Khmer', `Place of birth / ទីកន្លែងកំណើត: ${RAW_BIRTH}\nAddress / អាសយដ្ឋាន: ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
   ['Vietnamese labelled continuations', 'Nơi sinh: Xã A\r\nHuyện B\r\nĐịa chỉ thường trú: Thôn C\r\nTỉnh D\r\nNgày sinh: 01/01/1990', { noi_sinh: 'Xã A Huyện B', dia_chi: 'Thôn C Tỉnh D' }],
@@ -502,7 +510,7 @@ const addressCases = [
 for (const [label, text, expected] of addressCases) {
   test(`address parser: ${label}`, () => {
     const c = vm.createContext({});
-    vm.runInContext(functionSource('parseCardAddresses'), c);
+    vm.runInContext(ADDRESS_PARSER_SOURCE, c);
     assert.deepEqual({ ...c.parseCardAddresses(text) }, expected);
   });
 }
@@ -525,7 +533,7 @@ for (const boundary of [
 ]) {
   test(`address parser stops at ${boundary}`, () => {
     const c = vm.createContext({});
-    vm.runInContext(functionSource('parseCardAddresses'), c);
+    vm.runInContext(ADDRESS_PARSER_SOURCE, c);
     for (const [label, key] of [['Place of birth', 'noi_sinh'], ['Address', 'dia_chi']]) {
       assert.deepEqual({ ...c.parseCardAddresses(`${label}: Village A\nDistrict B\n${boundary}\nUnrelated Location`) },
         { [key]: 'Village A District B' });
@@ -539,6 +547,11 @@ const TWO_PASS_CALLS = [
   ['load'], ['createWorker', 'eng', 1], ['crop', FULL_CARD], ['recognize', CROPPED_CARD],
   ['reinitialize', 'khm+eng+vie', 1], ['recognize', FULL_CARD], ['terminate']
 ];
+const RETRY_CALLS = [
+  ['reinitialize', 'khm', 1], ['setParameters', { tessedit_pageseg_mode: '11' }],
+  ['prepare', FULL_CARD], ['recognize', ADDRESS_CANVAS]
+];
+const THREE_PASS_CALLS = TWO_PASS_CALLS.slice(0, -1).concat(RETRY_CALLS, [['terminate']]);
 
 test('offline OCR reads Khmer addresses even when MRZ identity is complete', async t => {
   const s = localOcrSandbox(t);
@@ -606,9 +619,31 @@ for (const [label, fullText, expected, warning] of [
       assert.equal(result.parsed[key], expected[key], key);
     }
     assert.match(result.warning || '', warning);
-    assert.deepEqual(s.calls, TWO_PASS_CALLS);
+    const retried = !expected.noi_sinh && !expected.dia_chi;
+    assert.deepEqual(s.calls, retried ? THREE_PASS_CALLS : TWO_PASS_CALLS);
   });
 }
+
+test('Khmer card with a missing address retries with Khmer-only sparse OCR', async t => {
+  const s = localOcrSandbox(t, { fullText: `ទីកន្លែងកំណើត៖ ${RAW_BIRTH}`, retryText: KHMER_CARD });
+  const result = await settles(s.run());
+  assert.equal(result.ok, true);
+  assertMrzIdentity(result.parsed);
+  assert.equal(result.parsed.noi_sinh, VI_BIRTH);
+  assert.equal(result.parsed.dia_chi, VI_ADDRESS);
+  assert.equal(result.parsed.dia_chi_goc, RAW_ADDRESS);
+  assert.equal(result.warning, '');
+  assert.deepEqual(s.calls, THREE_PASS_CALLS);
+  assert.ok(s.progress.some(message => message.includes('địa chỉ Khmer')), 'retry phase is reported');
+});
+
+test('Khmer retry only fills missing addresses and keeps the first pass results', async t => {
+  const s = localOcrSandbox(t, { fullText: KHMER_CARD, retryText: `ទីកន្លែងកំណើត៖ ${RAW_BIRTH}` });
+  const result = await settles(s.run());
+  assert.equal(result.parsed.noi_sinh, VI_BIRTH);
+  assert.equal(result.parsed.dia_chi, VI_ADDRESS, 'first pass address is not dropped');
+  assert.deepEqual(s.calls, TWO_PASS_CALLS, 'complete addresses skip the retry');
+});
 
 for (const supplied of [{}, { noi_sinh: 'AI birthplace' }, { dia_chi: 'AI residence' }]) {
   test(`partial AI supplements missing addresses: ${JSON.stringify(supplied)}`, async t => {
@@ -1027,7 +1062,7 @@ for (const secondPass of [false, true]) {
     assert.equal(result.ok, true);
     assert.equal(result.source, 'offline');
     assert.equal(result.parsed.ten_that, 'SOK CHANNA');
-    assert.deepEqual(s.calls, TWO_PASS_CALLS, 'both passes run even when cropped identity is complete');
+    assert.deepEqual(s.calls, THREE_PASS_CALLS, 'both passes and the Khmer retry run even when cropped identity is complete');
   });
 }
 
