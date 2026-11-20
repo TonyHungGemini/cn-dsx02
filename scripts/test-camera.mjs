@@ -338,7 +338,12 @@ function constantSource(name) {
 const ADDRESS_PARSER_SOURCE = ['matchKhmerAddressLabel', 'parseCardAddresses'].map(functionSource).join('\n');
 const LOCAL_OCR_SOURCE = [
   constantSource('KHMER_DICT'), constantSource('KHMER_TEST_RE'), ADDRESS_PARSER_SOURCE,
-  ...['cleanOcrName', 'parseMRZ', 'translateKhmerOffline', 'translateAddress', 'ocrCMND'].map(functionSource)
+  ...['cleanOcrName', 'parseMRZ', 'khmerPlaceMap', 'khmerEditDistance', 'khmerCommonSuffix',
+    'khmerLookupWord', 'translateKhmerOffline', 'translateAddress', 'ocrCMND'].map(functionSource)
+].join('\n');
+const KHMER_PLACES_STUB = [
+  'សន្ទុក\tSantuk', 'សំរោង\tSamraong', 'ច្រក\tChrak',
+  'កំពង់ធំ\tKampong Thom', 'ឈូករដ្ឋ\tChhuk Roadth'
 ].join('\n');
 const FULL_CARD = 'data:image/jpeg;base64,c3ludGhldGljLWZ1bGwtY2FyZA==';
 const CROPPED_CARD = 'data:image/jpeg;base64,c3ludGhldGljLWNyb3A=';
@@ -399,6 +404,7 @@ function localOcrSandbox(t, options = {}) {
     terminate: async () => { calls.push(['terminate']); terminations++; }
   };
   const c = vm.createContext({
+    KHMER_PLACES_RAW: KHMER_PLACES_STUB,
     API_OK: options.apiOK ?? false,
     setTimeout: (callback, delay) => {
       const timer = { callback, delay, cleared: false };
@@ -437,7 +443,7 @@ function localOcrSandbox(t, options = {}) {
       return worker;
     } } }
   });
-  vm.runInContext(LOCAL_OCR_SOURCE, c);
+  vm.runInContext('let _khPlaces = null;\n' + LOCAL_OCR_SOURCE, c);
   t.after(() => {
     assert.equal(terminations, workersCreated, 'every created worker is terminated exactly once');
     for (const timer of timers) {
@@ -585,6 +591,18 @@ for (const [raw, expected] of [
     const s = localOcrSandbox(t);
     assert.equal(await s.c.translateAddress(raw), expected);
     assert.deepEqual(s.calls, [], 'translation needs neither OCR nor an API');
+  });
+}
+
+for (const [raw, expected] of [
+  ['ភូមិច្រក ឃុំសំរោង ស្រុកសន្ទុក ខេត្តកំពង់ធំ', 'Thôn Chrak Xã Samraong Huyện Santuk Tỉnh Kampong Thom'],
+  ['ភូមិច្រកសំរោង', 'Thôn Chrak Samraong'],
+  ['ភូមិឈរដ្ឋ', 'Thôn Chhuk Roadth']
+]) {
+  test(`gazetteer translates Khmer village/commune names: ${raw}`, async t => {
+    const s = localOcrSandbox(t);
+    assert.equal(await s.c.translateAddress(raw), expected);
+    assert.deepEqual(s.calls, [], 'gazetteer lookup is fully offline');
   });
 }
 

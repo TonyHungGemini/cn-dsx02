@@ -1640,6 +1640,67 @@ const KHMER_DICT = {
   ]
 };
 
+let _khPlaces = null;
+function khmerPlaceMap() {
+  if (_khPlaces) return _khPlaces;
+  _khPlaces = new Map();
+  const raw = typeof KHMER_PLACES_RAW === "string" ? KHMER_PLACES_RAW : "";
+  for (const line of raw.split("\n")) {
+    const tab = line.indexOf("\t");
+    if (tab > 0) _khPlaces.set(line.slice(0, tab), line.slice(tab + 1));
+  }
+  return _khPlaces;
+}
+
+function khmerEditDistance(a, b, limit) {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (cur[j] < rowMin) rowMin = cur[j];
+    }
+    if (rowMin > limit) return limit + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+function khmerCommonSuffix(a, b) {
+  let n = 0;
+  while (n < a.length && n < b.length && a[a.length - 1 - n] === b[b.length - 1 - n]) n++;
+  return n;
+}
+
+// OCR hay đọc sai vài ký tự và dính các từ không dấu cách; tra từ điển địa danh rồi mới đoán gần đúng.
+function khmerLookupWord(word, map) {
+  const exact = map.get(word);
+  if (exact) return exact;
+  const chars = Array.from(word);
+  if (chars.length >= 6) {
+    for (let cut = chars.length - 2; cut >= 3; cut--) {
+      if (/[\u17B6-\u17D3]/.test(chars[cut])) continue;
+      const head = chars.slice(0, cut).join("");
+      const headEn = map.get(head);
+      if (!headEn) continue;
+      const tail = chars.slice(cut).join("");
+      const tailEn = map.get(tail) || khmerLookupWord(tail, map);
+      if (tailEn && tailEn !== tail) return headEn + " " + tailEn;
+    }
+  }
+  const limit = chars.length >= 5 ? 2 : 1;
+  let best = null;
+  for (const [kh, en] of map) {
+    const distance = khmerEditDistance(kh, word, limit);
+    if (distance > limit) continue;
+    const score = distance * 100 - khmerCommonSuffix(kh, word) - (kh[0] === word[0] ? 1 : 0);
+    if (!best || score < best.score) best = { en, score };
+  }
+  return best ? best.en : word;
+}
+
 function translateKhmerOffline(raw) {
   if (!raw) return "";
   let text = raw.normalize("NFC").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
@@ -1666,7 +1727,17 @@ function translateKhmerOffline(raw) {
   for (const v of KHMER_DICT.villages) {
     text = text.replace(new RegExp(v.kh, "g"), v.en);
   }
-  
+
+  // Tên thôn/xã/huyện/tỉnh chưa có trong bộ từ điển nhỏ: tra từ điển địa danh đầy đủ
+  const places = khmerPlaceMap();
+  if (places.size) {
+    text = text.replace(/[\u1780-\u17FF]+(?:[ ]+[\u1780-\u17FF]+)*/g, chunk => {
+      const whole = places.get(chunk);
+      if (whole) return whole;
+      return chunk.split(" ").map(word => khmerLookupWord(word, places)).join(" ");
+    });
+  }
+
   // Clean up formatting
   return text.replace(/\s{2,}/g, " ").trim();
 }
