@@ -1823,9 +1823,10 @@ function parseMRZ(text) {
 
 function parseCardAddresses(text) {
   const khLabel = value => [...value].join("[ \\t]*");
-  const birth = "(?:" + khLabel("ទីកន្លែងកំណើត") + "|" + khLabel("កន្លែងកំណើត") + "|place\\s+of\\s+birth|nơi\\s+sinh)";
+  const khBirth = khLabel("កន្លែងកំណើ") + "[ \\t]*[តន]";
+  const birth = "(?:(?:" + khLabel("ទី") + "[ \\t]*)?" + khBirth + "|place\\s+of\\s+birth|nơi\\s+sinh)";
   const address = "(?:" + khLabel("អាសយដ្ឋាន") + "|(?:place\\s+of\\s+)?(?:permanent\\s+)?residence|(?:permanent\\s+)?address|nơi\\s+thường\\s+trú|địa\\s+chỉ(?:\\s+thường\\s+trú)?)";
-  const label = new RegExp("^(?:[0-9០-៩]+[.)៖:]?\\s*)?(" + birth + "|" + address + ")(?:\\s*[/\\-]\\s*(?:" + birth + "|" + address + "))?\\s*[:៖.\\-]?\\s*", "i");
+  const label = new RegExp("^(" + birth + "|" + address + ")(?:\\s*[/\\-]\\s*(?:" + birth + "|" + address + "))?\\s*[:៖ៈ.\\-]?\\s*", "i");
   const isBirth = new RegExp("^" + birth + "$", "i");
   const stop = /^(?:[0-9០-៩]+[.)៖:]?\s*)?(?:họ\s*(?:và)?\s*tên|full\s*name|name\b|ngày\s*sinh|date\s*of\s*birth|giới\s*tính|sex\b|gender\b|quốc\s*tịch|nationality\b|có\s*giá\s*trị|date\s*of\s*(?:issue|expiry)|issued?\b|expiry\b|valid\b|signature\b|số\s*(?:cmnd|cccd)|id\s*(?:no|number)|អត្តសញ្ញាណប័ណ្ណ|នាមត្រកូល|នាមខ្លួន|គោត្តនាម|ឈ្មោះ|ថ្ងៃ\s*ខែ\s*ឆ្នាំ\s*កំណើត|ភេទ|សញ្ជាតិ|សុពលភាព|ថ្ងៃផុតកំណត់|ហត្ថលេខា)/i;
   const parts = { noi_sinh: [], dia_chi: [] };
@@ -1833,11 +1834,12 @@ function parseCardAddresses(text) {
   for (const raw of String(text || "").normalize("NFC").replace(/[\u200B-\u200D\uFEFF]/g, "").split(/\r?\n/)) {
     let line = raw.trim();
     if (!line) continue;
-    const match = line.match(label);
+    const candidate = line.replace(/^[\p{P}\p{S}\s0-9០-៩]+/u, "");
+    const match = candidate.match(label);
     if (match) {
       active = isBirth.test(match[1]) ? "noi_sinh" : "dia_chi";
-      line = line.slice(match[0].length);
-    } else if (stop.test(line) || /[<«‹＜]{2}|^(?:ID|I<)?KHM\d|\d{6}\d?[MFX]\d{6}/i.test(line) || /^[^:៖]{1,35}[:៖]/.test(line)) {
+      line = candidate.slice(match[0].length);
+    } else if (stop.test(candidate) || /[<«‹＜]{2}|^(?:ID|I<)?KHM\d|\d{6}\d?[MFX]\d{6}/i.test(line) || /^[^:៖ៈ]{1,35}[:៖ៈ]/.test(candidate)) {
       active = null;
     }
     if (active && line && /\p{L}/u.test(line) && !/[<«‹＜]/.test(line)) parts[active].push(line);
@@ -3218,11 +3220,10 @@ function requiredEditFields(rec) {
     ["ten_that", "Họ và tên (tên thật)*"], ["cmnd", "CMND / CCCD"],
     ["ngay_sinh", "Ngày sinh (dd/mm/yyyy)"], ["gioi_tinh", "Giới tính"],
     ["tuoi", "Tuổi"], ["loai", "Loại đối tượng"], ["to", "Tổ"],
-    ["phong_o", "Phòng ở"], ["phan_cay", "Phần cây hiện tại"],
-    ["so_dt", "Số điện thoại (SĐT / Zalo)"]
+    ["phong_o", "Phòng ở"], ["phan_cay", "Phần cây hiện tại"]
   ];
   return rec.loai === "Gia thuộc"
-    ? fields.filter(([key]) => !["cmnd", "so_dt", "to", "phan_cay"].includes(key)) : fields;
+    ? fields.filter(([key]) => !["cmnd", "to", "phan_cay"].includes(key)) : fields;
 }
 
 function readEditForm(sheet) {
@@ -3238,8 +3239,7 @@ function readEditForm(sheet) {
 
 function getEditIssues(rec) {
   const issues = requiredEditFields(rec).filter(([key]) => !String(rec[key] ?? "").trim() ||
-    (key === "cmnd" && !isValidCmnd(rec.cmnd)) ||
-    (key === "so_dt" && !/\d/.test(rec.so_dt)))
+    (key === "cmnd" && !isValidCmnd(rec.cmnd)))
     .map(([key, label]) => ({ keys: [key], label }));
   if (rec.ngay_sinh) {
     const dob = formatDOB(rec.ngay_sinh);

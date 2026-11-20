@@ -345,6 +345,10 @@ const RAW_ADDRESS = 'ភូមិចក ' + RAW_BIRTH;
 const VI_BIRTH = 'Xã Kampong Chen Cheung Huyện Stoung Tỉnh Kampong Thom';
 const VI_ADDRESS = 'Thôn Chork ' + VI_BIRTH;
 const KHMER_CARD = `ទីកន្លែងកំណើត៖ ${RAW_BIRTH}\nអាសយដ្ឋាន៖ ភូមិចក\n${RAW_BIRTH}\nសុពលភាព៖ 01/01/2030`;
+// Synthetic text only: reproduce OCR label noise without a real card or personal data.
+const NOISY_KHMER_CARD = `4” ទីកន្លែងកំណើន: ${RAW_BIRTH}\n+ អាសយដ្ឋានៈ ${RAW_ADDRESS}\n+ ៥” សុពលភាពៈ 01/01/2030\nUnrelated Location`;
+const NOISY_MULTILINE_CARD = `4” ទីកន្លែងកំណើន:\n\n${RAW_BIRTH}\n\n+ អាសយដ្ឋានៈ\n\nភូមិចក\n \t\n${RAW_BIRTH}\n\n5” ថ្ងៃផុតកំណត់ៈ 01/01/2030\nUnrelated Location`;
+const NUMBERED_ADDRESS_CARD = `4” ទីកន្លែងកំណើន: ${RAW_BIRTH}\n+ អាសយដ្ឋានៈ 12 ${RAW_ADDRESS}\n៣៤ ${RAW_BIRTH}\n+ Expiry 01/01/2030\nUnrelated Location`;
 const AI_IDENTITY = Object.freeze({
   ten_that: 'AI Worker', cmnd: '111222333', ngay_sinh: '02/03/1988', tuoi: '38', gioi_tinh: 'M'
 });
@@ -467,6 +471,20 @@ const addressCases = [
   ['zero-width Khmer headers', `ទី\u200Bកន្លែង\u200Cកំណើត៖ ${RAW_BIRTH}\nអាសយ\u200Dដ្ឋាន\uFEFF៖ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
   ['spaced Khmer headers', `${[...'ទីកន្លែងកំណើត'].join(' ')}៖ ${RAW_BIRTH}\n${[...'អាសយដ្ឋាន'].join('\t')}៖ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
   ['numbered shorter Khmer birth header', `៣. កន្លែងកំណើត៖ ${RAW_BIRTH}\n4) អាសយដ្ឋាន៖ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['plus address and quoted numbered OCR birth label', NOISY_KHMER_CARD, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['Khmer ៈ separator without label noise', `ទីកន្លែងកំណើតៈ ${RAW_BIRTH}\nអាសយដ្ឋានៈ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['birth-label last-glyph OCR variant only', `ទីកន្លែងកំណើន: ${RAW_BIRTH}\nកន្លែងកំណើន៖ ${RAW_BIRTH}`, { noi_sinh: `${RAW_BIRTH} ${RAW_BIRTH}` }],
+  ['plus-prefixed label only', `+ អាសយដ្ឋាន៖ ${RAW_ADDRESS}`, { dia_chi: RAW_ADDRESS }],
+  ['quote-prefixed clean birth label', `” ទីកន្លែងកំណើត៖ ${RAW_BIRTH}`, { noi_sinh: RAW_BIRTH }],
+  ['ASCII quoted numbering', `4" ទីកន្លែងកំណើន: ${RAW_BIRTH}\n5' អាសយដ្ឋានៈ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['mixed symbols and Khmer numbering', `* + ៣) ទីកន្លែងកំណើតៈ ${RAW_BIRTH}\n• ៤.” អាសយដ្ឋានៈ ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['noisy label-only lines with blank continuations', NOISY_MULTILINE_CARD, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
+  ['house numbers in inline value and continuation stay raw', NUMBERED_ADDRESS_CARD, { noi_sinh: RAW_BIRTH, dia_chi: `12 ${RAW_ADDRESS} ៣៤ ${RAW_BIRTH}` }],
+  ['numbered continuation punctuation is not stripped', '+ Address: 12A Synthetic Village\n34. Synthetic Lane\n៥៦) Synthetic District\n+ Expiry 01/01/2030', { dia_chi: '12A Synthetic Village 34. Synthetic Lane ៥៦) Synthetic District' }],
+  ['unknown Khmer under noisy labels stays raw', '4” ទីកន្លែងកំណើន: សាកល្បង\n+ អាសយដ្ឋានៈ ភូមិសាកល្បង', { noi_sinh: 'សាកល្បង', dia_chi: 'ភូមិសាកល្បង' }],
+  ['noisy unlabelled places are not guessed', `+ ${RAW_BIRTH}\n4” ${RAW_ADDRESS}\n៥) Phnom Penh`, {}],
+  ['labels embedded in prose are not field headers', `Notes about ទីកន្លែងកំណើន: ${RAW_BIRTH}\nNotes about អាសយដ្ឋានៈ ${RAW_ADDRESS}`, {}],
+  ['other birth-label glyph substitutions are not guessed', `4” ទីកន្លែងកំណើរ: ${RAW_BIRTH}`, {}],
   ['bilingual Khmer/English', `ទីកន្លែងកំណើត / Place of birth: ${RAW_BIRTH}\nអាសយដ្ឋាន - Address: ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
   ['bilingual English/Khmer', `Place of birth / ទីកន្លែងកំណើត: ${RAW_BIRTH}\nAddress / អាសយដ្ឋាន: ${RAW_ADDRESS}`, { noi_sinh: RAW_BIRTH, dia_chi: RAW_ADDRESS }],
   ['Vietnamese labelled continuations', 'Nơi sinh: Xã A\r\nHuyện B\r\nĐịa chỉ thường trú: Thôn C\r\nTỉnh D\r\nNgày sinh: 01/01/1990', { noi_sinh: 'Xã A Huyện B', dia_chi: 'Thôn C Tỉnh D' }],
@@ -497,6 +515,11 @@ for (const boundary of [
   'Valid until 01/01/2030', 'Signature Other Person', 'ឈ្មោះ៖ Other Person',
   'ថ្ងៃ ខែ ឆ្នាំ កំណើត៖ 01/01/1990', 'ភេទ៖ ស្រី', 'សញ្ជាតិ៖ ខ្មែរ',
   'សុពលភាព៖ 01/01/2030', 'ថ្ងៃផុតកំណត់៖ 01/01/2030', 'ហត្ថលេខា៖ Other Person',
+  '+ សុពលភាពៈ 01/01/2030', '5” ថ្ងៃផុតកំណត់ៈ 01/01/2030',
+  '+ ៥) សុពលភាព 01/01/2030', '4” Expiry 01/01/2030',
+  '* ៦” Full name Other Person', '+ ៧) ឈ្មោះៈ Other Person',
+  '+ Unknown fieldៈ Other Value', '8” Unknown field: Other Value',
+  '4” IDKHM9901234561<<<<<<<<<<<<<<<',
   'Unknown field: Other Value', 'IDKHM9901234561<<<<<<<<<<<<<<<',
   '9001011F3001011KHM', 'SOK<<CHANNA<<<<', 'SOK««CHANNA‹‹‹‹'
 ]) {
@@ -556,7 +579,18 @@ test('offline full-card identity cannot overwrite cropped MRZ identity', async t
 });
 
 for (const [label, fullText, expected, warning] of [
-  ['unknown Khmer is retained, not guessed', 'Place of birth: សាកល្បង\nAddress: ភូមិសាកល្បង', { noi_sinh: 'សាកល្បង', dia_chi: 'Thôn សាកល្បង' }, /Địa chỉ chưa dịch đầy đủ/],
+  ['plus and quoted numbered Khmer labels translate locally', NOISY_KHMER_CARD,
+    { noi_sinh: VI_BIRTH, dia_chi: VI_ADDRESS, noi_sinh_goc: RAW_BIRTH, dia_chi_goc: RAW_ADDRESS }, /^$/],
+  ['noisy Khmer labels preserve blank multiline continuations', NOISY_MULTILINE_CARD,
+    { noi_sinh: VI_BIRTH, dia_chi: VI_ADDRESS, noi_sinh_goc: RAW_BIRTH, dia_chi_goc: RAW_ADDRESS }, /^$/],
+  ['noisy labels preserve inline and continuation house numbers', NUMBERED_ADDRESS_CARD,
+    { noi_sinh: VI_BIRTH, dia_chi: `12 ${VI_ADDRESS} ៣៤ ${VI_BIRTH}`,
+      noi_sinh_goc: RAW_BIRTH, dia_chi_goc: `12 ${RAW_ADDRESS} ៣៤ ${RAW_BIRTH}` }, /Địa chỉ chưa dịch đầy đủ/],
+  ['unknown Khmer is retained, not guessed', 'Place of birth: សាកល្បង\nAddress: ភូមិសាកល្បង',
+    { noi_sinh: 'សាកល្បង', dia_chi: 'Thôn សាកល្បង', noi_sinh_goc: 'សាកល្បង', dia_chi_goc: 'ភូមិសាកល្បង' }, /Địa chỉ chưa dịch đầy đủ/],
+  ['unknown Khmer under noisy labels retains original values', '4” ទីកន្លែងកំណើន: សាកល្បង\n+ អាសយដ្ឋានៈ ភូមិសាកល្បង\n+ សុពលភាពៈ 01/01/2030\nUnrelated Location',
+    { noi_sinh: 'សាកល្បង', dia_chi: 'Thôn សាកល្បង', noi_sinh_goc: 'សាកល្បង', dia_chi_goc: 'ភូមិសាកល្បង' }, /Địa chỉ chưa dịch đầy đủ/],
+  ['noisy unlabelled locations stay absent', `+ ${RAW_BIRTH}\n4” ${RAW_ADDRESS}\n៥) Phnom Penh`, {}, /Chưa đọc được nơi sinh\/địa chỉ/],
   ['unlabelled known locations stay absent', RAW_BIRTH + '\n' + RAW_ADDRESS, {}, /Chưa đọc được nơi sinh\/địa chỉ/],
   ['identity-only card warns about missing addresses', COMPLETE_MRZ, {}, /Chưa đọc được nơi sinh\/địa chỉ/],
   ['Vietnamese addresses are not changed', 'Nơi sinh: Hà Nội\nĐịa chỉ: Đà Nẵng', { noi_sinh: 'Hà Nội', dia_chi: 'Đà Nẵng' }, /^$/],
@@ -567,8 +601,10 @@ for (const [label, fullText, expected, warning] of [
     const result = await settles(s.run());
     assert.equal(result.ok, true);
     assertMrzIdentity(result.parsed);
-    assert.equal(result.parsed.noi_sinh, expected.noi_sinh);
-    assert.equal(result.parsed.dia_chi, expected.dia_chi);
+    assert.equal(result.source, 'offline');
+    for (const key of ['noi_sinh', 'dia_chi', 'noi_sinh_goc', 'dia_chi_goc']) {
+      assert.equal(result.parsed[key], expected[key], key);
+    }
     assert.match(result.warning || '', warning);
     assert.deepEqual(s.calls, TWO_PASS_CALLS);
   });

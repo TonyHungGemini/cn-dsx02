@@ -206,7 +206,7 @@ test('birth year is calculated after timezone conversion', () => {
   assert.equal(c.ageFromDOB('1992-12-31T17:00:00.000Z'), c.ageFromDOB('01/01/1993'));
 });
 
-for (const key of ['ten_that', 'cmnd', 'ngay_sinh', 'gioi_tinh', 'tuoi', 'loai', 'to', 'phong_o', 'phan_cay', 'so_dt']) {
+for (const key of ['ten_that', 'cmnd', 'ngay_sinh', 'gioi_tinh', 'tuoi', 'loai', 'to', 'phong_o', 'phan_cay']) {
   test(`completion requires worker field ${key}`, () => {
     const { context: c } = sandbox();
     const issues = c.getEditIssues({ ...completeForm, [key]: '' });
@@ -229,12 +229,12 @@ test('completion requests one address if translation left only Khmer text', () =
   assert.equal(issues[0].keys.join(','), 'noi_sinh,dia_chi,chi_tiet_noi_o');
 });
 
-test('completion exempts four work fields for dependents and keeps optional fields optional', () => {
+test('completion exempts three work fields for dependents and keeps optional fields optional', () => {
   const { context: c } = sandbox();
   const record = { ...completeForm, loai: 'Gia thuộc', cmnd: '', so_dt: '', to: '', phan_cay: '',
     nhom_mau: '', ghi_chu_ky_luat: '', chu_phong: false };
   assert.equal(c.getEditIssues(record).length, 0);
-  assert.equal(c.getEditIssues({ ...record, loai: 'Lao động' }).length, 4);
+  assert.equal(c.getEditIssues({ ...record, loai: 'Lao động' }).length, 3);
   assert.equal(c.getEditIssues({ ...record, phong_o: '' }).length, 1);
 });
 
@@ -379,13 +379,34 @@ test('changing to dependent removes discipline fields from the applied draft', (
   assert.equal(c.DATA[0].danh_gia_ky_nang, undefined);
 });
 
-test('clearing a required worker phone keeps the original record and does not queue', () => {
+for (const loai of ['Lao động', 'Gia thuộc', 'Khác']) {
+  test(`phone is optional for ${loai}`, () => {
+    const { context: c, queue } = sandbox();
+    const record = { ...completeForm, loai, so_dt: '' };
+    assert.equal(c.getEditIssues(record).length, 0);
+    assert.equal(c.requiredEditFields(record).some(([key]) => key === 'so_dt'), false);
+    c.DATA = [];
+    editForm(c, record);
+    c.saveEdit('__new__');
+    assert.equal(c.DATA.length, 1);
+    assert.equal(c.DATA[0].so_dt, '');
+    assert.equal(queue().length, 1);
+    assert.equal(queue()[0].so_dt, '');
+  });
+}
+
+test('clearing a worker phone saves empty aliases without refilling from cache', () => {
   const { context: c, queue } = sandbox();
-  c.DATA = [{ ...old, so_dt: '0123456789' }];
+  c.DATA = [{ ...old, so_dt: '0123456789', sdt: '0123456789', phone: '0123456789' }];
+  c.lookupPhoneFromCache = () => '0123456789';
   editForm(c, { so_dt: '' });
   c.saveEdit(old.id);
-  assert.equal(c.DATA[0].so_dt, '0123456789');
-  assert.equal(queue().length, 0);
+  assert.equal(queue().length, 1);
+  for (const key of ['so_dt', 'sdt', 'phone', 'so_dien_thoai', 'Số điện thoại']) {
+    assert.equal(c.DATA[0][key], '');
+    assert.equal(queue()[0][key], '');
+  }
+  assert.equal(c.mergeServerData([{ ...old, so_dt: '0123456789' }], queue())[0].so_dt, '');
 });
 
 test('cleared dependent phone is not refilled from cache or stale DATA', () => {
