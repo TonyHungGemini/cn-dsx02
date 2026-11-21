@@ -2711,57 +2711,74 @@ function blank(prefillRoom) {
   };
 }
 
-function rotateImage(uri, angle = 90) {
-  return new Promise((resolve) => {
+// Ảnh Drive là khác nguồn: thiếu crossOrigin thì canvas bị "nhiễm" và
+// toDataURL/getImageData bị chặn. Nguồn không cho CORS thì tải lại để xem, chỉnh sửa tắt.
+function loadImgForEdit(uri) {
+  return new Promise(resolve => {
     const img = new Image();
-    img.onload = () => {
-      try {
-        const rad = (angle * Math.PI) / 180;
-        const sin = Math.abs(Math.sin(rad));
-        const cos = Math.abs(Math.cos(rad));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * cos + img.height * sin);
-        canvas.height = Math.round(img.width * sin + img.height * cos);
-        const ctx = canvas.getContext("2d");
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate(rad);
-        ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        const out = canvas.toDataURL("image/jpeg", 0.92);
-        resolve(out && out.length > 100 ? out : null);
-      } catch (e) {
-        resolve(null);
-      }
+    let settled = false;
+    const finish = editable => {
+      if (settled) return;
+      settled = true;
+      resolve({ img, editable });
     };
-    img.onerror = () => resolve(null);
+    img.crossOrigin = "anonymous";
+    img.onload = () => finish(true);
+    img.onerror = () => {
+      img.onload = () => finish(false);
+      img.onerror = () => { if (!settled) { settled = true; resolve(null); } };
+      img.removeAttribute("crossorigin");
+      img.src = uri;
+    };
     img.src = uri;
   });
 }
 
+function rotateImage(uri, angle = 90) {
+  return loadImgForEdit(uri).then(res => {
+    if (!res) return null;
+    const img = res.img;
+    try {
+      const rad = (angle * Math.PI) / 180;
+      const sin = Math.abs(Math.sin(rad));
+      const cos = Math.abs(Math.cos(rad));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * cos + img.height * sin);
+      canvas.height = Math.round(img.width * sin + img.height * cos);
+      const ctx = canvas.getContext("2d");
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(rad);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      const out = canvas.toDataURL("image/jpeg", 0.92);
+      return out && out.length > 100 ? out : null;
+    } catch (e) {
+      return null;
+    }
+  });
+}
+
 function flipImage(uri, horizontal = true) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        if (horizontal) {
-          ctx.translate(canvas.width, 0);
-          ctx.scale(-1, 1);
-        } else {
-          ctx.translate(0, canvas.height);
-          ctx.scale(1, -1);
-        }
-        ctx.drawImage(img, 0, 0);
-        const out = canvas.toDataURL("image/jpeg", 0.92);
-        resolve(out && out.length > 100 ? out : null);
-      } catch (e) {
-        resolve(null);
+  return loadImgForEdit(uri).then(res => {
+    if (!res) return null;
+    const img = res.img;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      if (horizontal) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      } else {
+        ctx.translate(0, canvas.height);
+        ctx.scale(1, -1);
       }
-    };
-    img.onerror = () => resolve(null);
-    img.src = uri;
+      ctx.drawImage(img, 0, 0);
+      const out = canvas.toDataURL("image/jpeg", 0.92);
+      return out && out.length > 100 ? out : null;
+    } catch (e) {
+      return null;
+    }
   });
 }
 
@@ -2903,63 +2920,61 @@ function smartComputerVisionCrop(img) {
 }
 
 function aiCropCard(uri) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = async () => {
-      const srcW = img.naturalWidth || img.width;
-      const srcH = img.naturalHeight || img.height;
+  return loadImgForEdit(uri).then(async res => {
+    if (!res) return { ok: false, reason: "Không tải được ảnh gốc", uri };
+    const img = res.img;
+    if (!res.editable) {
+      return { ok: false, reason: "Ảnh gốc đang chặn chỉnh sửa từ trình duyệt. Bấm 📷 Đổi ảnh để tải ảnh mới rồi cắt.", uri };
+    }
+    const srcW = img.naturalWidth || img.width;
+    const srcH = img.naturalHeight || img.height;
 
-      // 1. First attempt: Cloud Vision AI Bounding Box Detection
-      try {
-        const res = await fetch("/api/detect-card-bounds", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: uri })
-        });
-        const json = await res.json();
-        if (json.ok && json.data && json.data.detected && json.data.ymin != null) {
-          const { ymin, xmin, ymax, xmax } = json.data;
-          if (ymax > ymin && xmax > xmin && (xmax - xmin) > 80 && (ymax - ymin) > 80) {
-            // Pad 0.5% margin around detected bounds to ensure edge text/corners remain fully intact
-            const padX = Math.round(srcW * 0.005);
-            const padY = Math.round(srcH * 0.005);
+    // 1. First attempt: Cloud Vision AI Bounding Box Detection
+    try {
+      const boxRes = await fetch("/api/detect-card-bounds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: uri })
+      });
+      const json = await boxRes.json();
+      if (json.ok && json.data && json.data.detected && json.data.ymin != null) {
+        const { ymin, xmin, ymax, xmax } = json.data;
+        if (ymax > ymin && xmax > xmin && (xmax - xmin) > 80 && (ymax - ymin) > 80) {
+          // Pad 0.5% margin around detected bounds to ensure edge text/corners remain fully intact
+          const padX = Math.round(srcW * 0.005);
+          const padY = Math.round(srcH * 0.005);
 
-            const sx = Math.max(0, Math.round((xmin / 1000) * srcW) - padX);
-            const sy = Math.max(0, Math.round((ymin / 1000) * srcH) - padY);
-            const ex = Math.min(srcW, Math.round((xmax / 1000) * srcW) + padX);
-            const ey = Math.min(srcH, Math.round((ymax / 1000) * srcH) + padY);
+          const sx = Math.max(0, Math.round((xmin / 1000) * srcW) - padX);
+          const sy = Math.max(0, Math.round((ymin / 1000) * srcH) - padY);
+          const ex = Math.min(srcW, Math.round((xmax / 1000) * srcW) + padX);
+          const ey = Math.min(srcH, Math.round((ymax / 1000) * srcH) + padY);
 
-            const sw = ex - sx;
-            const sh = ey - sy;
+          const sw = ex - sx;
+          const sh = ey - sy;
 
-            if (sw > 30 && sh > 30) {
-              const canvas = document.createElement("canvas");
-              canvas.width = sw;
-              canvas.height = sh;
-              const ctx = canvas.getContext("2d");
-              
-              // Strictly crop original pixels only - NEVER modify or distort original text/photos
-              ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-              const croppedUri = canvas.toDataURL("image/jpeg", 0.94);
-              resolve({ ok: true, uri: croppedUri, msg: "Đã nhận diện & cắt viền CMND bằng AI thành công!" });
-              return;
-            }
+          if (sw > 30 && sh > 30) {
+            const canvas = document.createElement("canvas");
+            canvas.width = sw;
+            canvas.height = sh;
+            const ctx = canvas.getContext("2d");
+            
+            // Strictly crop original pixels only - NEVER modify or distort original text/photos
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+            const croppedUri = canvas.toDataURL("image/jpeg", 0.94);
+            return { ok: true, uri: croppedUri, msg: "Đã nhận diện & cắt viền CMND bằng AI thành công!" };
           }
         }
-      } catch (aiErr) {
-        // Fall through to smart Computer Vision edge detector
       }
+    } catch (aiErr) {
+      // Fall through to smart Computer Vision edge detector
+    }
 
-      // 2. High-Precision Client-Side Smart Edge & Contour Detector (Always works even offline/quota limit)
-      const cvCropped = smartComputerVisionCrop(img);
-      if (cvCropped) {
-        resolve({ ok: true, uri: cvCropped, msg: "Đã nhận diện & cắt gọn viền thẻ CMND!" });
-      } else {
-        resolve({ ok: false, reason: "Ảnh khó nhận diện tự động, vui lòng chọn Cắt viền thủ công.", uri });
-      }
-    };
-    img.onerror = () => resolve({ ok: false, reason: "Không tải được ảnh gốc", uri });
-    img.src = uri;
+    // 2. High-Precision Client-Side Smart Edge & Contour Detector (Always works even offline/quota limit)
+    const cvCropped = smartComputerVisionCrop(img);
+    if (cvCropped) {
+      return { ok: true, uri: cvCropped, msg: "Đã nhận diện & cắt gọn viền thẻ CMND!" };
+    }
+    return { ok: false, reason: "Ảnh khó nhận diện tự động, vui lòng chọn Cắt viền thủ công.", uri };
   });
 }
 
@@ -3019,8 +3034,14 @@ function openManualCropModal(id, type, label, onDone) {
 
   document.body.appendChild(wrap);
 
-  const img = new Image();
-  img.onload = () => {
+  loadImgForEdit(uri).then(res => {
+    if (!res) {
+      wrap.remove();
+      toast("Không tải được ảnh để cắt viền. Hãy kiểm tra kết nối rồi thử lại.");
+      return;
+    }
+    const img = res.img;
+    const editable = res.editable;
     const canvas = wrap.querySelector("#cropCanvas");
     const ctx = canvas.getContext("2d");
 
@@ -3081,15 +3102,15 @@ function openManualCropModal(id, type, label, onDone) {
       let croppedUri = null;
       try { croppedUri = canvas.toDataURL("image/jpeg", 0.92); } catch(e) { croppedUri = null; }
       if (!croppedUri) {
-        toast("Ảnh gốc đang lưu trên Drive nên không cắt được. Bấm 📷 Đổi ảnh để tải bản mới rồi cắt.");
+        toast(editable
+          ? "Không xuất được ảnh đã cắt. Bấm 📷 Đổi ảnh để tải bản mới rồi cắt."
+          : "Nguồn ảnh đang chặn chỉnh sửa từ trình duyệt. Bấm 📷 Đổi ảnh để tải bản mới rồi cắt.");
         return;
       }
       wrap.remove();
       if (onDone) onDone(croppedUri);
     };
-  };
-
-  img.src = uri;
+  });
 
   const close = () => wrap.remove();
   wrap.querySelector("#bCloseCrop").onclick = close;
