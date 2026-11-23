@@ -203,6 +203,7 @@ const KM = {
   "⭐ Thành viên VIP": "⭐ សមាជិក VIP",
   "Dữ liệu được lưu an toàn trên máy này. Nhập mã bảo mật để đồng bộ lên Đám mây.": "ទិន្នន័យត្រូវបានរក្សាទុកសុវត្ថិភាពនៅលើម៉ាស៊ីននេះ។ បញ្ចូលកូដសុវត្ថិភាពដើម្បីធ្វើសមកាលកម្មទៅក្នុងពិភពលោក។",
   " thay đổi chưa đồng bộ": " ការផ្លាស់ប្តែមិនទាន់ធ្វើសមកាលកម្ម",
+  " ảnh chưa đồng bộ": " រូបភាពមិនទាន់ធ្វើសមកាលកម្ម",
   "Mã bảo mật / Mật khẩu tài khoản (Key)": "កូដសុវត្ថិភាព / ពាក្យសម្ងាត់គណនី (Key)",
   "Nhập mã bảo mật (Key) hoặc mật khẩu Admin": "បញ្ចូលកូដសុវត្ថិភាព (Key) ឬពាក្យសម្ងាត់ Admin",
   "Tên người dùng / Mã nhân sự": "ឈ្មោះអ្នកប្រើប្រាស់ / កូដបុគ្គលិក",
@@ -260,6 +261,13 @@ const KM = {
   "Lịch sử biên bản đã khắc phục": "ប្រវត្តិកំណត់ហេតុដែលបានដោះស្រាយរួច",
   "Chụp ảnh": "ថតរូប",
   "Chụp ảnh bằng camera điện thoại": "ថតរូបដោយកាមេរ៉ាទូរសព្ទ",
+  "(không tên)": "(គ្មានឈ្មោះ)",
+  "Hồ sơ này đã có trên hệ thống:": "បញ្ជីនេះមានរួចហើយនៅក្នុងប្រព័ន្ធ:",
+  "Bấm OK để mở hồ sơ cũ và sửa, Cancel để quay lại.": "ចុច OK ដើម្បីបើកបញ្ជីចាស់ហើយកែ ឬ Cancel ដើម្បីត្រឡប់ក្រោយ។",
+  "Đang mở hồ sơ đã có": "កំពុងបើកបញ្ជីដែលមានរួច",
+  "Nhóm máu": "ក្រុមឈាម",
+  "Không lưu được: ": "មិនអាចរក្សាទុកបាន: ",
+  " (chỉ quản trị viên được sửa)": " (មានតែអ្នកគ្រប់គ្រងទេដែលកែបាន)",
 };
 
 function t(vi){
@@ -722,6 +730,24 @@ function findMatchingRecord(target, list){
   return null;
 }
 
+// Người này đã có hồ sơ chưa? Chỉ khớp chắc chắn: trùng số CMND, hoặc trùng
+// họ tên + ngày sinh (duy nhất). Dùng để chặn tạo hồ sơ trùng khi thêm mới.
+function findDuplicatePerson(rec){
+  if(!rec || !Array.isArray(DATA)) return null;
+  const cmnd = isValidCmnd(rec.cmnd) ? String(rec.cmnd).trim().toLowerCase() : "";
+  if(cmnd){
+    const byCmnd = DATA.find(p => p && !p.deleted && String(p.id) !== String(rec.id) &&
+      isValidCmnd(p.cmnd) && String(p.cmnd).trim().toLowerCase() === cmnd);
+    if(byCmnd) return byCmnd;
+  }
+  const name = cleanStr(rec.ten_that);
+  const dob = formatDOB(rec.ngay_sinh);
+  if(!name || !dob) return null;
+  const same = DATA.filter(p => p && !p.deleted && String(p.id) !== String(rec.id) &&
+    cleanStr(p.ten_that) === name && formatDOB(p.ngay_sinh) === dob);
+  return same.length === 1 ? same[0] : null;
+}
+
 function getPhone(p){
   if(!p) return "";
   if(typeof p !== "object") return cleanPhone(p);
@@ -828,53 +854,74 @@ function getBaseData(){
   return [];
 }
 
+function dedupeStamp(r){
+  const t = Number(r && r._editedAt);
+  if(t > 0) return t;
+  const u = Date.parse(r && r.updatedAt);
+  return isNaN(u) ? 0 : u;
+}
+
+function carryPhone(from, to){
+  const ph = getPhone(from);
+  if(!ph || getPhone(to)) return;
+  to.so_dt = ph;
+  to.sdt = ph;
+  to.phone = ph;
+  to["Số điện thoại"] = ph;
+  to["Số ĐT"] = ph;
+  savePhoneToCache(to, ph);
+}
+
 function dedupeDataset(list){
   if(!Array.isArray(list)) return [];
   const out = [];
-  const seenKeys = new Set();
+  const seenKeys = new Map();
 
   list.forEach(r => {
     if(!r || typeof r !== "object") return;
     const name = cleanStr(r.ten_that);
     const room = cleanStr(r.phong_o);
-    const dob = String(r.ngay_sinh || "").trim();
+    const to = cleanStr(r.to);
+    const dob = formatDOB(r.ngay_sinh);
     const cmnd = isValidCmnd(r.cmnd) ? String(r.cmnd).trim().toLowerCase() : "";
 
     // Skip empty placeholder records
     if(!name && !cmnd && !room) return;
 
+    // Chỉ gộp khi trùng cả nơi ở/tổ: hai bản ghi cùng người nhưng khác tổ
+    // (vd. chuyển tổ) vẫn phải hiện đủ, tránh "mất" bản vừa nhập.
     let key = "";
-    if(cmnd && name) key = `cmnd:${cmnd}__${name}`;
-    else if(cmnd && !name) key = `cmnd:${cmnd}`;
-    else if(name && room && dob) key = `nrd:${name}__${room}__${dob}`;
-    else if(name && room) key = `nr:${name}__${room}`;
+    if(cmnd && name) key = `cmnd:${cmnd}__${name}__${room}|${to}|${dob}`;
+    else if(cmnd && !name) key = `cmnd:${cmnd}__${room}|${to}`;
+    else if(name && room && dob) key = `nrd:${name}__${room}__${dob}__${to}`;
+    else if(name && room) key = `nr:${name}__${room}__${to}`;
     else if(name && dob) key = `nd:${name}__${dob}`;
     else if(r.id != null && r.id !== "" && r.id !== "__new__" && !String(r.id).startsWith("srv_")) key = `id:${r.id}`;
     else key = `name:${name}`;
 
-    if(seenKeys.has(key)){
-      const existing = out.find(x => {
-        if(cmnd && name && isValidCmnd(x.cmnd) && String(x.cmnd).trim().toLowerCase() === cmnd && cleanStr(x.ten_that) === name) return true;
-        if(name && room && cleanStr(x.ten_that) === name && cleanStr(x.phong_o) === room) return true;
-        if(x.id != null && r.id != null && String(x.id) === String(r.id)) return true;
-        return false;
-      });
-      if(existing){
-        const ph = getPhone(r);
-        if(ph && !getPhone(existing)){
-          existing.so_dt = ph;
-          existing.sdt = ph;
-          existing.phone = ph;
-          existing["Số điện thoại"] = ph;
-          existing["Số ĐT"] = ph;
-          savePhoneToCache(existing, ph);
-        }
-        if(r._edited) existing._edited = true;
-      }
+    const at = seenKeys.get(key);
+    if(at == null){
+      seenKeys.set(key, out.length);
+      out.push(r);
       return;
     }
-    seenKeys.add(key);
-    out.push(r);
+
+    // Giữ bản mới nhất (bản vừa lưu trên máy này), không giữ bản cũ theo thứ tự Sheet.
+    const kept = out[at];
+    if(!kept.deleted && r.deleted) return;
+    if(kept.deleted && !r.deleted){
+      carryPhone(kept, r);
+      out[at] = r;
+      return;
+    }
+    if(!kept.deleted && !r.deleted && dedupeStamp(r) > dedupeStamp(kept)){
+      carryPhone(kept, r);
+      if(kept._edited) r._edited = true;
+      out[at] = r;
+      return;
+    }
+    carryPhone(r, kept);
+    if(r._edited) kept._edited = true;
   });
   return out;
 }
@@ -3537,6 +3584,23 @@ function saveEdit(id) {
     rec.hinh_thuc_ky_luat = (rec.hinh_thuc_ky_luat || "").trim();
     rec.trang_thai_ky_luat = (rec.trang_thai_ky_luat || "").trim();
     rec.nguoi_lap_bien_ban = (rec.nguoi_lap_bien_ban || "").trim();
+  }
+
+  // Thêm mới nhưng người này đã có hồ sơ: mở hồ sơ cũ để sửa thay vì tạo bản trùng
+  if (isNew) {
+    const dup = findDuplicatePerson(rec);
+    if (dup) {
+      const label = dup.ten_that || dup.ten_ho_so || t("(không tên)");
+      const where = [dup.to, dup.phong_o].filter(Boolean).join(" · ");
+      const msg = t("Hồ sơ này đã có trên hệ thống:") + "\n\n" + label + (where ? " (" + where + ")" : "") +
+        "\n\n" + t("Bấm OK để mở hồ sơ cũ và sửa, Cancel để quay lại.");
+      if (confirm(msg)) {
+        TEMP_NEW_IMGS = {};
+        openEdit(dup.id);
+        toast(t("Đang mở hồ sơ đã có"));
+      }
+      return;
+    }
   }
 
   const ckChu = sheet.querySelector("#ckChu");
@@ -6700,27 +6764,50 @@ function queueChange(...records){
   }
 }
 
+const BLOCKED_FIELD_LABELS = { nhom_mau: "Nhóm máu" };
+
 function acknowledgeChanges(sent, response){
-  const rejected = new Set((response?.rejected || []).map(r => String(r.id)));
+  const rejectedList = Array.isArray(response?.rejected) ? response.rejected : [];
+  const retryRejected = new Set();
+  const blockedFields = [];
+  for(const item of rejectedList){
+    if(item && item.reason === "guest_field_restricted"){
+      for(const f of (item.fields || [])){
+        const key = String(f);
+        if(!blockedFields.includes(key)) blockedFields.push(key);
+      }
+    } else if(item && item.id != null){
+      retryRejected.add(String(item.id));
+    }
+  }
   const accepted = new Set(response?.ok === true ? (response.accepted || []).map(String) : []);
   const snapshots = new Map(sent.map(r => [String(r.id), JSON.stringify(r)]));
   const current = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
-  const remaining = current.filter(r => !accepted.has(String(r.id)) || rejected.has(String(r.id)) ||
-    snapshots.get(String(r.id)) !== JSON.stringify(r));
+  // Trường khách không có quyền sửa đã bị máy chủ bỏ qua: đừng giữ hồ sơ trong
+  // hàng đợi mãi (sẽ đẩy lại mỗi lần). Các trường hợp từ chối khác vẫn thử lại.
+  const remaining = current.filter(r => {
+    const id = String(r.id);
+    if(!accepted.has(id)) return true;
+    if(retryRejected.has(id)) return true;
+    if(snapshots.get(id) !== JSON.stringify(r)) return true;
+    return false;
+  });
   if(remaining.length !== current.length && !safeSetStorage("cn_queue_v1", JSON.stringify(remaining))){
     throw new Error("Không lưu được hàng đợi đồng bộ. Hãy giữ app mở và sao lưu dữ liệu.");
   }
-  return remaining;
+  return { remaining, blockedFields };
 }
 
 function updateSyncBadge(){
   try{
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+    const imgOps = getPendImg().length + getPendDel().length;
+    const total = q.length + imgOps;
     const b = document.getElementById("syncBadge");
     if(b){
-      if(q.length > 0){
+      if(total > 0){
         b.style.display = "";
-        b.textContent = "☁️ +" + q.length;
+        b.textContent = "☁️ +" + total;
       } else {
         b.style.display = "none";
       }
@@ -7253,7 +7340,12 @@ async function syncNowCore(silent, force){
     applyRole();
     const incomingData = res.data || res.rows || res.records;
     if(!Array.isArray(incomingData)) throw new Error("Máy chủ chưa trả về danh sách hồ sơ hợp lệ.");
-    const remaining = acknowledgeChanges(q, pushRes);
+    const ack = acknowledgeChanges(q, pushRes);
+    const remaining = ack.remaining;
+    if(ack.blockedFields.length){
+      const labels = ack.blockedFields.map(f => t(BLOCKED_FIELD_LABELS[f] || f)).join(", ");
+      toast(t("Không lưu được: ") + labels + t(" (chỉ quản trị viên được sửa)"));
+    }
     updateSyncBadge();
 
     if(Array.isArray(incomingData)){
@@ -7367,6 +7459,7 @@ function openSettings(initTab){
   if(!s) return;
 
   const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
+  const pendingImgOps = getPendImg().length + getPendDel().length;
   const imgCount = Object.keys(IMG_OVR).filter(k => IMG_OVR[k] && IMG_OVR[k] !== DEL).length;
   const uniqueRooms = new Set(DATA.map(x => x.phong_o).filter(Boolean)).size;
   const ldCount = DATA.filter(x => (x.loai || "").toLowerCase().includes("lao")).length;
@@ -7383,6 +7476,7 @@ function openSettings(initTab){
           '<b>' + (isOnline ? t("Máy chủ Google Drive & Sheets: Đã kết nối") : t("Chế độ Ngoại tuyến / Chưa kết nối")) + '</b>' +
           '<span>' + (isOnline ? (t("Quyền hạn: ") + (ROLE === "admin" ? t("🛡️ Quản trị viên (Admin) - Toàn quyền quản trị & đồng bộ") : t("⭐ Thành viên VIP"))) : t("Dữ liệu được lưu an toàn trên máy này. Nhập mã bảo mật để đồng bộ lên Đám mây.")) + '</span>' +
           (q.length > 0 ? ('<div class="pending-tag">⏳ ' + q.length + t(' thay đổi chưa đồng bộ') + '</div>') : '') +
+          (pendingImgOps > 0 ? ('<div class="pending-tag">🖼️ ' + pendingImgOps + t(' ảnh chưa đồng bộ') + '</div>') : '') +
         '</div>' +
       '</div>' +
       '<div class="fld">' +
