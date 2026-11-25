@@ -39,6 +39,7 @@ const KM = {
   "Vui lòng bổ sung thông tin": "សូមបំពេញព័ត៌មានបន្ថែម",
   "Thông tin bắt buộc đã đầy đủ": "ព័ត៌មានចាំបាច់បានបំពេញគ្រប់ហើយ",
   "Vui lòng bổ sung thông tin trước khi lưu": "សូមបំពេញព័ត៌មានឱ្យគ្រប់មុនពេលរក្សាទុក",
+  "Vui lòng nhập họ tên người mới trước khi lưu": "សូមបញ្ចូលឈ្មោះពេញរបស់អ្នកថ្មីមុនពេលរក្សាទុក",
   "Bấm vào mục bên dưới để nhập bổ sung. Nếu CMND không đọc được, hãy kiểm tra giấy tờ hoặc hỏi lại người lao động.": "ចុចលើចំណុចខាងក្រោមដើម្បីបំពេញព័ត៌មាន។ បើមិនអាចអានអត្តសញ្ញាណប័ណ្ណបាន សូមពិនិត្យឯកសារ ឬសួរកម្មករម្តងទៀត។",
   "Kiểm tra thông tin rồi bấm Lưu thay đổi.": "ពិនិត្យព័ត៌មាន រួចចុចរក្សាទុកការកែប្រែ។",
   "Nhập ngày sinh hợp lệ (dd/mm/yyyy)": "បញ្ចូលថ្ងៃកំណើតត្រឹមត្រូវ (dd/mm/yyyy)",
@@ -2716,7 +2717,13 @@ function movePerson(id, fromRoom){
 let editingId = null;
 let editBackRoom = null;
 
+function khuForTo(to) {
+  const m = String(to || "").match(/(\d+)/);
+  return m ? "KV" + m[1] : "";
+}
+
 function blank(prefillRoom) {
+  const defaultTo = state && state.to ? state.to : "";
   const queued = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
   const usedIds = new Set([...DATA, ...queued].map(p => String(p.id)));
   let id;
@@ -2738,8 +2745,8 @@ function blank(prefillRoom) {
     danh_gia_ky_nang: 3,
     danh_gia_dao_duc: 3,
     loai: "Lao động",
-    to: "",
-    khu_vuc: "",
+    to: defaultTo,
+    khu_vuc: khuForTo(defaultTo),
     phan_cay: "",
     quan_he: "",
     phong_o: prefillRoom || "",
@@ -3551,6 +3558,20 @@ function saveEdit(id) {
     return;
   }
 
+  // Hồ sơ mới không có tên sẽ bị ẩn khỏi danh sách sau khi đồng bộ
+  if (isNew && !String(rec.ten_that || "").trim()) {
+    toast(t("Vui lòng nhập họ tên người mới trước khi lưu"));
+    const nameInp = sheet.querySelector('[data-k="ten_that"]');
+    if (nameInp) {
+      nameInp.closest(".fld")?.scrollIntoView({ block: "center" });
+      nameInp.focus({ preventScroll: true });
+      nameInp.classList.remove("field-pulse-red"); void nameInp.offsetWidth;
+      nameInp.classList.add("field-pulse-red");
+      setTimeout(() => nameInp.classList.remove("field-pulse-red"), 2000);
+    }
+    return;
+  }
+
   const ph = cleanPhone(rec.so_dt);
   rec.so_dt = ph;
   rec.sdt = ph;
@@ -3910,6 +3931,21 @@ function openEdit(id, prefillRoom, backRoom) {
     setTimeout(() => inp.classList.remove("field-pulse"), 2500);
   }
   updateEditCompletion(sheet);
+
+  // Đổi tổ trong hồ sơ mới: cập nhật khu vực đi kèm (Tổ 6 → KV6)
+  if (id === "__new__") {
+    const toSel = sheet.querySelector('select[data-k="to"]');
+    const kvInp = sheet.querySelector('input[data-k="khu_vuc"]');
+    if (toSel && kvInp) {
+      let autoKv = khuForTo(toSel.value);
+      toSel.addEventListener("change", () => {
+        const next = khuForTo(toSel.value);
+        const cur = kvInp.value.trim();
+        if (!cur || cur.toUpperCase() === autoKv.toUpperCase()) kvInp.value = next;
+        autoKv = next;
+      });
+    }
+  }
 
   // Dynamically update title if worker name is edited in input
   const nameInput = sheet.querySelector("input[data-k='ten_that']");
