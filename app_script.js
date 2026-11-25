@@ -1214,6 +1214,11 @@ function idbPut(k,v){
   try{ _db.transaction("imgs","readwrite").objectStore("imgs").put(v,k); }catch(e){}
 }
 
+function idbDel(k){
+  if(!_db) return;
+  try{ _db.transaction("imgs","readwrite").objectStore("imgs").delete(k); }catch(e){}
+}
+
 function imgFileId(id, t){
   try {
     if (typeof window !== "undefined" && window.__IMG_MAP) {
@@ -7078,17 +7083,28 @@ async function fetchServerImages(imgs, deleted){
   let map = {};
   try{ map = JSON.parse(localStorage.getItem("cn_imgfiles_v1") || "{}"); }catch(e){}
   let mapChanged = false;
+  let liveChanged = false;
+  const liveKeys = new Set();
 
   for(const id in imgs){
     for(const t in imgs[id]){
       const key = t + ":" + id;
-      if(pending.has(key)) continue;
       const fid = imgs[id][t];
-      if(!window.__IMG_MAP[id]) window.__IMG_MAP[id] = {};
-      window.__IMG_MAP[id][t] = fid;
-      if(fid && map[key] !== fid){
-        map[key] = fid;
-        mapChanged = true;
+      if(fid) liveKeys.add(key);
+      if(pending.has(key)) continue;
+      // Máy chủ đã có ảnh: gỡ dấu xoá cũ còn kẹt trên máy này, nếu không ảnh sẽ mất vĩnh viễn
+      if(fid && IMG_OVR[key] === DEL){
+        delete IMG_OVR[key];
+        idbDel(key);
+        liveChanged = true;
+      }
+      if(fid){
+        if(!window.__IMG_MAP[id]) window.__IMG_MAP[id] = {};
+        window.__IMG_MAP[id][t] = fid;
+        if(map[key] !== fid){
+          map[key] = fid;
+          mapChanged = true;
+        }
       }
     }
   }
@@ -7098,6 +7114,8 @@ async function fetchServerImages(imgs, deleted){
       for(const t in deleted[id]){
         const key = t + ":" + id;
         if(pending.has(key)) continue;
+        // Máy chủ đang có ảnh sống thì bỏ qua dấu xoá cũ (tránh xoá nhầm ảnh vừa tải lại)
+        if(liveKeys.has(key)) continue;
         const hadImage = (IMG_OVR[key] && IMG_OVR[key] !== DEL) ||
           !!map[key] ||
           !!(window.__IMG_MAP && window.__IMG_MAP[id] && window.__IMG_MAP[id][t] != null);
@@ -7131,7 +7149,7 @@ async function fetchServerImages(imgs, deleted){
       console.warn("Storage warning for cn_imgfiles_v1:", storageErr);
     }
   }
-  if(delApplied){
+  if(delApplied || liveChanged || mapChanged){
     try { if(typeof _cardCache !== "undefined") _cardCache.clear(); _lastPeopleHtml = null; } catch(e){}
     if(typeof render === "function") render();
   }
