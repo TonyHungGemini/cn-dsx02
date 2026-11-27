@@ -1,5 +1,15 @@
 /* ===== Tra cứu Công nhân ĐSX02 - Phiên bản nâng cấp Thống kê & Quản lý Phòng ở, Số điện thoại ===== */
 const LS_KEY = "csdl_cn_dsx02_v1";
+
+// "Vùng đệm đã xoá": hồ sơ không còn dòng nào trên Sheet nhưng dữ liệu vẫn được giữ ở đây
+// để gọi lại khi cần. Luôn ẩn khỏi danh sách và tổng số, trừ khi Sheet có lại đúng id này.
+var BASE_ARCHIVE = [{"cmnd":"080086155","ten_that":"MAI MUP","ten_ho_so":"SIN SAMPHON","ngay_sinh":"15/07/2005","tuoi":"20","noi_sinh":"","gioi_tinh":"F","loai":"Lao động","to":"Tổ 3","khu_vuc":"KV3","phan_cay":"26-KV3","quan_he":"Vợ","phong_o":"J7","so_bao_hiem":"1940724-3665213-ប","chi_tiet_noi_o":"Kouk Ompil - Lveng Roesey - Chika Ranh - Siem Reap","dia_chi":"Siem Reap","ghi_chu":"LV","chu_phong":false,"deleted":true,"id":80086155,"so_dt":"","sdt":"","danh_gia_ky_nang":3,"danh_gia_dao_duc":3},{"cmnd":"080032299","ten_that":"PHANN TAU","ten_ho_so":"TEA SIM","ngay_sinh":"14/12/1965","tuoi":"60","noi_sinh":"","gioi_tinh":"M","loai":"Lao động","to":"Tổ 3","khu_vuc":"KV3","phan_cay":"06-KV3","quan_he":"","phong_o":"M7","so_bao_hiem":"TMP-198130","chi_tiet_noi_o":"Ban Na Ong - Sre Sambor - Siem Pang - Stung Treng","dia_chi":"Stung Treng","ghi_chu":"LV","chu_phong":false,"deleted":true,"id":80032299,"so_dt":"","sdt":"","danh_gia_ky_nang":3,"danh_gia_dao_duc":3},{"cmnd":"20064120","ten_that":"SIM SEYHA","ten_ho_so":"SIM SEYHA","ngay_sinh":"06/08/1993","tuoi":"32","noi_sinh":"","gioi_tinh":"M","loai":"Lao động","to":"Tổ 5","khu_vuc":"KV5","phan_cay":"33-KV5","quan_he":"Chồng","phong_o":"C5","so_bao_hiem":"","chi_tiet_noi_o":"Borkhamar - Srok Khimis - Takeo","dia_chi":"Takeo","ghi_chu":"LV","chu_phong":false,"deleted":true,"id":20064120,"so_dt":"","sdt":"","danh_gia_ky_nang":3,"danh_gia_dao_duc":3},{"cmnd":"200147003","ten_that":"LO SOKHCHEA","ten_ho_so":"LO SOKHCHEA","ngay_sinh":"06/01/1994","tuoi":"32","noi_sinh":"","gioi_tinh":"F","loai":"Lao động","to":"Tổ 5","khu_vuc":"KV5","phan_cay":"34-KV5","quan_he":"Vợ","phong_o":"C5","so_bao_hiem":"","chi_tiet_noi_o":"Smak Krosar - Srok Sna - Mondol Kiri","dia_chi":"Mondol Kiri","ghi_chu":"LV","chu_phong":false,"deleted":true,"id":200147003,"so_dt":"","sdt":"","danh_gia_ky_nang":3,"danh_gia_dao_duc":3},{"cmnd":"","ten_that":"SIN SUSODAY","ten_ho_so":"false","ngay_sinh":"20/05/2018","tuoi":"8","noi_sinh":"","gioi_tinh":"F","loai":"Gia thuộc","to":"Tổ 5","khu_vuc":"KV5","phan_cay":"","quan_he":"Con","phong_o":"C5","so_bao_hiem":"","chi_tiet_noi_o":"Smak Krosar - Srok Sna - Mondol Kiri","dia_chi":"Mondol Kiri","ghi_chu":"GT","chu_phong":false,"deleted":true,"id":312,"so_dt":"","sdt":""},{"cmnd":"","ten_that":"SIN TOLA","ten_ho_so":"false","ngay_sinh":"02/10/2020","tuoi":"5","noi_sinh":"","gioi_tinh":"M","loai":"Gia thuộc","to":"Tổ 5","khu_vuc":"KV5","phan_cay":"","quan_he":"Con","phong_o":"C5","so_bao_hiem":"","chi_tiet_noi_o":"Smak Krosar - Srok Sna - Mondol Kiri","dia_chi":"Mondol Kiri","ghi_chu":"GT","chu_phong":false,"deleted":true,"id":313,"so_dt":"","sdt":""},{"cmnd":"151062632","ten_that":"XINUON SAMKHUON","ten_ho_so":"VAI SOPHEAP","ngay_sinh":"07/06/2008","tuoi":"18","noi_sinh":"","gioi_tinh":"","loai":"Lao động","to":"Tổ 5","khu_vuc":"KV5","phan_cay":"23-KV5","quan_he":"Bạn","phong_o":"M1","so_bao_hiem":"","chi_tiet_noi_o":"Yutros - Svay Krau - Tboung Khmum","dia_chi":"Tboung Khmum","ghi_chu":"LV","chu_phong":false,"deleted":true,"id":151062632,"so_dt":"","sdt":"","danh_gia_ky_nang":3,"danh_gia_dao_duc":3},{"cmnd":"150530458","ten_that":"MON PHEAN","ten_ho_so":"MON PHEAN","ngay_sinh":"20/11/2015","tuoi":"10","noi_sinh":"","gioi_tinh":"M","loai":"Lao động","to":"Tổ 6","khu_vuc":"KV6","phan_cay":"18-KV6","quan_he":"Bạn","phong_o":"K7","so_bao_hiem":"1961217-1065788-ស","chi_tiet_noi_o":"Popok - Popok - Stung - Kampong Thom","dia_chi":"Kampong Thom","ghi_chu":"LV","chu_phong":false,"deleted":true,"id":150530458,"so_dt":"","sdt":"","danh_gia_ky_nang":3,"danh_gia_dao_duc":3}];
+var ARCHIVED_IDS = {};
+for (var _ai = 0; _ai < BASE_ARCHIVE.length; _ai++) {
+  if (BASE_ARCHIVE[_ai] && BASE_ARCHIVE[_ai].id != null) ARCHIVED_IDS[String(BASE_ARCHIVE[_ai].id)] = true;
+}
+function isArchivedId(id){ return id != null && id !== "" && ARCHIVED_IDS[String(id)] === true; }
+
 const FIELDS = [
   ["cmnd","CMND / CCCD","input"],
   ["ten_that","Họ và tên (tên thật)","input"],
@@ -958,7 +968,7 @@ function load(){
           }
           return p;
         });
-        return dedupeDataset(mapped);
+        return dedupeDataset(mapped).filter(p => !isArchivedId(p.id));
       }
     }
   }catch(e){
@@ -976,7 +986,7 @@ function load(){
       savePhoneToCache(p, ph);
     }
     return p;
-  }));
+  }).filter(p => !isArchivedId(p.id)));
 }
 
 function save(){
@@ -7021,6 +7031,7 @@ function normServerRec(o){
 
 function mergeServerData(serverList, queuedList){
   const merged = [];
+  const liveSrvIds = new Set();
   const matchedLocalIds = new Set();
   const deletedIds = new Set(); // hồ sơ đã bị xoá trên máy khác
   const queueArr = Array.isArray(queuedList) ? queuedList : [];
@@ -7041,6 +7052,7 @@ function mergeServerData(serverList, queuedList){
       if(existing) deletedIds.add(String(existing.id));
       return;
     }
+    if(!srec.deleted) liveSrvIds.add(String(srec.id));
     if(existing) matchedLocalIds.add(String(existing.id));
     if(queued){
       merged.push({ ...normServerRec(queued), ...queued, _edited: true });
@@ -7091,7 +7103,7 @@ function mergeServerData(serverList, queuedList){
     merged.push({ ...normServerRec(p), ...p, _edited: true });
   });
 
-  return dedupeDataset(merged);
+  return dedupeDataset(merged).filter(r => !isArchivedId(r.id) || liveSrvIds.has(String(r.id)));
 }
 
 async function fetchServerImages(imgs, deleted){
