@@ -373,6 +373,7 @@ let _khmerWarnAt = 0;
 document.addEventListener("input", (e) => {
   const el = e.target;
   if(!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA")) return;
+  if(el.hasAttribute && el.hasAttribute("data-allow-khmer")) return;
   if(!el.value || !KHMER_TEST_RE.test(el.value)) return;
   el.value = el.value.replace(KHMER_INPUT_RE, "");
   el.classList.remove("field-pulse-red"); void el.offsetWidth; el.classList.add("field-pulse-red");
@@ -3891,6 +3892,10 @@ function openEdit(id, prefillRoom, backRoom) {
     if (k === "cmnd") {
       return '<div class="fld"><label>' + lbl + (isValidCmnd(cur.cmnd) ? (' ' + verifiedBadgeHtml(cur)) : '') + '</label><input data-k="' + k + '" value="' + v + '" placeholder="' + t("Nhập số CMND / CCCD hoặc quét từ ảnh") + '"></div>';
     }
+    if (k === "so_bao_hiem") {
+      // Số bảo hiểm Campuchia có thể có ký tự Khmer ở cuối: cho phép nhập
+      return '<div class="fld"><label>' + lbl + '</label><input data-k="' + k + '" value="' + v + '" data-allow-khmer="1"></div>';
+    }
     return '<div class="fld"><label>' + lbl + '</label><input data-k="' + k + '" value="' + v + '"></div>';
   };
   
@@ -7106,6 +7111,59 @@ function mergeServerData(serverList, queuedList){
   return dedupeDataset(merged).filter(r => !isArchivedId(r.id) || liveSrvIds.has(String(r.id)));
 }
 
+/* ---- Trộn theo từng trường: chỉ gửi trường thực sự đổi so với lần đồng bộ gần nhất ---- */
+const SYNC_BASE_KEY = "cn_base_dsx02_v1";
+const SYNC_BASE_FIELDS = ['cmnd','ten_that','ten_ho_so','ngay_sinh','tuoi','gioi_tinh','loai',
+  'chu_phong','to','khu_vuc','phan_cay','quan_he','phong_o','so_bao_hiem','chi_tiet_noi_o',
+  'dia_chi','ghi_chu','noi_sinh','so_dt','nhom_mau','danh_gia_ky_nang','danh_gia_dao_duc',
+  'ghi_chu_ky_luat','ngay_ky_luat','hinh_thuc_ky_luat','trang_thai_ky_luat','nguoi_lap_bien_ban'];
+let _syncBaseMap = null;
+function getSyncBaseMap(){
+  if(_syncBaseMap) return _syncBaseMap;
+  try{
+    const v = JSON.parse(localStorage.getItem(SYNC_BASE_KEY) || "{}");
+    _syncBaseMap = (v && typeof v === "object" && !Array.isArray(v)) ? v : {};
+  }catch(e){ _syncBaseMap = {}; }
+  return _syncBaseMap;
+}
+function rememberServerBaseline(serverList){
+  if(!Array.isArray(serverList) || !serverList.length) return;
+  try{
+    const map = getSyncBaseMap();
+    let dirty = false;
+    latestServerRows(serverList).forEach(raw => {
+      if(!raw || typeof raw !== "object") return;
+      const n = normServerRec(raw);
+      const id = n.id != null ? String(n.id) : "";
+      if(!id || id === "undefined") return;
+      if(n.deleted){
+        if(map[id]){ delete map[id]; dirty = true; }
+        return;
+      }
+      const snap = {};
+      for(const f of SYNC_BASE_FIELDS){
+        snap[f] = (f === "chu_phong") ? !!n[f] : String(n[f] == null ? "" : n[f]);
+      }
+      if(JSON.stringify(map[id]) !== JSON.stringify(snap)){ map[id] = snap; dirty = true; }
+    });
+    if(dirty) localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(map));
+  }catch(e){}
+}
+function buildPushRecord(rec, baseSnap){
+  if(!baseSnap) return enrichRecordForServer(rec);
+  const out = { id: rec.id };
+  for(const f of SYNC_BASE_FIELDS){
+    if(!(f in baseSnap)) continue; // baseline cũ thiếu trường mới: bỏ qua để không ghi đè nhầm
+    const isBool = (f === "chu_phong");
+    const nv = isBool ? !!rec[f] : (rec[f] == null ? "" : rec[f]);
+    const bv = baseSnap[f];
+    if(f === "so_dt" && cleanPhone(nv) === cleanPhone(bv == null ? "" : bv)) continue;
+    if(String(nv).trim() === String(bv == null ? "" : bv).trim()) continue;
+    out[f] = nv;
+  }
+  return out;
+}
+
 async function fetchServerImages(imgs, deleted){
   if (!window.__IMG_MAP) window.__IMG_MAP = {};
   const pending = new Set([...getPendImg(), ...getPendDel()]);
@@ -7333,6 +7391,7 @@ async function syncNowCore(silent, force){
         // Merge master records from server
         if(Array.isArray(srvData.data) && srvData.data.length > 0){
           logIncomingChanges(srvData.data);
+          rememberServerBaseline(srvData.data);
           DATA = mergeServerData(srvData.data, q);
           save();
           initFilterOptions();
@@ -7373,7 +7432,7 @@ async function syncNowCore(silent, force){
     if(!force && !hasLocalWork && _lastCloudRev != null){
       try{
         const rv = await api("rev", {});
-        if(rv && rv.ok && rv.rev === _lastCloudRev) return true;
+        if(rv && rv.ok && rv.rev === _lastCloudRev && Object.keys(getSyncBaseMap()).length > 0) return true;
       }catch(e){}
     }
 
@@ -7431,13 +7490,14 @@ async function syncNowCore(silent, force){
 
     const q = JSON.parse(localStorage.getItem("cn_queue_v1") || "[]");
     const enrichedQ = q.map(enrichRecordForServer);
+    const baseAtPush = getSyncBaseMap();
 
     // Push local changes to Google Apps Script if there are any pending edits
     let pushRes = null;
-    if(enrichedQ.length > 0){
+    if(q.length > 0){
       try {
         pushRes = await api("push", {
-          changes: enrichedQ.map(r => ({ rec: r, deleted: r.deleted === true })),
+          changes: q.map(r => ({ rec: buildPushRecord(r, baseAtPush[String(r.id)]), deleted: r.deleted === true })),
           records: enrichedQ
         });
       } catch(pushErr){
@@ -7471,6 +7531,7 @@ async function syncNowCore(silent, force){
     applyRole();
     const incomingData = res.data || res.rows || res.records;
     if(!Array.isArray(incomingData)) throw new Error("Máy chủ chưa trả về danh sách hồ sơ hợp lệ.");
+    rememberServerBaseline(incomingData);
     const ack = acknowledgeChanges(q, pushRes);
     const remaining = ack.remaining;
     if(ack.blockedFields.length){
@@ -7547,6 +7608,7 @@ async function connect(silent = false){
       const rData = (r && (r.data || r.rows || r.records)) || [];
       if(Array.isArray(rData) && rData.length > 0){
         logIncomingChanges(rData);
+        rememberServerBaseline(rData);
         DATA = mergeServerData(rData, JSON.parse(localStorage.getItem("cn_queue_v1") || "[]"));
         save();
         initFilterOptions();
