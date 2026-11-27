@@ -6573,6 +6573,15 @@ function clearImgCache(){
 
 let RESOLVED_ACTIONS = { sync: "pull", pull: "pull", push: "push", uploadImage: "uploadImage", deleteImage: "deleteImage" };
 
+// Mạng di động chuyển vùng có thể treo fetch vô hạn; thiếu timeout thì một lần treo
+// làm _syncInFlight kẹt luôn, máy không bao giờ đồng bộ tiếp cho tới khi tải lại trang.
+function fetchWithTimeout(url, options, ms){
+  if(typeof AbortController === "undefined") return fetch(url, options);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms || 30000);
+  return fetch(url, Object.assign({}, options, { signal: ctrl.signal })).finally(() => clearTimeout(timer));
+}
+
 async function rawApiCall(url, payload, method = "POST"){
   const cleanUrl = (url || "").trim();
   const httpMethod = method.toUpperCase();
@@ -6587,7 +6596,7 @@ async function rawApiCall(url, payload, method = "POST"){
     if(httpMethod !== "GET" && httpMethod !== "HEAD"){
       fetchOptions.body = JSON.stringify(payload || {});
     }
-    const res = await fetch(cleanUrl, fetchOptions);
+    const res = await fetchWithTimeout(cleanUrl, fetchOptions, 45000);
     if(res.ok){
       const text = await res.text();
       try {
@@ -6604,11 +6613,11 @@ async function rawApiCall(url, payload, method = "POST"){
 
   // 2. Server proxy fallback
   try {
-    const proxyRes = await fetch("/api/sync-gas", {
+    const proxyRes = await fetchWithTimeout("/api/sync-gas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: cleanUrl, payload: payload, method: httpMethod })
-    });
+    }, 15000);
     if(proxyRes.ok){
       const data = await proxyRes.json();
       return data;
@@ -6849,8 +6858,16 @@ function updateSyncBadge(){
       if(total > 0){
         b.style.display = "";
         b.textContent = "☁️ +" + total;
+        b.title = "";
+      } else if(_lastSyncErr){
+        b.style.display = "";
+        b.textContent = "⚠️";
+        b.title = "Chưa đồng bộ được (" + _lastSyncErr + "). Bấm để thử lại.";
+        b.style.cursor = "pointer";
+        b.onclick = () => { _syncFailCount = 0; syncNow(false); };
       } else {
         b.style.display = "none";
+        b.title = "";
       }
     }
   }catch(e){}
@@ -7157,15 +7174,60 @@ async function fetchServerImages(imgs, deleted){
 
 let _lastCloudSig = null; // dấu vân tay dữ liệu pull gần nhất, tránh merge/render lại mỗi 4 giây
 let _lastCloudRev = null; // số bản sửa trên máy chủ, hỏi nhanh trước khi tải toàn bộ
+try {
+  const savedRev = localStorage.getItem("cn_rev_v1");
+  if(savedRev != null && savedRev !== "") _lastCloudRev = JSON.parse(savedRev);
+} catch(e){}
+function rememberCloudRev(rev){
+  if(rev == null) return;
+  _lastCloudRev = rev;
+  try { localStorage.setItem("cn_rev_v1", JSON.stringify(rev)); } catch(e){}
+}
 let _syncInFlight = false;
 let _syncQueued = false;
 let _syncQueuedForce = false;
+var _lastSyncErr = null;      // lỗi đồng bộ gần nhất (null = lần cuối thành công)
+var _syncErrDetail = null;
+var _syncFailCount = 0;
+var _syncRetryTimer = null;
+var _lastSyncAttempt = 0;
+function markSyncResult(ok, err){
+  if(ok){
+    _syncFailCount = 0;
+    _lastSyncErr = null;
+    if(_syncRetryTimer){ clearTimeout(_syncRetryTimer); _syncRetryTimer = null; }
+  } else {
+    _lastSyncErr = err || "network";
+    _syncFailCount++;
+  }
+  try { updateSyncBadge(); } catch(e){}
+  if(!ok && _lastSyncErr !== "unauthorized") scheduleSyncRetry();
+}
+function scheduleSyncRetry(){
+  if(_syncRetryTimer || _syncFailCount > 4) return;
+  const delay = Math.min(120000, 10000 * Math.pow(2, Math.max(0, _syncFailCount - 1)));
+  _syncRetryTimer = setTimeout(() => {
+    _syncRetryTimer = null;
+    if(!document.hidden) syncNow(true);
+  }, delay);
+}
+// Gom các yêu cầu dồn dập (mở app + focus + hiện tab xảy ra cùng lúc) thành một vòng.
+function requestSync(silent){
+  const now = Date.now();
+  if(now - _lastSyncAttempt < 15000) return;
+  _lastSyncAttempt = now;
+  syncNow(silent);
+}
 // Chỉ chạy 1 vòng đồng bộ tại một thời điểm: pull ~vài giây, nếu chồng nhau sẽ ghi đè dữ liệu cũ lên dữ liệu mới
 async function syncNow(silent, force){
   if(_syncInFlight){ _syncQueued = true; _syncQueuedForce = _syncQueuedForce || !!force; return; }
   _syncInFlight = true;
+  _lastSyncAttempt = Date.now();
   try{
-    await syncNowCore(silent, force || !silent);
+    const ok = await syncNowCore(silent, force || !silent);
+    markSyncResult(ok !== false, ok === false ? (_syncErrDetail || "cloud") : null);
+  } catch(e){
+    markSyncResult(false, e && e.message ? e.message : "network");
   } finally {
     _syncInFlight = false;
     if(_syncQueued){
@@ -7177,7 +7239,7 @@ async function syncNow(silent, force){
 }
 async function syncNowCore(silent, force){
   if(!silent) toast(t("Đang đồng bộ dữ liệu…"));
-  if (API_OK === false && (!CFG.url || !CFG.key)) return;
+  if (API_OK === false && (!CFG.url || !CFG.key)) return true;
 
   // 1. STEP 1: ALWAYS perform full bidirectional 2-way sync with server.js
   // Pushes all local phones, queued changes, modified records, and config.
@@ -7194,7 +7256,7 @@ async function syncNowCore(silent, force){
       Object.assign(mapToSend, window.__IMG_MAP);
     }
 
-    const srvRes = (API_OK === false) ? null : await fetch("/api/sync-data", {
+    const srvRes = (API_OK === false) ? null : await fetchWithTimeout("/api/sync-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -7204,7 +7266,7 @@ async function syncNowCore(silent, force){
         config: CFG,
         images: mapToSend
       })
-    });
+    }, 15000);
 
     // Also push any local IMG_OVR portraits directly to server so all employee iPhones see them immediately
     if (API_OK !== false) {
@@ -7287,7 +7349,7 @@ async function syncNowCore(silent, force){
         openSettings("sync");
       }
     }
-    return;
+    return true;
   }
 
   // 3. STEP 3: Proceed with Google Apps Script cloud sync (Images & Sheet rows)
@@ -7299,7 +7361,7 @@ async function syncNowCore(silent, force){
     if(!force && !hasLocalWork && _lastCloudRev != null){
       try{
         const rv = await api("rev", {});
-        if(rv && rv.ok && rv.rev === _lastCloudRev) return;
+        if(rv && rv.ok && rv.rev === _lastCloudRev) return true;
       }catch(e){}
     }
 
@@ -7322,7 +7384,8 @@ async function syncNowCore(silent, force){
               toast(t("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt."));
               openSettings("sync");
             }
-            return;
+            _syncErrDetail = "unauthorized";
+            return false;
           }
         }
       }catch(e){} // Lỗi không xác nhận: giữ nguyên thao tác trong queue hiện tại.
@@ -7340,7 +7403,8 @@ async function syncNowCore(silent, force){
               toast(t("Mã bảo mật (Key) Google Sheet không đúng. Vui lòng kiểm tra lại trong ⚙️ Cài đặt."));
               openSettings("sync");
             }
-            return;
+            _syncErrDetail = "unauthorized";
+            return false;
           }
         } else if(acknowledgeImgOp(op, true)) {
           // Chỉ dọn fid khi yêu cầu xóa này vẫn là thao tác mới nhất của ảnh.
@@ -7378,16 +7442,17 @@ async function syncNowCore(silent, force){
     }
 
     if(!res.ok){
+      const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ Google Sheet";
+      _syncErrDetail = errMsg;
       if(res.error === "unauthorized" || res.msg === "Sai khoá truy cập." || res.err === "unauthorized"){
         if(!silent){
           toast(t("✓ Đã đồng bộ máy chủ, nhưng Key Google Sheet chưa đúng."));
           openSettings("sync");
         }
       } else {
-        const errMsg = res.msg || res.err || res.error || "Lỗi đồng bộ Google Sheet";
         if(!silent) toast(t("✓ Đã đồng bộ máy chủ. Google Sheet: ") + errMsg);
       }
-      return;
+      return false;
     }
 
     ROLE = res.role || "vip";
@@ -7432,15 +7497,18 @@ async function syncNowCore(silent, force){
       }
     }
     if(res.images) await fetchServerImages(res.images, res.deletedImages || res.deleted);
-    if(res.rev != null) _lastCloudRev = res.rev;
+    rememberCloudRev(res.rev);
     if(remaining.length){
       if(!silent) toast("Còn " + remaining.length + " hồ sơ chưa được máy chủ xác nhận. Thay đổi vẫn được giữ trên máy này.");
-      return;
+      return true;
     }
     if(!silent) addLog("Đồng bộ đám mây", `Thành công (${incomingData.length} hồ sơ)`);
     if(!silent) toast(t("Đồng bộ đám mây thành công ✓"));
+    return true;
   }catch(e){
+    _syncErrDetail = e && e.message ? e.message : "network";
     if(!silent) toast(t("✓ Đã đồng bộ máy chủ nội bộ. Google Sheet: ") + e.message);
+    return false;
   }
 }
 
@@ -7463,7 +7531,7 @@ async function connect(silent = false){
       ROLE = r.role || (isKeyAdmin(CFG.key, CFG.user) ? "admin" : (ROLE || "vip"));
       try { localStorage.setItem("cn_role_v1", ROLE); } catch(e){}
       applyRole();
-      if(r.rev != null) _lastCloudRev = r.rev;
+      rememberCloudRev(r.rev);
       const rData = (r && (r.data || r.rows || r.records)) || [];
       if(Array.isArray(rData) && rData.length > 0){
         logIncomingChanges(rData);
@@ -8187,11 +8255,15 @@ document.addEventListener("DOMContentLoaded", () => {
 // Auto-sync across devices whenever user focuses window or returns to the tab
 document.addEventListener("visibilitychange", () => {
   if(document.visibilityState === "visible"){
-    syncNow(true);
+    requestSync(true);
   }
 });
 window.addEventListener("focus", () => {
-  syncNow(true);
+  requestSync(true);
+});
+window.addEventListener("online", () => {
+  _syncFailCount = 0;
+  requestSync(true);
 });
 // Mỗi 60 giây hỏi nhanh số bản sửa: chỉ pull toàn bộ khi máy khác có thay đổi
 // (Google Apps Script giới hạn thời gian chạy/ngày, gọi liên tục sẽ bị chặn đồng bộ)
